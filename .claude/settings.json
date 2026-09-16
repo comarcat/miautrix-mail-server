@@ -1,0 +1,74 @@
+{
+  "enabledPlugins": {
+    "the-architect@soyenriquerocha": true,
+    "claude-mem@thedotmack": false
+  },
+  "extraKnownMarketplaces": {
+    "soyenriquerocha": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/Hainrixz/the-architect.git"
+      }
+    },
+    "thedotmack": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/thedotmack/claude-mem.git"
+      }
+    }
+  },
+  "permissions": {
+    "allow": [
+      "Skill(graphify)",
+      "Bash(dotnet --version:*)",
+      "Bash(dotnet --list-sdks)",
+      "Bash(dotnet tool restore)",
+      "Bash(dotnet restore:*)",
+      "Bash(dotnet build:*)",
+      "Bash(dotnet format:*)",
+      "Bash(dotnet test:*)",
+      "Bash(dotnet run:*)",
+      "Bash(dotnet new sln:*)",
+      "Bash(dotnet sln:*)",
+      "Bash(dotnet ef:*)",
+      "Bash(dotnet publish:*)",
+      "Bash(dotnet vpk pack:*)",
+      "Bash(dotnet list:*)",
+      "Bash(bash build/pack-local.sh:*)",
+      "Bash(env MNAS_:*)",
+      "Bash(env NO_COLOR:*)",
+      "Bash(tr -d:*)",
+      "Bash(rm -rf .mnas-verify/:*)",
+      "Bash(rm -rf TestResults/:*)",
+      "Bash(mkdir -p:*)",
+      "Bash(printf:*)",
+      "Bash(grep:*)",
+      "Bash(test:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(head:*)",
+      "Bash(find:*)",
+      "Bash(cp:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git tag:*)",
+      "Bash(git ls-files:*)",
+      "Bash(git check-ignore:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(git init:*)",
+      "Bash(git config user.email:*)",
+      "Bash(git config user.name:*)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Bash(dotnet vpk upload:*)",
+      "Bash(dotnet nuget push:*)",
+      "Bash(rm -rf /:*)",
+      "Bash(rm -rf vendor:*)"
+    ]
+  }
+}
