@@ -1,0 +1,12 @@
+C:\Users\miauadmin\OneDrive\Documentos\GitHub\miautrix-mail-server\Miautrix_Mail_Server_Final_Architecture_Design.md
+C:\Users\miauadmin\OneDrive\Documentos\GitHub\miautrix-mail-server\PMI_Project_Charter_and_Plan.md
+C:\Users\miauadmin\OneDrive\Documentos\GitHub\miautrix-mail-server\blueprints\miautrix-mail-server\blueprint.md
+C:\Users\miauadmin\OneDrive\Documentos\GitHub\miautrix-mail-server\blueprints\miautrix-mail-server\epics\01-core-platform.md
+C:\Users\miauadmin\OneDrive\Documentos\GitHub\miautrix-mail-server\blueprints\miautrix-mail-server\epics\02-mail-transport.md
+C:\Users\miauadmin\OneDrive\Documentos\GitHub\miautrix-mail-server\blueprints\miautrix-mail-server\epics\03-surfaces.md
+C:\Users\miauadmin\OneDrive\Documentos\GitHub\miautrix-mail-server\blueprints\miautrix-mail-server\epics\04-operations.md
+C:\Users\miauadmin\OneDrive\Documentos\GitHub\miautrix-mail-server\blueprints\miautrix-mail-server\workspace\.claude\rules\secrets-and-logging.md
+C:\Users\miauadmin\OneDrive\Documentos\GitHub\miautrix-mail-server\blueprints\miautrix-mail-server\workspace\.claude\rules\tenancy.md
+C:\Users\miauadmin\OneDrive\Documentos\GitHub\miautrix-mail-server\blueprints\miautrix-mail-server\workspace\.claude\skills\verify-task\SKILL.md
+C:\Users\miauadmin\OneDrive\Documentos\GitHub\miautrix-mail-server\blueprints\miautrix-mail-server\workspace\AGENTS.md
+C:\Users\miauadmin\OneDrive\Documentos\GitHub\miautrix-mail-server\blueprints\miautrix-mail-server\workspace\CLAUDE.md

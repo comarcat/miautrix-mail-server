@@ -1,0 +1,51 @@
+{
+  "files": {
+    "code": [
+      "C:\\Users\\miauadmin\\OneDrive\\Documentos\\GitHub\\miautrix-mail-server\\.claude\\settings.json",
+      "C:\\Users\\miauadmin\\OneDrive\\Documentos\\GitHub\\miautrix-mail-server\\.claude\\settings.local.json",
+      "C:\\Users\\miauadmin\\OneDrive\\Documentos\\GitHub\\miautrix-mail-server\\.codebase-memory\\artifact.json",
+      "C:\\Users\\miauadmin\\OneDrive\\Documentos\\GitHub\\miautrix-mail-server\\architecture.json",
+      "C:\\Users\\miauadmin\\OneDrive\\Documentos\\GitHub\\miautrix-mail-server\\blueprints\\_verify\\versions.mjs",
+      "C:\\Users\\miauadmin\\OneDrive\\Documentos\\GitHub\\miautrix-mail-server\\blueprints\\miautrix-mail-server\\tasks.json",
+      "C:\\Users\\miauadmin\\OneDrive\\Documentos\\GitHub\\miautrix-mail-server\\blueprints\\miautrix-mail-server\\workspace\\.claude\\settings.json"
+    ],
+    "document": [
+      "C:\\Users\\miauadmin\\OneDrive\\Documentos\\GitHub\\miautrix-mail-server\\Miautrix_Mail_Server_Final_Architecture_Design.md",
+      "C:\\Users\\miauadmin\\OneDrive\\Documentos\\GitHub\\miautrix-mail-server\\PMI_Project_Charter_and_Plan.md",
+      "C:\\Users\\miauadmin\\OneDrive\\Documentos\\GitHub\\miautrix-mail-server\\blueprints\\miautrix-mail-server\\blueprint.md",
+      "C:\\Users\\miauadmin\\OneDrive\\Documentos\\GitHub\\miautrix-mail-server\\blueprints\\miautrix-mail-server\\epics\\01-core-platform.md",
+      "C:\\Users\\miauadmin\\OneDrive\\Documentos\\GitHub\\miautrix-mail-server\\blueprints\\miautrix-mail-server\\epics\\02-mail-transport.md",
+      "C:\\Users\\miauadmin\\OneDrive\\Documentos\\GitHub\\miautrix-mail-server\\blueprints\\miautrix-mail-server\\epics\\03-surfaces.md",
+      "C:\\Users\\miauadmin\\OneDrive\\Documentos\\GitHub\\miautrix-mail-server\\blueprints\\miautrix-mail-server\\epics\\04-operations.md",
+      "C:\\Users\\miauadmin\\OneDrive\\Documentos\\GitHub\\miautrix-mail-server\\blueprints\\miautrix-mail-server\\workspace\\.claude\\rules\\secrets-and-logging.md",
+      "C:\\Users\\miauadmin\\OneDrive\\Documentos\\GitHub\\miautrix-mail-server\\blueprints\\miautrix-mail-server\\workspace\\.claude\\rules\\tenancy.md",
+      "C:\\Users\\miauadmin\\OneDrive\\Documentos\\GitHub\\miautrix-mail-server\\blueprints\\miautrix-mail-server\\workspace\\.claude\\skills\\verify-task\\SKILL.md",
+      "C:\\Users\\miauadmin\\OneDrive\\Documentos\\GitHub\\miautrix-mail-server\\blueprints\\miautrix-mail-server\\workspace\\AGENTS.md",
+      "C:\\Users\\miauadmin\\OneDrive\\Documentos\\GitHub\\miautrix-mail-server\\blueprints\\miautrix-mail-server\\workspace\\CLAUDE.md"
+    ],
+    "paper": [],
+    "image": [],
+    "video": []
+  },
+  "total_files": 19,
+  "total_words": 15927,
+  "needs_graph": false,
+  "warning": "Corpus is ~15,927 words - fits in a single context window. You may not need a graph.",
+  "skipped_sensitive": [],
+  "unclassified": [
+    "C:\\Users\\miauadmin\\OneDrive\\Documentos\\GitHub\\miautrix-mail-server\\.codebase-memory\\.gitattributes",
+    "C:\\Users\\miauadmin\\OneDrive\\Documentos\\GitHub\\miautrix-mail-server\\.codebase-memory\\graph.db.zst",
+    "C:\\Users\\miauadmin\\OneDrive\\Documentos\\GitHub\\miautrix-mail-server\\.gitattributes",
+    "C:\\Users\\miauadmin\\OneDrive\\Documentos\\GitHub\\miautrix-mail-server\\blueprints\\miautrix-mail-server\\workspace\\.editorconfig",
+    "C:\\Users\\miauadmin\\OneDrive\\Documentos\\GitHub\\miautrix-mail-server\\blueprints\\miautrix-mail-server\\workspace\\Directory.Build.props"
+  ],
+  "walk_errors": [],
+  "ignored": [],
+  "pruned_noise_dirs": [
+    "C:\\Users\\miauadmin\\OneDrive\\Documentos\\GitHub\\miautrix-mail-server\\.git\\",
+    "C:\\Users\\miauadmin\\OneDrive\\Documentos\\GitHub\\miautrix-mail-server\\blueprints\\_verify\\graphify-out\\",
+    "C:\\Users\\miauadmin\\OneDrive\\Documentos\\GitHub\\miautrix-mail-server\\graphify-out\\"
+  ],
+  "graphifyignore_patterns": 0,
+  "scan_root": "C:\\Users\\miauadmin\\OneDrive\\Documentos\\GitHub\\miautrix-mail-server"
+}

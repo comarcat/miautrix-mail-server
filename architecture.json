@@ -1,0 +1,240 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Miautrix Mail Server — System Architecture",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "mail-path",
+        "label": "Mail Ingress & Flow",
+        "focus": ["clients", "ingress", "core", "mailflow", "antispam", "storage", "db"],
+        "note": "Trace inbound and outbound mail through ingress, transport pipeline, security scans, and persistent storage."
+      },
+      {
+        "id": "security-isolation",
+        "label": "Identity & Multi-Tenancy",
+        "focus": ["clients", "ingress", "auth", "core", "db", "licensing"],
+        "note": "View identity verification, tenant authorization helper, and licensing boundaries."
+      },
+      {
+        "id": "api-extensibility",
+        "label": "API & Provider Seams",
+        "focus": ["clients", "core", "rules", "mcp", "antispam"],
+        "note": "Inspect rule engine, MCP tool execution, and swappable provider interfaces."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "clients",
+      "type": "frontend",
+      "label": "Client Surfaces",
+      "sublabel": "Admin · Webmail · CLI",
+      "pos": [40, 260],
+      "size": [160, 68]
+    },
+    {
+      "id": "ingress",
+      "type": "security",
+      "label": "Ingress & TLS Proxy",
+      "sublabel": "SMTP · IMAPS · HTTPS",
+      "pos": [270, 260],
+      "size": [160, 68]
+    },
+    {
+      "id": "auth",
+      "type": "security",
+      "label": "Identity & MFA",
+      "sublabel": "Argon2id · TOTP · WebAuthn",
+      "pos": [270, 80],
+      "size": [160, 68],
+      "tag": "Self-Hosted"
+    },
+    {
+      "id": "core",
+      "type": "backend",
+      "label": "Core Monolith (.NET 10)",
+      "sublabel": "Clean Architecture",
+      "pos": [510, 260],
+      "size": [170, 68],
+      "tag": "Tenant Isolated"
+    },
+    {
+      "id": "mailflow",
+      "type": "backend",
+      "label": "Mail Transport Engine",
+      "sublabel": "SMTP Queue · DKIM",
+      "pos": [510, 440],
+      "size": [170, 68]
+    },
+    {
+      "id": "antispam",
+      "type": "security",
+      "label": "Anti-Spam & Malware",
+      "sublabel": "ISpamProvider · ClamAV",
+      "pos": [270, 440],
+      "size": [160, 68]
+    },
+    {
+      "id": "rules",
+      "type": "backend",
+      "label": "Rule Engine & Sieve",
+      "sublabel": "ManageSieve · Simulator",
+      "pos": [510, 80],
+      "size": [170, 68]
+    },
+    {
+      "id": "db",
+      "type": "database",
+      "label": "PostgreSQL 17",
+      "sublabel": "Metadata · FTS · Audit",
+      "pos": [770, 260],
+      "size": [160, 68]
+    },
+    {
+      "id": "storage",
+      "type": "cloud",
+      "label": "MIME Storage Layer",
+      "sublabel": "IMailStorage FS / S3",
+      "pos": [770, 440],
+      "size": [160, 68]
+    },
+    {
+      "id": "mcp",
+      "type": "external",
+      "label": "REST API & MCP",
+      "sublabel": "OpenAPI /api/v1/*",
+      "pos": [770, 80],
+      "size": [160, 68]
+    },
+    {
+      "id": "licensing",
+      "type": "security",
+      "label": "Licensing Subsystem",
+      "sublabel": "Offline · Fail-open",
+      "pos": [1010, 260],
+      "size": [150, 68]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Debian Linux Host / Operating Environment",
+      "wraps": ["ingress", "auth", "core", "mailflow", "antispam", "rules", "db", "storage", "mcp", "licensing"]
+    },
+    {
+      "kind": "security-group",
+      "label": "Miautrix Monolith Boundary",
+      "wraps": ["core", "mailflow", "auth", "rules", "antispam"]
+    }
+  ],
+  "connections": [
+    {
+      "id": "clients-to-ingress",
+      "from": "clients",
+      "to": "ingress",
+      "label": "TLS / HTTPS",
+      "variant": "emphasis"
+    },
+    {
+      "id": "ingress-to-core",
+      "from": "ingress",
+      "to": "core",
+      "label": "Dispatches"
+    },
+    {
+      "id": "auth-to-core",
+      "from": "auth",
+      "to": "core",
+      "label": "Authorizes (404 on Cross-Tenant)",
+      "variant": "security",
+      "fromSide": "right",
+      "toSide": "top"
+    },
+    {
+      "id": "core-to-mailflow",
+      "from": "core",
+      "to": "mailflow",
+      "label": "Enqueues",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 24
+    },
+    {
+      "id": "mailflow-to-antispam",
+      "from": "mailflow",
+      "to": "antispam",
+      "label": "Filters / Scans",
+      "fromSide": "left",
+      "toSide": "right",
+      "labelDy": -28
+    },
+    {
+      "id": "core-to-rules",
+      "from": "core",
+      "to": "rules",
+      "label": "Evaluates",
+      "fromSide": "top",
+      "toSide": "bottom",
+      "labelDy": -24
+    },
+    {
+      "id": "core-to-db",
+      "from": "core",
+      "to": "db",
+      "label": "EF Core"
+    },
+    {
+      "id": "mailflow-to-storage",
+      "from": "mailflow",
+      "to": "storage",
+      "label": "Writes MIME"
+    },
+    {
+      "id": "core-to-mcp",
+      "from": "core",
+      "to": "mcp",
+      "label": "Exposes API",
+      "fromSide": "top",
+      "toSide": "left"
+    },
+    {
+      "id": "db-to-licensing",
+      "from": "db",
+      "to": "licensing",
+      "label": "License Usage Gate",
+      "variant": "dashed",
+      "labelDy": -28
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Clean Architecture & Modular Monolith",
+      "items": [
+        "Single deployable process on Debian Linux with .NET 10 and PostgreSQL 17",
+        "Domain layer depends on nothing; Application depends only on Domain",
+        "One authorization helper: all cross-tenant access returns 404 to prevent ID enumeration"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Mail Transport, Policy & Seams",
+      "items": [
+        "SMTP in/out with durable queue, exponential backoff retries, and DKIM signing",
+        "Pluggable provider seams: ISpamProvider, IMalwareProvider (ClamAV), IMailStorage",
+        "Full-text search indexed in PostgreSQL FTS; ManageSieve with syntax-checking gate"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Security, Operations & Licensing",
+      "items": [
+        "Self-hosted identity with Argon2id, TOTP, and WebAuthn (Fido2 4.0.1)",
+        "Fail-open licensing: mail keeps flowing if server is unreachable; over-limit blocks new mailboxes only",
+        "Zero-downtime blue/green deployments with EXPAND → MIGRATE → CONTRACT migrations"
+      ]
+    }
+  ]
+}

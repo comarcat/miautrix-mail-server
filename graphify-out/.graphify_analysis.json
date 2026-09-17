@@ -1,0 +1,220 @@
+{
+  "communities": {
+    "0": [
+      "blueprints_miautrix_mail_server_epics_01_core_platform_epic_1",
+      "blueprints_miautrix_mail_server_tasks_t1",
+      "blueprints_miautrix_mail_server_tasks_t2",
+      "blueprints_miautrix_mail_server_tasks_t3",
+      "blueprints_miautrix_mail_server_tasks_t4",
+      "blueprints_miautrix_mail_server_tasks_t5",
+      "blueprints_miautrix_mail_server_tasks_t6",
+      "blueprints_miautrix_mail_server_workspace__claude_rules_secrets_and_logging_secrets_logging",
+      "blueprints_miautrix_mail_server_workspace__claude_rules_tenancy_tenant_isolation",
+      "miautrix_mail_server_final_architecture_design_iauthenticationprovider",
+      "miautrix_mail_server_final_architecture_design_iidentityprovider"
+    ],
+    "1": [
+      "blueprints_miautrix_mail_server_epics_02_mail_transport_epic_2",
+      "miautrix_mail_server_final_architecture_design_antispam_quarantine",
+      "miautrix_mail_server_final_architecture_design_dns_auth",
+      "miautrix_mail_server_final_architecture_design_fts_search",
+      "miautrix_mail_server_final_architecture_design_imap_listener",
+      "miautrix_mail_server_final_architecture_design_mailflow_rules",
+      "miautrix_mail_server_final_architecture_design_managesieve",
+      "miautrix_mail_server_final_architecture_design_smtp_listener"
+    ],
+    "2": [
+      "blueprints_miautrix_mail_server_epics_04_operations_epic_4",
+      "blueprints_miautrix_mail_server_tasks_t18",
+      "blueprints_miautrix_mail_server_tasks_t19",
+      "blueprints_miautrix_mail_server_tasks_t20",
+      "blueprints_miautrix_mail_server_tasks_t21",
+      "blueprints_miautrix_mail_server_workspace__claude_skills_verify_task_skill_verify_task",
+      "blueprints_miautrix_mail_server_workspace_claude_licensing_rules"
+    ],
+    "3": [
+      "blueprints_miautrix_mail_server_tasks_t7",
+      "blueprints_miautrix_mail_server_tasks_t8",
+      "blueprints_miautrix_mail_server_tasks_t9",
+      "miautrix_mail_server_final_architecture_design_imalwareprovider",
+      "miautrix_mail_server_final_architecture_design_iqueueprovider",
+      "miautrix_mail_server_final_architecture_design_ispamprovider"
+    ],
+    "4": [
+      "miautrix_mail_server_final_architecture_design_clean_architecture",
+      "miautrix_mail_server_final_architecture_design_dotnet_10",
+      "miautrix_mail_server_final_architecture_design_miautrix_platform",
+      "miautrix_mail_server_final_architecture_design_modular_monolith",
+      "miautrix_mail_server_final_architecture_design_postgresql",
+      "miautrix_mail_server_final_architecture_design_react_typescript"
+    ],
+    "5": [
+      "blueprints_miautrix_mail_server_epics_03_surfaces_epic_3",
+      "blueprints_miautrix_mail_server_tasks_t14",
+      "blueprints_miautrix_mail_server_tasks_t15",
+      "blueprints_miautrix_mail_server_tasks_t16",
+      "blueprints_miautrix_mail_server_tasks_t17"
+    ],
+    "6": [
+      "blueprints_miautrix_mail_server_tasks_t10",
+      "blueprints_miautrix_mail_server_tasks_t11",
+      "miautrix_mail_server_final_architecture_design_imailstorage"
+    ],
+    "7": [
+      "blueprints_miautrix_mail_server_tasks_t12",
+      "blueprints_miautrix_mail_server_tasks_t13",
+      "miautrix_mail_server_final_architecture_design_isearchprovider"
+    ],
+    "8": [
+      "blueprints_verify_versions",
+      "blueprints_verify_versions_npm",
+      "blueprints_verify_versions_nuget"
+    ],
+    "9": [
+      "miautrix_mail_server_final_architecture_design_jmap_protocol"
+    ]
+  },
+  "cohesion": {
+    "0": 0.2727272727272727,
+    "1": 0.25,
+    "2": 0.42857142857142855,
+    "3": 0.3333333333333333,
+    "4": 0.3333333333333333,
+    "5": 0.7,
+    "6": 0.6666666666666666,
+    "7": 0.6666666666666666,
+    "8": 0.6666666666666666,
+    "9": 1.0
+  },
+  "gods": [
+    {
+      "id": "blueprints_miautrix_mail_server_epics_02_mail_transport_epic_2",
+      "label": "Epic 2: Mail Transport & Policy (T7-T13)",
+      "degree": 14
+    },
+    {
+      "id": "blueprints_miautrix_mail_server_epics_01_core_platform_epic_1",
+      "label": "Epic 1: Core Platform (T1-T6)",
+      "degree": 9
+    },
+    {
+      "id": "blueprints_miautrix_mail_server_epics_04_operations_epic_4",
+      "label": "Epic 4: Operations (T18-T21)",
+      "degree": 5
+    },
+    {
+      "id": "blueprints_miautrix_mail_server_tasks_t4",
+      "label": "T4: Identity: credentials, MFA, sessions",
+      "degree": 5
+    },
+    {
+      "id": "blueprints_miautrix_mail_server_tasks_t9",
+      "label": "T9: Anti-spam baseline and quarantine",
+      "degree": 5
+    },
+    {
+      "id": "miautrix_mail_server_final_architecture_design_miautrix_platform",
+      "label": "Miautrix Mail Server Platform",
+      "degree": 4
+    },
+    {
+      "id": "blueprints_miautrix_mail_server_epics_03_surfaces_epic_3",
+      "label": "Epic 3: Surfaces (T14-T17)",
+      "degree": 4
+    },
+    {
+      "id": "blueprints_miautrix_mail_server_tasks_t7",
+      "label": "T7: SMTP listener and queue",
+      "degree": 4
+    },
+    {
+      "id": "blueprints_miautrix_mail_server_tasks_t10",
+      "label": "T10: IMAP, storage abstraction, attachments",
+      "degree": 4
+    },
+    {
+      "id": "blueprints_miautrix_mail_server_tasks_t12",
+      "label": "T12: Full-text search indexing",
+      "degree": 4
+    }
+  ],
+  "surprises": [
+    {
+      "source": "Epic 1: Core Platform (T1-T6)",
+      "target": "Clean Architecture Pattern",
+      "source_files": [
+        "blueprints/miautrix-mail-server/epics/01-core-platform.md",
+        "Miautrix_Mail_Server_Final_Architecture_Design.md"
+      ],
+      "confidence": "INFERRED",
+      "relation": "conceptually_related_to",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; bridges separate communities; peripheral node `Clean Architecture Pattern` unexpectedly reaches hub `Epic 1: Core Platform (T1-T6)`"
+    },
+    {
+      "source": "T4: Identity: credentials, MFA, sessions",
+      "target": "IIdentityProvider",
+      "source_files": [
+        "blueprints/miautrix-mail-server/tasks.json",
+        "Miautrix_Mail_Server_Final_Architecture_Design.md"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "implements",
+      "why": "crosses file types (doc ↔ code); connects across different repos/directories; peripheral node `IIdentityProvider` unexpectedly reaches hub `T4: Identity: credentials, MFA, sessions`"
+    },
+    {
+      "source": "T9: Anti-spam baseline and quarantine",
+      "target": "ISpamProvider",
+      "source_files": [
+        "blueprints/miautrix-mail-server/tasks.json",
+        "Miautrix_Mail_Server_Final_Architecture_Design.md"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "implements",
+      "why": "crosses file types (doc ↔ code); connects across different repos/directories; peripheral node `ISpamProvider` unexpectedly reaches hub `T9: Anti-spam baseline and quarantine`"
+    },
+    {
+      "source": "T9: Anti-spam baseline and quarantine",
+      "target": "IMalwareProvider",
+      "source_files": [
+        "blueprints/miautrix-mail-server/tasks.json",
+        "Miautrix_Mail_Server_Final_Architecture_Design.md"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "implements",
+      "why": "crosses file types (doc ↔ code); connects across different repos/directories; peripheral node `IMalwareProvider` unexpectedly reaches hub `T9: Anti-spam baseline and quarantine`"
+    },
+    {
+      "source": "T4: Identity: credentials, MFA, sessions",
+      "target": "IAuthenticationProvider",
+      "source_files": [
+        "blueprints/miautrix-mail-server/tasks.json",
+        "Miautrix_Mail_Server_Final_Architecture_Design.md"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "implements",
+      "why": "crosses file types (doc ↔ code); connects across different repos/directories; peripheral node `IAuthenticationProvider` unexpectedly reaches hub `T4: Identity: credentials, MFA, sessions`"
+    }
+  ],
+  "questions": [
+    {
+      "type": "bridge_node",
+      "question": "Why does `Epic 2: Mail Transport & Policy (T7-T13)` connect `Community 1` to `Community 3`, `Community 6`, `Community 7`?",
+      "why": "High betweenness centrality (0.586) - this node is a cross-community bridge."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `T7: SMTP listener and queue` connect `Community 3` to `Community 0`, `Community 1`?",
+      "why": "High betweenness centrality (0.420) - this node is a cross-community bridge."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `T6: Audit trail` connect `Community 0` to `Community 3`?",
+      "why": "High betweenness centrality (0.386) - this node is a cross-community bridge."
+    },
+    {
+      "type": "isolated_nodes",
+      "question": "What connects `nuget`, `npm`, `.NET 10 LTS Core Engine` to the rest of the system?",
+      "why": "21 weakly-connected nodes found - possible documentation gaps or missing edges."
+    }
+  ]
+}

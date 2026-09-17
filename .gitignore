@@ -1,0 +1,20 @@
+# Build and runtime outputs
+bin/
+obj/
+out/
+dist/
+node_modules/
+
+# IDE and tooling
+.vs/
+.idea/
+.vscode/
+*.user
+*.suo
+.DS_Store
+Thumbs.db
+
+# Local memory / cache
+.codebase-memory/
+*.log
+*.tmp

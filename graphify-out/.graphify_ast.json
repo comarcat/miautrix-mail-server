@@ -1,0 +1,53 @@
+{
+  "nodes": [
+    {
+      "id": "blueprints_verify_versions",
+      "label": "versions.mjs",
+      "file_type": "code",
+      "source_file": "blueprints/_verify/versions.mjs",
+      "source_location": "L1",
+      "_origin": "ast"
+    },
+    {
+      "id": "blueprints_verify_versions_nuget",
+      "label": "nuget",
+      "file_type": "code",
+      "source_file": "blueprints/_verify/versions.mjs",
+      "source_location": "L1",
+      "_origin": "ast"
+    },
+    {
+      "id": "blueprints_verify_versions_npm",
+      "label": "npm",
+      "file_type": "code",
+      "source_file": "blueprints/_verify/versions.mjs",
+      "source_location": "L26",
+      "_origin": "ast"
+    }
+  ],
+  "edges": [
+    {
+      "source": "blueprints_verify_versions",
+      "target": "blueprints_verify_versions_nuget",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "blueprints/_verify/versions.mjs",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "blueprints_verify_versions",
+      "target": "blueprints_verify_versions_npm",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "blueprints/_verify/versions.mjs",
+      "source_location": "L26",
+      "weight": 1.0,
+      "_origin": "ast"
+    }
+  ],
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "failed_sources": []
+}
