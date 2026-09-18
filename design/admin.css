@@ -1,0 +1,413 @@
+/* =====================================================================
+   Miautrix Mail — Admin Console
+   Palette and component styling measured from
+   images/AdminGUI-Dashboard-Reference.jpg.
+   Token names follow DESIGN-Admin.md so the two documents stay mappable.
+   ===================================================================== */
+
+:root {
+  /* ---- Chrome: header band + sidebar (one continuous surface) ---- */
+  --chrome:        #213653;
+  --chrome-edge:   #1B2C48;
+  --nav-hover:     #27405F;
+  --nav-active:    #2B4365;
+  --nav-text:      #C9D6E8;
+  --nav-text-on:   #FFFFFF;
+
+  /* ---- Canvas ---- */
+  --page:          #0E1525;
+  --card:          #1A2537;
+  --card-raise:    #1E2B40;
+  --border:        #2F4E7E;   /* card outline */
+  --border-soft:   #22304A;   /* internal dividers */
+
+  /* ---- Accents ---- */
+  --info:          #3B82F6;
+  --info-btn:      #3E85ED;
+  --info-btn-hi:   #5590F0;
+  --info-text:     #60A5FA;
+
+  --success:       #22C55E;
+  --success-text:  #4ADE80;
+
+  --warning:       #F59E0B;
+  --warning-text:  #FBBF24;
+
+  --error:         #E63946;
+  --error-btn:     #DA393F;
+  --error-btn-hi:  #E9555B;
+  --error-text:    #FF6B76;
+
+  --steel:         #8D99AE;
+
+  /* ---- Text ---- */
+  --text:          #F1F5F9;
+  --text-dim:      #94A3B8;
+  --text-mute:     #64748B;
+  --head-text:     #8FA8C8;   /* card titles */
+
+  /* ---- Alert / chip tints (measured) ---- */
+  --crit-bg:       #511F2A;
+  --crit-edge:     #7A3241;
+  --warn-bg:       #4F3E20;
+  --warn-edge:     #7A6231;
+  --chip-red-bg:   #502632;
+  --chip-grn-bg:   #1E5343;
+  --chip-amb-bg:   #524028;
+  --chip-blu-bg:   #1B3A5E;
+
+  /* ---- Geometry ---- */
+  --r-sm: 2px; --r-md: 4px; --r-lg: 6px; --r-xl: 8px; --r-full: 9999px;
+  --s-4: 4px; --s-8: 8px; --s-12: 12px; --s-16: 16px;
+  --s-20: 20px; --s-24: 24px; --s-32: 32px;
+
+  --header-h: 76px;
+  --sidebar-w: 222px;
+
+  --glow-info:  0 0 0 1px rgba(47,78,126,.55), 0 8px 24px rgba(0,0,0,.45);
+  --glow-card:  0 10px 30px rgba(0,0,0,.38);
+
+  /* ---- Type ---- */
+  --font-head: "Red Hat Display", "Segoe UI Semibold", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--page);
+  color: var(--text);
+  font: 400 14px/1.5 var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--info-text); text-decoration: none; }
+img { display: block; }
+
+.mono  { font-family: var(--font-mono); }
+.muted { color: var(--text-mute); }
+.dim   { color: var(--text-dim); }
+.spacer { flex: 1 1 auto; }
+.row { display: flex; align-items: center; gap: var(--s-12); }
+
+/* =====================================================================
+   SHELL  —  full-width header band, then sidebar + main
+   ===================================================================== */
+.shell { min-height: 100vh; display: flex; flex-direction: column; }
+
+.appbar {
+  height: var(--header-h);
+  flex: 0 0 var(--header-h);
+  background: var(--chrome);
+  display: flex; align-items: center;
+  padding: 0 var(--s-24);
+  gap: var(--s-16);
+  position: sticky; top: 0; z-index: 20;
+}
+.appbar .burger {
+  width: 26px; height: 18px; flex: 0 0 26px;
+  display: flex; flex-direction: column; justify-content: space-between;
+  cursor: pointer;
+}
+.appbar .burger i { display: block; height: 2px; border-radius: 2px; background: #FFFFFF; }
+.brand {
+  font: 700 21px/1 var(--font-head);
+  letter-spacing: .04em; text-transform: uppercase;
+  color: #FFFFFF; white-space: nowrap;
+}
+.brand em { font-style: normal; color: #8FA8C8; }
+.avatar {
+  width: 42px; height: 42px; border-radius: var(--r-full);
+  background: linear-gradient(160deg, #4B6EA8, #2B4365);
+  border: 2px solid #5C7FB5;
+  display: grid; place-items: center;
+  font: 700 14px/1 var(--font-head); color: #FFFFFF;
+}
+
+.body { flex: 1 1 auto; display: grid; grid-template-columns: var(--sidebar-w) 1fr; min-height: 0; }
+
+/* ---------- Sidebar ---------- */
+.sidebar { background: var(--chrome); padding: var(--s-8) 0 var(--s-24); }
+.nav-item {
+  display: flex; align-items: center; gap: 14px;
+  height: 56px; padding: 0 var(--s-24);
+  font: 400 15px/1 var(--font-body);
+  color: var(--nav-text);
+  border-left: 3px solid transparent;
+  cursor: pointer;
+  transition: background-color .15s ease, color .15s ease;
+}
+.nav-item:hover { background: var(--nav-hover); color: var(--nav-text-on); }
+.nav-item[aria-current="page"] {
+  background: var(--nav-active);
+  border-left-color: var(--info);
+  color: var(--nav-text-on);
+}
+.nav-item .ic { width: 22px; height: 22px; flex: 0 0 22px; }
+/* Extracted icons are full-colour neon artwork with a real alpha channel,
+   so they render in their true colours against the dark chrome. */
+.nav-item .ic img { width: 22px; height: 22px; opacity: .85; }
+.nav-item:hover .ic img,
+.nav-item[aria-current="page"] .ic img { opacity: 1; }
+.nav-item .badge {
+  margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px;
+  border-radius: var(--r-full); background: var(--error-btn); color: #fff;
+  font: 700 11px/20px var(--font-body); text-align: center;
+}
+
+/* ---------- Main canvas ---------- */
+.main { padding: var(--s-24); min-width: 0; }
+.canvas { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: var(--s-24); align-items: start; }
+.col { display: flex; flex-direction: column; gap: var(--s-24); min-width: 0; }
+@media (max-width: 1280px) { .canvas { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+@media (max-width: 900px) {
+  .body { grid-template-columns: 1fr; }
+  .sidebar { display: flex; overflow-x: auto; padding: 0; }
+  .nav-item { height: 46px; border-left: 0; border-bottom: 3px solid transparent; white-space: nowrap; }
+  .nav-item[aria-current="page"] { border-bottom-color: var(--info); }
+  .canvas { grid-template-columns: 1fr; }
+}
+
+/* =====================================================================
+   CARD  —  uppercase header, hairline rule, roomy body
+   ===================================================================== */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--glow-card);
+  overflow: hidden;
+}
+.card-head {
+  display: flex; align-items: center; gap: var(--s-8);
+  padding: 14px var(--s-20) 10px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.card-head h2 {
+  margin: 0;
+  font: 700 12px/1.3 var(--font-body);
+  letter-spacing: .09em; text-transform: uppercase;
+  color: var(--head-text);
+}
+.card-head .dots {
+  margin-left: auto; color: var(--text-mute);
+  font: 700 16px/1 var(--font-body); letter-spacing: .12em; cursor: pointer;
+}
+.card-head .dots:hover { color: var(--text); }
+.card-body { padding: var(--s-20); }
+.card-body.tight { padding: 0; }
+
+/* =====================================================================
+   ALERT BLOCKS
+   ===================================================================== */
+.alert {
+  display: flex; align-items: flex-start; gap: var(--s-16);
+  padding: 14px var(--s-16);
+  border-radius: var(--r-md);
+  border: 1px solid;
+}
+.alert + .alert { margin-top: var(--s-12); }
+.alert-text {
+  flex: 1 1 auto; min-width: 0;
+  font: 700 13px/1.4 var(--font-body);
+  letter-spacing: .04em; text-transform: uppercase;
+}
+.alert-sub { display: block; margin-top: 3px; font: 400 12px/1.4 var(--font-body); letter-spacing: .01em; text-transform: none; opacity: .85; }
+.alert-ic { width: 34px; height: 34px; flex: 0 0 34px; }
+.alert-ic img { width: 34px; height: 34px; }
+.alert-critical { background: var(--crit-bg); border-color: var(--crit-edge); color: var(--error-text); }
+.alert-warning  { background: var(--warn-bg); border-color: var(--warn-edge); color: var(--warning-text); }
+
+/* =====================================================================
+   STATUS CHIPS  —  11px / 700 / uppercase, tinted
+   ===================================================================== */
+.chip {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 3px 9px; border-radius: var(--r-md);
+  font: 700 11px/1.4 var(--font-body);
+  letter-spacing: .04em; text-transform: uppercase;
+  white-space: nowrap;
+}
+.chip-critical { background: var(--chip-red-bg); color: var(--error-text);   border: 1px solid rgba(230,57,70,.32); }
+.chip-normal   { background: var(--chip-grn-bg); color: var(--success-text); border: 1px solid rgba(34,197,94,.32); }
+.chip-warning  { background: var(--chip-amb-bg); color: var(--warning-text); border: 1px solid rgba(245,158,11,.32); }
+.chip-info     { background: var(--chip-blu-bg); color: var(--info-text);    border: 1px solid rgba(59,130,246,.32); }
+.chip-plain    { background: transparent; color: var(--success-text); border: 1px solid rgba(34,197,94,.45); }
+
+/* Dismissible filter chips */
+.fchip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 10px; border-radius: var(--r-md);
+  background: var(--card-raise); color: var(--text-dim);
+  border: 1px solid var(--border-soft);
+  font: 500 13px/1 var(--font-body);
+  cursor: pointer;
+}
+.fchip:hover { border-color: var(--border); color: var(--text); }
+.fchip .x { color: var(--text-mute); font-size: 14px; }
+.fchip .x:hover { color: var(--error-text); }
+
+/* =====================================================================
+   BUTTONS
+   ===================================================================== */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--s-8);
+  height: 40px; padding: 0 var(--s-16);
+  border-radius: var(--r-md); border: 1px solid transparent;
+  font: 700 13px/1 var(--font-body);
+  letter-spacing: .01em;
+  cursor: pointer;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+.btn-primary   { background: var(--info-btn);  color: #FFFFFF; }
+.btn-primary:hover { background: var(--info-btn-hi); }
+.btn-destructive { background: var(--error-btn); color: #FFFFFF; }
+.btn-destructive:hover { background: var(--error-btn-hi); }
+.btn-outline-info { background: rgba(62,133,237,.10); color: var(--info-text); border-color: rgba(62,133,237,.55); }
+.btn-outline-info:hover { background: rgba(62,133,237,.20); }
+.btn-outline-danger { background: rgba(218,57,63,.10); color: var(--error-text); border-color: rgba(218,57,63,.55); }
+.btn-outline-danger:hover { background: rgba(218,57,63,.20); }
+.btn-ghost { background: transparent; color: var(--text-dim); }
+.btn-ghost:hover { background: var(--card-raise); color: var(--text); }
+.btn-sm { height: 32px; padding: 0 12px; font-size: 12px; }
+.btn[disabled] { opacity: .38; cursor: not-allowed; }
+
+/* =====================================================================
+   FORM CONTROLS
+   ===================================================================== */
+.field { display: flex; align-items: center; gap: var(--s-8); height: 42px; padding: 0 14px;
+         background: var(--page); border: 1px solid var(--border-soft); border-radius: var(--r-md); }
+.field:hover { border-color: var(--steel); }
+.field:focus-within { border-color: var(--info); box-shadow: 0 0 0 3px rgba(59,130,246,.18); }
+.field svg { color: var(--text-mute); flex: 0 0 auto; }
+.field input { flex: 1 1 auto; min-width: 0; border: 0; outline: 0; background: transparent;
+               font: 400 14px/1 var(--font-body); color: var(--text); }
+.field input::placeholder { color: var(--text-mute); }
+
+/* =====================================================================
+   TABLES
+   ===================================================================== */
+.table { width: 100%; border-collapse: collapse; font: 400 13px/1.45 var(--font-body); }
+.table thead th {
+  text-align: left; padding: 10px var(--s-20);
+  font: 500 13px/1.3 var(--font-body);
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border-soft);
+  white-space: nowrap;
+}
+.table tbody td { padding: 11px var(--s-20); border-bottom: 1px solid var(--border-soft); color: var(--text); white-space: nowrap; }
+.table tbody tr:last-child td { border-bottom: 0; }
+.table tbody tr:hover td { background: var(--card-raise); }
+.table .num { font-family: var(--font-mono); }
+.table .right { text-align: right; }
+
+/* dot + value cell (SERVER HEALTH) */
+.vital { display: flex; align-items: center; gap: var(--s-8); }
+.dot { width: 9px; height: 9px; border-radius: var(--r-full); flex: 0 0 9px; }
+.dot-normal   { background: var(--success); box-shadow: 0 0 6px rgba(34,197,94,.55); }
+.dot-warning  { background: var(--warning); box-shadow: 0 0 6px rgba(245,158,11,.55); }
+.dot-critical { background: var(--error);   box-shadow: 0 0 6px rgba(230,57,70,.55); }
+
+/* meter bar */
+.meter { height: 8px; border-radius: var(--r-full); background: #16223A; overflow: hidden; }
+.meter > span { display: block; height: 100%; border-radius: var(--r-full); background: var(--info-btn); }
+
+/* =====================================================================
+   CHARTS (inline SVG)
+   ===================================================================== */
+.chart { width: 100%; height: auto; display: block; overflow: visible; }
+/* The chart SVGs carry a 732-unit-wide viewBox rendered into roughly a third
+   of that, so label sizes are quoted in viewBox units: 21 units ≈ 11px on
+   screen at the three-column canvas width. */
+.chart-label { font: 400 21px/1 var(--font-body); fill: var(--text-mute); }
+.chart-axis  { stroke: var(--border-soft); stroke-width: 1; }
+.chart-grid  { stroke: #1D2A42; stroke-width: 1; }
+.chart-tooltip rect { fill: #0B1524; stroke: var(--border); }
+.chart-tooltip text { font: 400 21px/1 var(--font-body); fill: var(--text); }
+
+.chart-head { display: flex; align-items: baseline; gap: var(--s-12); margin-bottom: 2px; }
+.chart-title { font: 500 15px/1.3 var(--font-body); color: var(--text); }
+.chart-meta { margin-left: auto; font: 400 12px/1.3 var(--font-mono); color: var(--text-mute); }
+
+/* =====================================================================
+   SPEC SWATCHES  (kept from the reference sheet: they document tokens)
+   ===================================================================== */
+.spec-row { display: flex; align-items: center; justify-content: space-between; gap: var(--s-12);
+            padding: 9px 0; border-bottom: 1px solid var(--border-soft); }
+.spec-row:last-child { border-bottom: 0; }
+.spec-key { font: 400 13px/1.4 var(--font-body); color: var(--text); }
+.spec-val { font: 400 13px/1.4 var(--font-mono); color: var(--text-dim); }
+.swatch { display: flex; align-items: center; gap: var(--s-8); font: 400 12px/1.4 var(--font-body); color: var(--text-dim); }
+.swatch i { width: 11px; height: 11px; border-radius: var(--r-full); flex: 0 0 11px; }
+
+/* Icon grid (light surface so the true artwork colours show) */
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: var(--s-12); }
+.tile { background: var(--page); border: 1px solid var(--border-soft); border-radius: var(--r-md);
+        padding: var(--s-12) var(--s-8); text-align: center; }
+.tile img { width: 40px; height: 40px; margin: 0 auto var(--s-8); }
+.tile .tile-name { font: 500 10px/1.35 var(--font-body); color: var(--text-dim); word-break: break-word; }
+
+/* =====================================================================
+   LOGIN  —  layout from images/Miautrix-Login-Page-Reference.jpg
+   ===================================================================== */
+.login-page {
+  min-height: 100vh; display: grid; place-items: center;
+  padding: var(--s-24); position: relative; isolation: isolate;
+  background: #0B1410;
+}
+.login-page::before {
+  content: ""; position: absolute; inset: -40px;
+  background: url("assets/matrix-rain.jpg") center/cover no-repeat;
+  filter: blur(6px) saturate(.9) brightness(.62);
+  transform: scale(1.06); z-index: -2;
+}
+.login-page::after {
+  content: ""; position: absolute; inset: 0;
+  background: radial-gradient(120% 90% at 50% 45%, rgba(11,20,16,.10) 0%, rgba(6,11,9,.72) 100%);
+  z-index: -1;
+}
+.login-card {
+  width: 100%; max-width: 420px;
+  padding: var(--s-32) var(--s-32) var(--s-24);
+  border-radius: var(--r-lg);
+  background: linear-gradient(180deg, #FBFBFB 0%, #F1F1EF 100%);
+  border: 1px solid rgba(0,0,0,.06);
+  box-shadow: 0 24px 60px rgba(0,0,0,.55), 0 2px 6px rgba(0,0,0,.30);
+  color: #0C1C11;
+  position: relative; z-index: 1;
+}
+.login-logo { width: 208px; margin: 0 auto var(--s-24); }
+.login-field { margin-bottom: var(--s-16); }
+.login-field > label { display: block; font: 600 12px/1 var(--font-body); color: #0C1C11; margin-bottom: var(--s-8); }
+.login-input {
+  display: flex; align-items: center; gap: var(--s-8);
+  height: 40px; padding: 0 var(--s-12);
+  background: #FFFFFF; border: 1px solid #D3D7DC; border-radius: var(--r-md);
+  transition: border-color .16s ease, box-shadow .16s ease;
+}
+.login-input:hover { border-color: #B4BAC2; }
+.login-input:focus-within { border-color: #3E8251; box-shadow: 0 0 0 3px rgba(62,130,81,.16); }
+.login-input svg { flex: 0 0 auto; color: #6B7280; }
+.login-input input { flex: 1 1 auto; min-width: 0; border: 0; outline: 0; background: transparent;
+                     font: 400 14px/1 var(--font-body); color: #0C1C11; }
+.login-input input::placeholder { color: #9AA1AA; }
+.login-row { display: flex; justify-content: flex-end; margin: var(--s-4) 0 var(--s-20); }
+.login-row a { font: 400 13px/1 var(--font-body); color: #4B5563; }
+.login-row a:hover { color: #0C1C11; }
+
+/* CTA — the login reference uses the logo's brand green.
+   Switch --cta/--cta-hi to var(--chrome)/#2B4365 to use the console navy. */
+.login-cta {
+  --cta: #3E8251; --cta-hi: #357146;
+  display: block; width: 100%; height: 44px;
+  border: 0; border-radius: var(--r-md);
+  background: var(--cta); color: #FFFFFF;
+  font: 600 15px/1 var(--font-body);
+  cursor: pointer;
+  transition: background-color .16s ease, box-shadow .16s ease;
+}
+.login-cta:hover { background: var(--cta-hi); box-shadow: 0 4px 14px rgba(62,130,81,.34); }
+.login-cta:focus-visible { outline: 2px solid #0C1C11; outline-offset: 2px; }
+.login-cta[disabled] { opacity: .35; cursor: not-allowed; }
+.login-alt { text-align: center; margin-top: var(--s-16); }
+.login-alt a { font: 400 14px/1 var(--font-body); color: #4B5563; }

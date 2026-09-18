@@ -2,25 +2,46 @@
   "schema_version": 1,
   "diagram_type": "architecture",
   "meta": {
-    "title": "Miautrix Mail Server — System Architecture",
+    "title": "Miautrix Mail Server \u2014 System Architecture",
     "quality_profile": "showcase",
     "views": [
       {
         "id": "mail-path",
         "label": "Mail Ingress & Flow",
-        "focus": ["clients", "ingress", "core", "mailflow", "antispam", "storage", "db"],
+        "focus": [
+          "clients",
+          "ingress",
+          "core",
+          "mailflow",
+          "antispam",
+          "storage",
+          "db"
+        ],
         "note": "Trace inbound and outbound mail through ingress, transport pipeline, security scans, and persistent storage."
       },
       {
         "id": "security-isolation",
         "label": "Identity & Multi-Tenancy",
-        "focus": ["clients", "ingress", "auth", "core", "db", "licensing"],
+        "focus": [
+          "clients",
+          "ingress",
+          "auth",
+          "core",
+          "db",
+          "licensing"
+        ],
         "note": "View identity verification, tenant authorization helper, and licensing boundaries."
       },
       {
         "id": "api-extensibility",
         "label": "API & Provider Seams",
-        "focus": ["clients", "core", "rules", "mcp", "antispam"],
+        "focus": [
+          "clients",
+          "core",
+          "rules",
+          "mcp",
+          "antispam"
+        ],
         "note": "Inspect rule engine, MCP tool execution, and swappable provider interfaces."
       }
     ]
@@ -30,25 +51,43 @@
       "id": "clients",
       "type": "frontend",
       "label": "Client Surfaces",
-      "sublabel": "Admin · Webmail · CLI",
-      "pos": [40, 260],
-      "size": [160, 68]
+      "sublabel": "Admin \u00b7 Webmail \u00b7 CLI",
+      "pos": [
+        40,
+        230
+      ],
+      "size": [
+        160,
+        68
+      ]
     },
     {
       "id": "ingress",
       "type": "security",
       "label": "Ingress & TLS Proxy",
-      "sublabel": "SMTP · IMAPS · HTTPS",
-      "pos": [270, 260],
-      "size": [160, 68]
+      "sublabel": "SMTP \u00b7 IMAPS \u00b7 HTTPS",
+      "pos": [
+        270,
+        230
+      ],
+      "size": [
+        160,
+        68
+      ]
     },
     {
       "id": "auth",
       "type": "security",
       "label": "Identity & MFA",
-      "sublabel": "Argon2id · TOTP · WebAuthn",
-      "pos": [270, 80],
-      "size": [160, 68],
+      "sublabel": "Argon2id \u00b7 TOTP \u00b7 WebAuthn",
+      "pos": [
+        270,
+        70
+      ],
+      "size": [
+        160,
+        68
+      ],
       "tag": "Self-Hosted"
     },
     {
@@ -56,77 +95,142 @@
       "type": "backend",
       "label": "Core Monolith (.NET 10)",
       "sublabel": "Clean Architecture",
-      "pos": [510, 260],
-      "size": [170, 68],
+      "pos": [
+        510,
+        230
+      ],
+      "size": [
+        170,
+        68
+      ],
       "tag": "Tenant Isolated"
     },
     {
       "id": "mailflow",
       "type": "backend",
       "label": "Mail Transport Engine",
-      "sublabel": "SMTP Queue · DKIM",
-      "pos": [510, 440],
-      "size": [170, 68]
+      "sublabel": "SMTP Queue \u00b7 DKIM",
+      "pos": [
+        510,
+        390
+      ],
+      "size": [
+        170,
+        68
+      ]
     },
     {
       "id": "antispam",
       "type": "security",
       "label": "Anti-Spam & Malware",
-      "sublabel": "ISpamProvider · ClamAV",
-      "pos": [270, 440],
-      "size": [160, 68]
+      "sublabel": "ISpamProvider \u00b7 ClamAV",
+      "pos": [
+        270,
+        390
+      ],
+      "size": [
+        160,
+        68
+      ]
     },
     {
       "id": "rules",
       "type": "backend",
       "label": "Rule Engine & Sieve",
-      "sublabel": "ManageSieve · Simulator",
-      "pos": [510, 80],
-      "size": [170, 68]
+      "sublabel": "ManageSieve \u00b7 Simulator",
+      "pos": [
+        510,
+        70
+      ],
+      "size": [
+        170,
+        68
+      ]
     },
     {
       "id": "db",
       "type": "database",
       "label": "PostgreSQL 17",
-      "sublabel": "Metadata · FTS · Audit",
-      "pos": [770, 260],
-      "size": [160, 68]
+      "sublabel": "Metadata \u00b7 FTS \u00b7 Audit",
+      "pos": [
+        770,
+        230
+      ],
+      "size": [
+        160,
+        68
+      ]
     },
     {
       "id": "storage",
       "type": "cloud",
       "label": "MIME Storage Layer",
       "sublabel": "IMailStorage FS / S3",
-      "pos": [770, 440],
-      "size": [160, 68]
+      "pos": [
+        770,
+        390
+      ],
+      "size": [
+        160,
+        68
+      ]
     },
     {
       "id": "mcp",
       "type": "external",
       "label": "REST API & MCP",
       "sublabel": "OpenAPI /api/v1/*",
-      "pos": [770, 80],
-      "size": [160, 68]
+      "pos": [
+        770,
+        70
+      ],
+      "size": [
+        160,
+        68
+      ]
     },
     {
       "id": "licensing",
       "type": "security",
       "label": "Licensing Subsystem",
-      "sublabel": "Offline · Fail-open",
-      "pos": [1010, 260],
-      "size": [150, 68]
+      "sublabel": "Offline \u00b7 Fail-open",
+      "pos": [
+        1010,
+        230
+      ],
+      "size": [
+        150,
+        68
+      ]
     }
   ],
   "boundaries": [
     {
       "kind": "region",
       "label": "Debian Linux Host / Operating Environment",
-      "wraps": ["ingress", "auth", "core", "mailflow", "antispam", "rules", "db", "storage", "mcp", "licensing"]
+      "wraps": [
+        "ingress",
+        "auth",
+        "core",
+        "mailflow",
+        "antispam",
+        "rules",
+        "db",
+        "storage",
+        "mcp",
+        "licensing"
+      ]
     },
     {
       "kind": "security-group",
       "label": "Miautrix Monolith Boundary",
-      "wraps": ["core", "mailflow", "auth", "rules", "antispam"]
+      "wraps": [
+        "core",
+        "mailflow",
+        "auth",
+        "rules",
+        "antispam"
+      ]
     }
   ],
   "connections": [
@@ -150,7 +254,8 @@
       "label": "Authorizes (404 on Cross-Tenant)",
       "variant": "security",
       "fromSide": "right",
-      "toSide": "top"
+      "toSide": "top",
+      "labelDy": 14
     },
     {
       "id": "core-to-mailflow",
@@ -233,7 +338,7 @@
       "items": [
         "Self-hosted identity with Argon2id, TOTP, and WebAuthn (Fido2 4.0.1)",
         "Fail-open licensing: mail keeps flowing if server is unreachable; over-limit blocks new mailboxes only",
-        "Zero-downtime blue/green deployments with EXPAND → MIGRATE → CONTRACT migrations"
+        "Zero-downtime blue/green deployments with EXPAND \u2192 MIGRATE \u2192 CONTRACT migrations"
       ]
     }
   ]

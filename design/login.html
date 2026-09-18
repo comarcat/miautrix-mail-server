@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Miautrix Mail — Sign in</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Red+Hat+Display:wght@600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="admin.css"/>
+</head>
+<body>
+<div class="login-page">
+  <form class="login-card" method="post" action="#" novalidate>
+    <img class="login-logo" src="assets/miautrix-logo.png" alt="Miautrix — Secure Email Platform"/>
+
+    <div class="login-field">
+      <label for="email">Email Address</label>
+      <div class="login-input">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="8" r="3.4"/>
+          <path d="M4.5 20a7.5 7.5 0 0 1 15 0"/>
+        </svg>
+        <input id="email" name="email" type="email" autocomplete="username"
+               placeholder="admin@example.miautrix.com" required/>
+      </div>
+    </div>
+
+    <div class="login-field">
+      <label for="password">Password</label>
+      <div class="login-input">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="4.2" y="10.5" width="15.6" height="9.6" rx="2"/>
+          <path d="M8 10.5V7.6a4 4 0 0 1 8 0v2.9"/>
+        </svg>
+        <input id="password" name="password" type="password" autocomplete="current-password"
+               placeholder="••••••••••" required/>
+      </div>
+    </div>
+
+    <div class="login-row">
+      <a href="#">Forgot Password?</a>
+    </div>
+
+    <button class="login-cta" type="submit">Sign In</button>
+
+    <p class="login-alt"><a href="#">Sign Up</a></p>
+  </form>
+</div>
+</body>
+</html>

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Miautrix Mail — Admin design system</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Red+Hat+Display:wght@600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="admin.css"/>
+</head>
+<body>
+<div class="shell">
+
+  <header class="appbar">
+    <div class="burger" role="button" aria-label="Toggle navigation"><i></i><i></i><i></i></div>
+    <div class="brand">Miautrix Mail <em>Admin</em></div>
+    <div class="spacer"></div>
+    <div class="avatar" title="comarcat">CM</div>
+  </header>
+
+  <div class="body">
+
+    <nav class="sidebar">
+      <a class="nav-item" href="dashboard.html">
+        <span class="ic"><img src="assets/icons/user-management.png" alt=""/></span>Dashboard
+      </a>
+      <a class="nav-item" href="login.html">
+        <span class="ic"><img src="assets/icons/security-audit-logs.png" alt=""/></span>Login page
+      </a>
+      <a class="nav-item" href="#" aria-current="page">
+        <span class="ic"><img src="assets/icons/info-help-documentation.png" alt=""/></span>Design system
+      </a>
+    </nav>
+
+    <main class="main">
+      <div class="canvas">
+
+        <div class="col">
+
+          <section class="card">
+            <div class="card-head"><h2>Surfaces</h2></div>
+            <div class="card-body">
+              <div class="spec-row"><span class="swatch"><i style="background:#213653"></i>--chrome</span><span class="spec-val">#213653</span></div>
+              <div class="spec-row"><span class="swatch"><i style="background:#2B4365"></i>--nav-active</span><span class="spec-val">#2B4365</span></div>
+              <div class="spec-row"><span class="swatch"><i style="background:#0E1525"></i>--page</span><span class="spec-val">#0E1525</span></div>
+              <div class="spec-row"><span class="swatch"><i style="background:#1A2537"></i>--card</span><span class="spec-val">#1A2537</span></div>
+              <div class="spec-row"><span class="swatch"><i style="background:#1E2B40"></i>--card-raise</span><span class="spec-val">#1E2B40</span></div>
+              <div class="spec-row"><span class="swatch"><i style="background:#2F4E7E"></i>--border</span><span class="spec-val">#2F4E7E</span></div>
+              <div class="spec-row"><span class="swatch"><i style="background:#22304A"></i>--border-soft</span><span class="spec-val">#22304A</span></div>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card-head"><h2>Accents</h2></div>
+            <div class="card-body">
+              <div class="spec-row"><span class="swatch"><i style="background:#3E85ED"></i>--info-btn</span><span class="spec-val">#3E85ED</span></div>
+              <div class="spec-row"><span class="swatch"><i style="background:#3B82F6"></i>--info</span><span class="spec-val">#3B82F6</span></div>
+              <div class="spec-row"><span class="swatch"><i style="background:#22C55E"></i>--success</span><span class="spec-val">#22C55E</span></div>
+              <div class="spec-row"><span class="swatch"><i style="background:#F59E0B"></i>--warning</span><span class="spec-val">#F59E0B</span></div>
+              <div class="spec-row"><span class="swatch"><i style="background:#DA393F"></i>--error-btn</span><span class="spec-val">#DA393F</span></div>
+              <div class="spec-row"><span class="swatch"><i style="background:#E63946"></i>--error</span><span class="spec-val">#E63946</span></div>
+              <div class="spec-row"><span class="swatch"><i style="background:#8FA8C8"></i>--head-text</span><span class="spec-val">#8FA8C8</span></div>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card-head"><h2>Type Scale</h2></div>
+            <div class="card-body">
+              <div class="spec-row"><span style="font:700 21px/1.2 var(--font-head);letter-spacing:.04em;text-transform:uppercase">Red Hat Display</span><span class="spec-val">brand</span></div>
+              <div class="spec-row"><span style="font:500 15px/1.3 var(--font-body)">Inter 15px medium</span><span class="spec-val">body</span></div>
+              <div class="spec-row"><span class="mono" style="font-size:13px">JetBrains Mono 13px</span><span class="spec-val">data</span></div>
+              <div class="spec-row"><span style="font:700 12px/1.3 var(--font-body);letter-spacing:.09em;text-transform:uppercase;color:var(--head-text)">Card heading 12px / .09em</span><span class="spec-val">label</span></div>
+              <div class="spec-row"><span class="chip chip-info">11px / 700 / uppercase</span><span class="spec-val">chip</span></div>
+            </div>
+          </section>
+
+        </div>
+
+        <div class="col">
+
+          <section class="card">
+            <div class="card-head"><h2>Chips &amp; Alerts</h2></div>
+            <div class="card-body">
+              <div class="row" style="flex-wrap:wrap;gap:8px;margin-bottom:20px">
+                <span class="chip chip-critical">Critical</span>
+                <span class="chip chip-warning">Warning</span>
+                <span class="chip chip-normal">Normal</span>
+                <span class="chip chip-info">Info</span>
+                <span class="chip chip-plain">Completed</span>
+              </div>
+              <div class="alert alert-critical" style="margin-bottom:12px">
+                <div class="alert-text">Critical alert block
+                  <span class="alert-sub">Tinted panel &mdash; never colour alone, always icon + label</span>
+                </div>
+                <span class="alert-ic"><img src="assets/icons/alert-configuration-critical.png" alt=""/></span>
+              </div>
+              <div class="alert alert-warning">
+                <div class="alert-text">Warning alert block
+                  <span class="alert-sub">Paired with iconography and an explicit text label</span>
+                </div>
+                <span class="alert-ic"><img src="assets/icons/alert-configuration-warning.png" alt=""/></span>
+              </div>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card-head"><h2>Buttons &amp; Inputs</h2></div>
+            <div class="card-body">
+              <div class="row" style="flex-wrap:wrap;gap:12px;margin-bottom:20px">
+                <button class="btn btn-primary">Primary</button>
+                <button class="btn btn-destructive">Destructive</button>
+                <button class="btn btn-outline-info">Outline info</button>
+                <button class="btn btn-outline-danger">Outline danger</button>
+                <button class="btn btn-ghost">Ghost</button>
+                <button class="btn btn-primary" disabled>Disabled</button>
+              </div>
+              <div class="field" style="max-width:340px">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/>
+                </svg>
+                <input type="search" placeholder="Search"/>
+              </div>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card-head"><h2>Elevation</h2></div>
+            <div class="card-body">
+              <div class="spec-row"><span class="spec-key">--glow-card</span><span class="spec-val mono">0 10px 30px rgba(0,0,0,.38)</span></div>
+              <div class="spec-row"><span class="spec-key">--glow-info</span><span class="spec-val mono">0 0 0 1px #2F4E7E</span></div>
+              <div class="spec-row"><span class="spec-key">Critical alert glow</span><span class="spec-val mono">0 0 20px rgba(230,57,70,.40)</span></div>
+              <div class="spec-row"><span class="spec-key">Radius &mdash; cards</span><span class="spec-val mono">6px</span></div>
+              <div class="spec-row"><span class="spec-key">Radius &mdash; controls</span><span class="spec-val mono">4px</span></div>
+            </div>
+          </section>
+
+        </div>
+
+        <div class="col">
+          <section class="card">
+            <div class="card-head"><h2>Admin icon set</h2></div>
+            <div class="card-body">
+              <p class="dim" style="margin:0 0 16px;font-size:13px">
+                21 icons extracted at 256&times;256 from <span class="mono">images/Admin-Icons.jpg</span>,
+                with a real alpha channel recovered from the glow-on-navy source artwork. Shown
+                here on the page surface they are used on.
+              </p>
+              <div class="gallery">
+                <div class="tile"><img src="assets/icons/system-settings.png" alt=""/><div class="tile-name">system settings</div></div>
+                <div class="tile"><img src="assets/icons/security-audit-logs.png" alt=""/><div class="tile-name">security &amp; audit</div></div>
+                <div class="tile"><img src="assets/icons/user-management.png" alt=""/><div class="tile-name">user management</div></div>
+                <div class="tile"><img src="assets/icons/user-permissions.png" alt=""/><div class="tile-name">user permissions</div></div>
+                <div class="tile"><img src="assets/icons/access-control-policies.png" alt=""/><div class="tile-name">access policies</div></div>
+                <div class="tile"><img src="assets/icons/mail-flow-analytics.png" alt=""/><div class="tile-name">mail flow</div></div>
+                <div class="tile"><img src="assets/icons/exchange-transport-service.png" alt=""/><div class="tile-name">transport service</div></div>
+                <div class="tile"><img src="assets/icons/mailbox-cloud-sync.png" alt=""/><div class="tile-name">cloud sync</div></div>
+                <div class="tile"><img src="assets/icons/emergency-override.png" alt=""/><div class="tile-name">emergency override</div></div>
+                <div class="tile"><img src="assets/icons/alert-configuration-warning.png" alt=""/><div class="tile-name">alert warning</div></div>
+                <div class="tile"><img src="assets/icons/alert-configuration-critical.png" alt=""/><div class="tile-name">alert critical</div></div>
+                <div class="tile"><img src="assets/icons/dashboard-customization.png" alt=""/><div class="tile-name">dashboard</div></div>
+                <div class="tile"><img src="assets/icons/mailbox-databases.png" alt=""/><div class="tile-name">mailbox db</div></div>
+                <div class="tile"><img src="assets/icons/archive-compliance.png" alt=""/><div class="tile-name">archive</div></div>
+                <div class="tile"><img src="assets/icons/server-health.png" alt=""/><div class="tile-name">server health</div></div>
+                <div class="tile"><img src="assets/icons/reporting-data-export.png" alt=""/><div class="tile-name">reporting</div></div>
+                <div class="tile"><img src="assets/icons/interface-standards-api.png" alt=""/><div class="tile-name">api standards</div></div>
+                <div class="tile"><img src="assets/icons/info-help-documentation.png" alt=""/><div class="tile-name">help</div></div>
+                <div class="tile"><img src="assets/icons/backup-restore.png" alt=""/><div class="tile-name">backup</div></div>
+                <div class="tile"><img src="assets/icons/performance-monitoring.png" alt=""/><div class="tile-name">performance</div></div>
+                <div class="tile"><img src="assets/icons/destructive-disable-user.png" alt=""/><div class="tile-name">disable user</div></div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</div>
+</body>
+</html>
