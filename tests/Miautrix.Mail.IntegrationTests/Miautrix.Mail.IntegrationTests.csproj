@@ -30,6 +30,9 @@
     <ProjectReference Include="..\..\src\Miautrix.Mail.Search\Miautrix.Mail.Search.csproj" />
     <ProjectReference Include="..\..\src\Miautrix.Mail.MailFlow\Miautrix.Mail.MailFlow.csproj" />
     <ProjectReference Include="..\..\src\Miautrix.Mail.Web\Miautrix.Mail.Web.csproj" />
+    <ProjectReference Include="..\..\src\Miautrix.Mail.Cli\Miautrix.Mail.Cli.csproj" />
+    <ProjectReference Include="..\..\src\Miautrix.Mail.Infrastructure\Miautrix.Mail.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Miautrix.Mail.Licensing\Miautrix.Mail.Licensing.csproj" />
   </ItemGroup>
 
 </Project>

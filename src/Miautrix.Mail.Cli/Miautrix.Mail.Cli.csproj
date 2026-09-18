@@ -4,6 +4,23 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <OutputType>Exe</OutputType>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Spectre.Console" Version="0.55.0" />
+    <PackageReference Include="Spectre.Console.Cli" Version="0.55.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.4" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.4" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Miautrix.Mail.Domain\Miautrix.Mail.Domain.csproj" />
+    <ProjectReference Include="..\Miautrix.Mail.Security\Miautrix.Mail.Security.csproj" />
+    <ProjectReference Include="..\Miautrix.Mail.Application\Miautrix.Mail.Application.csproj" />
+    <ProjectReference Include="..\Miautrix.Mail.Persistence\Miautrix.Mail.Persistence.csproj" />
+    <ProjectReference Include="..\Miautrix.Mail.Infrastructure\Miautrix.Mail.Infrastructure.csproj" />
+  </ItemGroup>
 
 </Project>

@@ -325,7 +325,7 @@
       "Miautrix.Mail.sln",
       "Directory.Build.props"
     ],
-    "status": "pending"
+    "status": "done"
   },
   {
     "id": "T17",
@@ -343,10 +343,10 @@
     ],
     "checkpoint": "step-17-cli",
     "files": [
-      "Miautrix.Mail.sln",
-      "Directory.Build.props"
+      "src/Miautrix.Mail.Cli/**/*",
+      "Miautrix.Mail.sln"
     ],
-    "status": "pending"
+    "status": "done"
   },
   {
     "id": "T18",
@@ -364,10 +364,12 @@
     ],
     "checkpoint": "step-18-desktop",
     "files": [
+      "desktop/**/*",
+      "pnpm-workspace.yaml",
       "Miautrix.Mail.sln",
       "Directory.Build.props"
     ],
-    "status": "pending"
+    "status": "done"
   },
   {
     "id": "T19",
@@ -388,7 +390,7 @@
       "Miautrix.Mail.sln",
       "Directory.Build.props"
     ],
-    "status": "pending"
+    "status": "done"
   },
   {
     "id": "T20",
@@ -410,7 +412,7 @@
       "src/Miautrix.Mail.Persistence/**/*",
       "migrations/**/*"
     ],
-    "status": "pending"
+    "status": "done"
   },
   {
     "id": "T21",
@@ -432,6 +434,6 @@
       "src/Miautrix.Mail.Persistence/**/*",
       "migrations/**/*"
     ],
-    "status": "pending"
+    "status": "done"
   }
 ]
