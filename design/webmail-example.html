@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Miautrix Webmail — Iris Pay Design</title>
+  <link rel="stylesheet" href="webmail.css">
+</head>
+<body>
+
+<div class="webmail-layout">
+
+  <!-- Header: Tabs and Ribbon Formatting Tools -->
+  <header class="wm-header">
+    <!-- Top Tabs (File, Home, View, Help, Message, Format text, Draw, Options) -->
+    <nav class="wm-tabs">
+      <div class="wm-tab">File</div>
+      <div class="wm-tab">Home</div>
+      <div class="wm-tab">View</div>
+      <div class="wm-tab">Help</div>
+      <div class="wm-tab active">Message</div>
+      <div class="wm-tab">Format text</div>
+      <div class="wm-tab">Draw</div>
+      <div class="wm-tab">Options</div>
+    </nav>
+
+    <!-- Ribbon Formatting Toolbar -->
+    <div class="wm-ribbon">
+      <div class="wm-ribbon-group">
+        <button class="wm-tool-btn" title="Undo"><img src="../images/icons/webmail/preferences.png" alt="Undo" style="transform: scaleX(-1);"></button>
+        <button class="wm-tool-btn" title="Paste"><img src="../images/icons/webmail/drafts.png" alt="Paste"></button>
+        <button class="wm-tool-btn" title="Pin / Marker"><img src="../images/icons/webmail/flag.png" alt="Pin"></button>
+      </div>
+
+      <div class="wm-ribbon-group">
+        <button class="wm-tool-btn" title="Bold"><img src="../images/icons/webmail/bold.png" alt="Bold"></button>
+        <button class="wm-tool-btn" title="Italic"><img src="../images/icons/webmail/italic.png" alt="Italic"></button>
+        <button class="wm-tool-btn" title="Underline"><img src="../images/icons/webmail/underline.png" alt="Underline"></button>
+        <button class="wm-tool-btn" title="Strikethrough"><img src="../images/icons/webmail/strikethrough.png" alt="Strikethrough"></button>
+        <button class="wm-tool-btn" title="Text Color"><img src="../images/icons/webmail/text-color.png" alt="Color"></button>
+        <button class="wm-tool-btn" title="Text Size"><img src="../images/icons/webmail/text-size.png" alt="Size"></button>
+      </div>
+
+      <div class="wm-ribbon-group">
+        <button class="wm-tool-btn" title="Bullet List"><img src="../images/icons/webmail/unordered-list.png" alt="Bullets"></button>
+        <button class="wm-tool-btn" title="Align Left"><img src="../images/icons/webmail/align-left.png" alt="Left"></button>
+        <button class="wm-tool-btn" title="Align Center"><img src="../images/icons/webmail/align-center.png" alt="Center"></button>
+        <button class="wm-tool-btn" title="Align Right"><img src="../images/icons/webmail/align-right.png" alt="Right"></button>
+        <button class="wm-tool-btn" title="Justify"><img src="../images/icons/webmail/align-justify.png" alt="Justify"></button>
+        <button class="wm-tool-btn" title="Block Quote"><img src="../images/icons/webmail/block-quote.png" alt="Quote"></button>
+      </div>
+
+      <div class="wm-ribbon-group">
+        <button class="wm-tool-btn" title="Attach File"><img src="../images/icons/webmail/attach-file.png" alt="Attach"></button>
+        <button class="wm-tool-btn" title="Insert Link"><img src="../images/icons/webmail/link.png" alt="Link"></button>
+        <button class="wm-tool-btn" title="Insert Image"><img src="../images/icons/webmail/insert-image.png" alt="Image"></button>
+        <button class="wm-tool-btn" title="Dictate"><img src="../images/icons/webmail/microphone-dictate.png" alt="Dictate"></button>
+      </div>
+
+      <div class="wm-ribbon-group">
+        <button class="wm-tool-btn" title="Flag Message"><img src="../images/icons/webmail/flag.png" alt="Flag"></button>
+        <button class="wm-tool-btn" title="Encrypt Message"><img src="../images/icons/webmail/encrypt.png" alt="Encrypt"></button>
+        <button class="wm-tool-btn" title="Print"><img src="../images/icons/webmail/print.png" alt="Print"></button>
+        <button class="wm-tool-btn" title="More Options"><img src="../images/icons/webmail/more-options.png" alt="More"></button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Webmail Body: Sidebar + Main Compose / Reading Panel -->
+  <div class="wm-body">
+
+    <!-- Left Navigation Folders Sidebar -->
+    <aside class="wm-sidebar">
+
+      <!-- Favorites Section -->
+      <div class="wm-nav-section">
+        <div class="wm-nav-head">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          Favorites
+        </div>
+        <a class="wm-nav-item" href="#">
+          <div class="wm-nav-icon">
+            <img src="../images/icons/webmail/contacts.png" alt="">
+            <span>Your family</span>
+          </div>
+          <span class="badge">1</span>
+        </a>
+      </div>
+
+      <!-- Account / Main Folders Section -->
+      <div class="wm-nav-section">
+        <div class="wm-nav-head">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          outlook_CA881434...
+        </div>
+
+        <a class="wm-nav-item active" href="#">
+          <div class="wm-nav-icon">
+            <img src="../images/icons/webmail/inbox.png" alt="">
+            <span>Inbox</span>
+          </div>
+        </a>
+
+        <a class="wm-nav-item" href="#">
+          <div class="wm-nav-icon">
+            <img src="../images/icons/webmail/security.png" alt="">
+            <span>Junk Email</span>
+          </div>
+        </a>
+
+        <a class="wm-nav-item" href="#">
+          <div class="wm-nav-icon">
+            <img src="../images/icons/webmail/drafts.png" alt="">
+            <span>Drafts</span>
+          </div>
+        </a>
+
+        <a class="wm-nav-item" href="#">
+          <div class="wm-nav-icon">
+            <img src="../images/icons/webmail/sent.png" alt="">
+            <span>Sent Items</span>
+          </div>
+        </a>
+
+        <a class="wm-nav-item" href="#">
+          <div class="wm-nav-icon">
+            <img src="../images/icons/webmail/trash.png" alt="">
+            <span>Deleted Items</span>
+          </div>
+        </a>
+
+        <a class="wm-nav-item" href="#">
+          <div class="wm-nav-icon">
+            <img src="../images/icons/webmail/archive.png" alt="">
+            <span>Archive</span>
+          </div>
+        </a>
+
+        <a class="wm-nav-item" href="#">
+          <div class="wm-nav-icon">
+            <img src="../images/icons/webmail/archive-box.png" alt="">
+            <span>Conversation Hist...</span>
+          </div>
+        </a>
+
+        <a class="wm-nav-item" href="#">
+          <div class="wm-nav-icon">
+            <img src="../images/icons/webmail/compose-pencil.png" alt="">
+            <span>Notes</span>
+          </div>
+        </a>
+
+        <a class="wm-nav-item" href="#">
+          <div class="wm-nav-icon">
+            <img src="../images/icons/webmail/sidebar.png" alt="">
+            <span>Search Folders</span>
+          </div>
+        </a>
+      </div>
+
+      <!-- Bottom Groups / Contacts Link -->
+      <div class="wm-nav-section" style="margin-top: auto;">
+        <a class="wm-nav-item" href="#">
+          <div class="wm-nav-icon">
+            <img src="../images/icons/webmail/contacts.png" alt="">
+            <span>Go to Groups</span>
+          </div>
+          <span class="badge">1</span>
+        </a>
+      </div>
+
+    </aside>
+
+    <!-- Main Content Area: Compose Form exactly as in Webmail-Sample.jpg -->
+    <main class="wm-content">
+
+      <!-- Action Row: Split Send Button + From Selector -->
+      <div class="wm-compose-actions">
+        <div class="btn-send-split">
+          <button class="btn-send-main" type="button">
+            <img src="../images/icons/webmail/sent.png" alt="Send">
+            Send
+          </button>
+          <button class="btn-send-drop" type="button" title="Send Options">
+            <svg width="10" height="6" viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M1 1L5 5L9 1" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="from-selector">
+          <span>From: comarcat@gmail.com</span>
+          <svg width="10" height="6" viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M1 1L5 5L9 1" />
+          </svg>
+        </div>
+      </div>
+
+      <!-- Compose Header: To + Subject -->
+      <div class="compose-header">
+        <div class="compose-row">
+          <button class="pill-label" type="button">To</button>
+          <input class="compose-input" type="text" placeholder="" />
+        </div>
+
+        <div class="compose-row">
+          <input class="subject-input" type="text" placeholder="Add a subject" />
+        </div>
+      </div>
+
+      <!-- Compose Body with Placeholder / Sample Content -->
+      <div class="compose-body" contenteditable="true">
+        <p>Start typing or use the formatting tools.</p>
+        <p>Add a detailed message for your team.</p>
+        <p>- The Iris Webmail Team</p>
+      </div>
+
+    </main>
+
+  </div>
+
+</div>
+
+</body>
+</html>

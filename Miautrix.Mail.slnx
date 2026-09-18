@@ -1,0 +1,35 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Miautrix.Mail.Admin/Miautrix.Mail.Admin.csproj" />
+    <Project Path="src/Miautrix.Mail.AntiMalware/Miautrix.Mail.AntiMalware.csproj" />
+    <Project Path="src/Miautrix.Mail.AntiSpam/Miautrix.Mail.AntiSpam.csproj" />
+    <Project Path="src/Miautrix.Mail.Application/Miautrix.Mail.Application.csproj" />
+    <Project Path="src/Miautrix.Mail.Cli/Miautrix.Mail.Cli.csproj" />
+    <Project Path="src/Miautrix.Mail.Diagnostics/Miautrix.Mail.Diagnostics.csproj" />
+    <Project Path="src/Miautrix.Mail.Domain/Miautrix.Mail.Domain.csproj" />
+    <Project Path="src/Miautrix.Mail.Identity/Miautrix.Mail.Identity.csproj" />
+    <Project Path="src/Miautrix.Mail.Infrastructure/Miautrix.Mail.Infrastructure.csproj" />
+    <Project Path="src/Miautrix.Mail.Licensing/Miautrix.Mail.Licensing.csproj" />
+    <Project Path="src/Miautrix.Mail.MailFlow/Miautrix.Mail.MailFlow.csproj" />
+    <Project Path="src/Miautrix.Mail.Persistence/Miautrix.Mail.Persistence.csproj" />
+    <Project Path="src/Miautrix.Mail.Plugins/Miautrix.Mail.Plugins.csproj" />
+    <Project Path="src/Miautrix.Mail.Protocols.Imap/Miautrix.Mail.Protocols.Imap.csproj" />
+    <Project Path="src/Miautrix.Mail.Protocols.Jmap/Miautrix.Mail.Protocols.Jmap.csproj" />
+    <Project Path="src/Miautrix.Mail.Protocols.Sieve/Miautrix.Mail.Protocols.Sieve.csproj" />
+    <Project Path="src/Miautrix.Mail.Protocols.Smtp/Miautrix.Mail.Protocols.Smtp.csproj" />
+    <Project Path="src/Miautrix.Mail.Queue/Miautrix.Mail.Queue.csproj" />
+    <Project Path="src/Miautrix.Mail.Reporting/Miautrix.Mail.Reporting.csproj" />
+    <Project Path="src/Miautrix.Mail.Search/Miautrix.Mail.Search.csproj" />
+    <Project Path="src/Miautrix.Mail.Security/Miautrix.Mail.Security.csproj" />
+    <Project Path="src/Miautrix.Mail.Storage/Miautrix.Mail.Storage.csproj" />
+    <Project Path="src/Miautrix.Mail.Web/Miautrix.Mail.Web.csproj" />
+    <Project Path="src/Miautrix.Mail.Worker/Miautrix.Mail.Worker.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Miautrix.Mail.EndToEndTests/Miautrix.Mail.EndToEndTests.csproj" />
+    <Project Path="tests/Miautrix.Mail.IntegrationTests/Miautrix.Mail.IntegrationTests.csproj" />
+    <Project Path="tests/Miautrix.Mail.ProtocolTests/Miautrix.Mail.ProtocolTests.csproj" />
+    <Project Path="tests/Miautrix.Mail.SecurityTests/Miautrix.Mail.SecurityTests.csproj" />
+    <Project Path="tests/Miautrix.Mail.UnitTests/Miautrix.Mail.UnitTests.csproj" />
+  </Folder>
+</Solution>

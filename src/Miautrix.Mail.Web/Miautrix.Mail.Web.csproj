@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Miautrix.Mail.Domain\Miautrix.Mail.Domain.csproj" />
+    <ProjectReference Include="..\Miautrix.Mail.Application\Miautrix.Mail.Application.csproj" />
+    <ProjectReference Include="..\Miautrix.Mail.Persistence\Miautrix.Mail.Persistence.csproj" />
+    <ProjectReference Include="..\Miautrix.Mail.Security\Miautrix.Mail.Security.csproj" />
+    <ProjectReference Include="..\Miautrix.Mail.Identity\Miautrix.Mail.Identity.csproj" />
+    <ProjectReference Include="..\Miautrix.Mail.Queue\Miautrix.Mail.Queue.csproj" />
+    <ProjectReference Include="..\Miautrix.Mail.MailFlow\Miautrix.Mail.MailFlow.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.4" />
+    <PackageReference Include="Microsoft.OpenApi" Version="2.7.5" />
+  </ItemGroup>
+
+</Project>
