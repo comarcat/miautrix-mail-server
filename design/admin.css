@@ -351,50 +351,118 @@ img { display: block; }
    LOGIN  —  layout from images/Miautrix-Login-Page-Reference.jpg
    ===================================================================== */
 .login-page {
-  min-height: 100vh; display: grid; place-items: center;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
   padding: var(--s-24);
   background: var(--page);
 }
 .login-card {
-  width: 100%; max-width: 420px;
-  padding: var(--s-32) var(--s-32) var(--s-24);
-  border-radius: var(--r-lg);
-  background: var(--card);
-  border: 1px solid var(--border);
-  box-shadow: var(--glow-card);
-  color: var(--text);
+  width: 100%;
+  max-width: 410px;
+  padding: 36px 32px 32px;
+  border-radius: 12px;
+  background: #FBFBF9;
+  border: 1px solid #E5E7EB;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.45);
+  color: #1F2937;
 }
-.login-logo { width: 208px; margin: 0 auto var(--s-24); }
-.login-field { margin-bottom: var(--s-16); }
-.login-field > label { display: block; font: 600 12px/1 var(--font-body); color: var(--head-text); margin-bottom: var(--s-8); }
+.login-logo {
+  display: block;
+  width: 200px;
+  margin: 0 auto 24px;
+}
+.login-field {
+  margin-bottom: 16px;
+}
+.login-field > label {
+  display: block;
+  font: 600 13px/1.3 var(--font-body);
+  color: #111827;
+  margin-bottom: 6px;
+}
 .login-input {
-  display: flex; align-items: center; gap: var(--s-8);
-  height: 40px; padding: 0 var(--s-12);
-  background: var(--page); border: 1px solid var(--border-soft); border-radius: var(--r-md);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 42px;
+  padding: 0 12px;
+  background: #FFFFFF;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
   transition: border-color .16s ease, box-shadow .16s ease;
 }
-.login-input:hover { border-color: var(--steel); }
-.login-input:focus-within { border-color: var(--info); box-shadow: 0 0 0 3px rgba(59,130,246,.18); }
-.login-input svg { flex: 0 0 auto; color: var(--text-mute); }
-.login-input input { flex: 1 1 auto; min-width: 0; border: 0; outline: 0; background: transparent;
-                     font: 400 14px/1 var(--font-body); color: var(--text); }
-.login-input input::placeholder { color: var(--text-dim); }
-.login-row { display: flex; justify-content: flex-end; margin: var(--s-4) 0 var(--s-20); }
-.login-row a { font: 400 13px/1 var(--font-body); color: var(--text-mute); }
-.login-row a:hover { color: var(--info-text); }
+.login-input:hover {
+  border-color: #9CA3AF;
+}
+.login-input:focus-within {
+  border-color: #3C804F;
+  box-shadow: 0 0 0 3px rgba(60, 128, 79, .15);
+}
+.login-input svg {
+  flex: 0 0 auto;
+  color: #6B7280;
+}
+.login-input input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font: 400 14px/1 var(--font-body);
+  color: #111827;
+}
+.login-input input::placeholder {
+  color: #9CA3AF;
+}
+.login-row {
+  display: flex;
+  justify-content: flex-end;
+  margin: 8px 0 18px;
+}
+.login-row a {
+  font: 400 12px/1 var(--font-body);
+  color: #6B7280;
+  transition: color .15s ease;
+}
+.login-row a:hover {
+  color: #111827;
+}
 
-/* CTA — using the console appbar color. */
+/* CTA — Sign In green matching reference */
 .login-cta {
-  display: block; width: 100%; height: 44px;
-  border: 0; border-radius: var(--r-md);
-  background: var(--info-btn); color: #FFFFFF;
-  font: 700 15px/1 var(--font-body);
+  display: block;
+  width: 100%;
+  height: 42px;
+  border: 0;
+  border-radius: 6px;
+  background: #3C804F;
+  color: #FFFFFF;
+  font: 600 14px/1 var(--font-body);
   cursor: pointer;
   transition: background-color .16s ease, box-shadow .16s ease;
 }
-.login-cta:hover { background: var(--info-btn-hi); box-shadow: 0 4px 14px rgba(62,133,237,.35); }
-.login-cta:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
-.login-cta[disabled] { opacity: .35; cursor: not-allowed; }
-.login-alt { text-align: center; margin-top: var(--s-16); }
-.login-alt a { font: 400 14px/1 var(--font-body); color: var(--text-mute); }
-.login-alt a:hover { color: var(--info-text); }
+.login-cta:hover {
+  background: #326B42;
+  box-shadow: 0 4px 12px rgba(60, 128, 79, .3);
+}
+.login-cta:focus-visible {
+  outline: 2px solid #3C804F;
+  outline-offset: 2px;
+}
+.login-cta[disabled] {
+  opacity: .35;
+  cursor: not-allowed;
+}
+.login-alt {
+  text-align: center;
+  margin: 18px 0 0;
+}
+.login-alt a {
+  font: 500 13px/1 var(--font-body);
+  color: #4B5563;
+  transition: color .15s ease;
+}
+.login-alt a:hover {
+  color: #111827;
+}
