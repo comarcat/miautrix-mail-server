@@ -352,62 +352,49 @@ img { display: block; }
    ===================================================================== */
 .login-page {
   min-height: 100vh; display: grid; place-items: center;
-  padding: var(--s-24); position: relative; isolation: isolate;
-  background: #0B1410;
-}
-.login-page::before {
-  content: ""; position: absolute; inset: -40px;
-  background: url("assets/matrix-rain.jpg") center/cover no-repeat;
-  filter: blur(6px) saturate(.9) brightness(.62);
-  transform: scale(1.06); z-index: -2;
-}
-.login-page::after {
-  content: ""; position: absolute; inset: 0;
-  background: radial-gradient(120% 90% at 50% 45%, rgba(11,20,16,.10) 0%, rgba(6,11,9,.72) 100%);
-  z-index: -1;
+  padding: var(--s-24);
+  background: var(--page);
 }
 .login-card {
   width: 100%; max-width: 420px;
   padding: var(--s-32) var(--s-32) var(--s-24);
   border-radius: var(--r-lg);
-  background: linear-gradient(180deg, #FBFBFB 0%, #F1F1EF 100%);
-  border: 1px solid rgba(0,0,0,.06);
-  box-shadow: 0 24px 60px rgba(0,0,0,.55), 0 2px 6px rgba(0,0,0,.30);
-  color: #0C1C11;
-  position: relative; z-index: 1;
+  background: var(--card);
+  border: 1px solid var(--border);
+  box-shadow: var(--glow-card);
+  color: var(--text);
 }
 .login-logo { width: 208px; margin: 0 auto var(--s-24); }
 .login-field { margin-bottom: var(--s-16); }
-.login-field > label { display: block; font: 600 12px/1 var(--font-body); color: #0C1C11; margin-bottom: var(--s-8); }
+.login-field > label { display: block; font: 600 12px/1 var(--font-body); color: var(--head-text); margin-bottom: var(--s-8); }
 .login-input {
   display: flex; align-items: center; gap: var(--s-8);
   height: 40px; padding: 0 var(--s-12);
-  background: #FFFFFF; border: 1px solid #D3D7DC; border-radius: var(--r-md);
+  background: var(--page); border: 1px solid var(--border-soft); border-radius: var(--r-md);
   transition: border-color .16s ease, box-shadow .16s ease;
 }
-.login-input:hover { border-color: #B4BAC2; }
-.login-input:focus-within { border-color: #3E8251; box-shadow: 0 0 0 3px rgba(62,130,81,.16); }
-.login-input svg { flex: 0 0 auto; color: #6B7280; }
+.login-input:hover { border-color: var(--steel); }
+.login-input:focus-within { border-color: var(--info); box-shadow: 0 0 0 3px rgba(59,130,246,.18); }
+.login-input svg { flex: 0 0 auto; color: var(--text-mute); }
 .login-input input { flex: 1 1 auto; min-width: 0; border: 0; outline: 0; background: transparent;
-                     font: 400 14px/1 var(--font-body); color: #0C1C11; }
-.login-input input::placeholder { color: #9AA1AA; }
+                     font: 400 14px/1 var(--font-body); color: var(--text); }
+.login-input input::placeholder { color: var(--text-dim); }
 .login-row { display: flex; justify-content: flex-end; margin: var(--s-4) 0 var(--s-20); }
-.login-row a { font: 400 13px/1 var(--font-body); color: #4B5563; }
-.login-row a:hover { color: #0C1C11; }
+.login-row a { font: 400 13px/1 var(--font-body); color: var(--text-mute); }
+.login-row a:hover { color: var(--info-text); }
 
-/* CTA — the login reference uses the logo's brand green.
-   Switch --cta/--cta-hi to var(--chrome)/#2B4365 to use the console navy. */
+/* CTA — using the console appbar color. */
 .login-cta {
-  --cta: #3E8251; --cta-hi: #357146;
   display: block; width: 100%; height: 44px;
   border: 0; border-radius: var(--r-md);
-  background: var(--cta); color: #FFFFFF;
-  font: 600 15px/1 var(--font-body);
+  background: var(--info-btn); color: #FFFFFF;
+  font: 700 15px/1 var(--font-body);
   cursor: pointer;
   transition: background-color .16s ease, box-shadow .16s ease;
 }
-.login-cta:hover { background: var(--cta-hi); box-shadow: 0 4px 14px rgba(62,130,81,.34); }
-.login-cta:focus-visible { outline: 2px solid #0C1C11; outline-offset: 2px; }
+.login-cta:hover { background: var(--info-btn-hi); box-shadow: 0 4px 14px rgba(62,133,237,.35); }
+.login-cta:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
 .login-cta[disabled] { opacity: .35; cursor: not-allowed; }
 .login-alt { text-align: center; margin-top: var(--s-16); }
-.login-alt a { font: 400 14px/1 var(--font-body); color: #4B5563; }
+.login-alt a { font: 400 14px/1 var(--font-body); color: var(--text-mute); }
+.login-alt a:hover { color: var(--info-text); }
