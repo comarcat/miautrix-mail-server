@@ -4,6 +4,7 @@ obj/
 out/
 dist/
 node_modules/
+*.tsbuildinfo
 
 # IDE and tooling
 .vs/
