@@ -97,8 +97,33 @@ public class AppDbContext : DbContext
             .Property(e => e.TenantId).HasColumnName("tenant_id").IsRequired();
 
         ConfigureTenantScoped<DomainEntity>(modelBuilder, "domains");
+        modelBuilder.Entity<DomainEntity>(entity =>
+        {
+            entity.Property(e => e.Name).HasColumnName("name").IsRequired();
+            entity.Property(e => e.IsVerified).HasColumnName("is_verified");
+            entity.Property(e => e.DkimSelector).HasColumnName("dkim_selector");
+            entity.Property(e => e.DkimPublicKey).HasColumnName("dkim_public_key");
+            entity.Property(e => e.SpfRecord).HasColumnName("spf_record");
+            entity.Property(e => e.DmarcRecord).HasColumnName("dmarc_record");
+            entity.Property(e => e.IsPrimary).HasColumnName("is_primary");
+        });
+
         ConfigureTenantScoped<User>(modelBuilder, "users");
+        modelBuilder.Entity<User>(entity =>
+        {
+            entity.Property(e => e.Email).HasColumnName("email").IsRequired();
+            entity.Property(e => e.Name).HasColumnName("name");
+            entity.Property(e => e.IsActive).HasColumnName("is_active");
+        });
+
         ConfigureTenantScoped<UserCredential>(modelBuilder, "user_credentials");
+        modelBuilder.Entity<UserCredential>(entity =>
+        {
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.PasswordHash).HasColumnName("password_hash").IsRequired();
+            entity.Property(e => e.Algorithm).HasColumnName("algorithm").IsRequired();
+            entity.Property(e => e.MustChangePassword).HasColumnName("must_change_password");
+        });
         ConfigureTenantScoped<UserIdentity>(modelBuilder, "user_identities");
         ConfigureTenantScoped<IdentityProvider>(modelBuilder, "identity_providers");
         ConfigureTenantScoped<IdentityProviderGroup>(modelBuilder, "identity_provider_groups");

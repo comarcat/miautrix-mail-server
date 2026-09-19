@@ -37,32 +37,13 @@
   },
   "nodes": [
     {
-      "id": "src_miautrix_mail_application_queue_mailqueueservice_miautrix_mail_application_queue_mailqueueservice",
-      "label": "MailQueueService",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "MailQueueService",
-      "file_type": "code",
-      "metadata": {
-        "namespace": "Miautrix.Mail.Application.Queue",
-        "scope_chain": [
-          "s129"
-        ]
-      },
-      "norm_label": "mailqueueservice",
-      "source_file": "src/Miautrix.Mail.Application/Queue/MailQueueService.cs",
-      "source_location": "L13"
-    },
-    {
       "id": "src_miautrix_mail_security_tenantauthorizationhelper_miautrix_mail_security_ipermissionrepository",
       "label": "IPermissionRepository",
       "_callable": true,
       "_callable_class": true,
       "_origin": "ast",
       "community": 0,
-      "community_name": "MailQueueService",
+      "community_name": ".Main",
       "file_type": "code",
       "metadata": {
         "namespace": "Miautrix.Mail.Security",
@@ -81,7 +62,7 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 0,
-      "community_name": "MailQueueService",
+      "community_name": ".Main",
       "file_type": "code",
       "metadata": {
         "namespace": "Miautrix.Mail.Security",
@@ -100,7 +81,7 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 0,
-      "community_name": "MailQueueService",
+      "community_name": ".Main",
       "file_type": "code",
       "metadata": {
         "namespace": "Miautrix.Mail.Security",
@@ -119,7 +100,7 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 0,
-      "community_name": "MailQueueService",
+      "community_name": ".Main",
       "file_type": "code",
       "metadata": {
         "namespace": "Miautrix.Mail.Security",
@@ -138,7 +119,7 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 0,
-      "community_name": "MailQueueService",
+      "community_name": ".Main",
       "file_type": "code",
       "metadata": {
         "namespace": "Miautrix.Mail.Security",
@@ -151,43 +132,42 @@
       "source_location": "L36"
     },
     {
-      "id": "tests_miautrix_mail_securitytests_isolation_isolationtests_miautrix_mail_securitytests_isolation_isolationtests",
-      "label": "IsolationTests",
+      "id": "src_miautrix_mail_cli_infrastructure_typeregistrar_miautrix_mail_cli_infrastructure_typeregistrar",
+      "label": "TypeRegistrar",
       "_callable": true,
       "_callable_class": true,
       "_origin": "ast",
-      "community": 0,
-      "community_name": "MailQueueService",
+      "community": 10,
+      "community_name": ".SimulateAsync",
       "file_type": "code",
       "metadata": {
-        "namespace": "Miautrix.Mail.SecurityTests.Isolation",
+        "namespace": "Miautrix.Mail.Cli.Infrastructure",
         "scope_chain": [
-          "s102"
+          "s90"
         ]
       },
-      "norm_label": "isolationtests",
-      "source_file": "tests/Miautrix.Mail.SecurityTests/Isolation/IsolationTests.cs",
-      "source_location": "L8"
+      "norm_label": "typeregistrar",
+      "source_file": "src/Miautrix.Mail.Cli/Infrastructure/TypeRegistrar.cs",
+      "source_location": "L7"
     },
     {
-      "id": "tests_miautrix_mail_securitytests_isolation_isolationtests_miautrix_mail_securitytests_isolation_mockpermissionrepo",
-      "label": "MockPermissionRepo",
+      "id": "src_miautrix_mail_cli_infrastructure_typeregistrar_miautrix_mail_cli_infrastructure_typeresolver",
+      "label": "TypeResolver",
       "_callable": true,
       "_callable_class": true,
       "_origin": "ast",
-      "community": 0,
-      "community_name": "MailQueueService",
+      "community": 10,
+      "community_name": ".SimulateAsync",
       "file_type": "code",
       "metadata": {
-        "is_nested_type": true,
-        "namespace": "Miautrix.Mail.SecurityTests.Isolation",
+        "namespace": "Miautrix.Mail.Cli.Infrastructure",
         "scope_chain": [
-          "s102"
+          "s90"
         ]
       },
-      "norm_label": "mockpermissionrepo",
-      "source_file": "tests/Miautrix.Mail.SecurityTests/Isolation/IsolationTests.cs",
-      "source_location": "L11"
+      "norm_label": "typeresolver",
+      "source_file": "src/Miautrix.Mail.Cli/Infrastructure/TypeRegistrar.cs",
+      "source_location": "L37"
     },
     {
       "id": "src_miautrix_mail_mailflow_mailflowengine_miautrix_mail_mailflow_imailflowengine",
@@ -665,61 +645,23 @@
       "source_location": "L9"
     },
     {
-      "id": "src_miautrix_mail_application_queue_queuecontracts_miautrix_mail_application_queue_queuefilter",
-      "label": "QueueFilter",
+      "id": "src_miautrix_mail_application_queue_mailqueueservice_miautrix_mail_application_queue_mailqueueservice",
+      "label": "MailQueueService",
       "_callable": true,
       "_callable_class": true,
       "_origin": "ast",
       "community": 108,
-      "community_name": "QueueStatusFilter",
+      "community_name": "MailQueueService",
       "file_type": "code",
       "metadata": {
         "namespace": "Miautrix.Mail.Application.Queue",
         "scope_chain": [
-          "s29"
+          "s129"
         ]
       },
-      "norm_label": "queuefilter",
-      "source_file": "src/Miautrix.Mail.Application/Queue/QueueContracts.cs",
-      "source_location": "L19"
-    },
-    {
-      "id": "src_miautrix_mail_application_queue_queuecontracts_miautrix_mail_application_queue_queuepage",
-      "label": "QueuePage",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 108,
-      "community_name": "QueueStatusFilter",
-      "file_type": "code",
-      "metadata": {
-        "namespace": "Miautrix.Mail.Application.Queue",
-        "scope_chain": [
-          "s29"
-        ]
-      },
-      "norm_label": "queuepage",
-      "source_file": "src/Miautrix.Mail.Application/Queue/QueueContracts.cs",
-      "source_location": "L26"
-    },
-    {
-      "id": "src_miautrix_mail_application_queue_queuecontracts_miautrix_mail_application_queue_queuestatusfilter",
-      "label": "QueueStatusFilter",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 108,
-      "community_name": "QueueStatusFilter",
-      "file_type": "code",
-      "metadata": {
-        "namespace": "Miautrix.Mail.Application.Queue",
-        "scope_chain": [
-          "s29"
-        ]
-      },
-      "norm_label": "queuestatusfilter",
-      "source_file": "src/Miautrix.Mail.Application/Queue/QueueContracts.cs",
-      "source_location": "L10"
+      "norm_label": "mailqueueservice",
+      "source_file": "src/Miautrix.Mail.Application/Queue/MailQueueService.cs",
+      "source_location": "L13"
     },
     {
       "id": "src_miautrix_mail_cli_commands_quarantinelistcommand_miautrix_mail_cli_commands_quarantinelistcommand",
@@ -903,23 +845,43 @@
       "source_location": "L25"
     },
     {
-      "id": "src_miautrix_mail_application_queue_imailqueueservice_miautrix_mail_application_queue_imailqueueservice",
-      "label": "IMailQueueService",
+      "id": "tests_miautrix_mail_securitytests_isolation_isolationtests_miautrix_mail_securitytests_isolation_isolationtests",
+      "label": "IsolationTests",
       "_callable": true,
       "_callable_class": true,
       "_origin": "ast",
       "community": 110,
-      "community_name": ".ListAsync",
+      "community_name": ".When_user_in_tenant_A_requests_mailbox_belonging_to_tenant_B_returns_404_and_does_not_leak_existence",
       "file_type": "code",
       "metadata": {
-        "namespace": "Miautrix.Mail.Application.Queue",
+        "namespace": "Miautrix.Mail.SecurityTests.Isolation",
         "scope_chain": [
-          "s29"
+          "s102"
         ]
       },
-      "norm_label": "imailqueueservice",
-      "source_file": "src/Miautrix.Mail.Application/Queue/IMailQueueService.cs",
-      "source_location": "L5"
+      "norm_label": "isolationtests",
+      "source_file": "tests/Miautrix.Mail.SecurityTests/Isolation/IsolationTests.cs",
+      "source_location": "L8"
+    },
+    {
+      "id": "tests_miautrix_mail_securitytests_isolation_isolationtests_miautrix_mail_securitytests_isolation_mockpermissionrepo",
+      "label": "MockPermissionRepo",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 110,
+      "community_name": ".When_user_in_tenant_A_requests_mailbox_belonging_to_tenant_B_returns_404_and_does_not_leak_existence",
+      "file_type": "code",
+      "metadata": {
+        "is_nested_type": true,
+        "namespace": "Miautrix.Mail.SecurityTests.Isolation",
+        "scope_chain": [
+          "s102"
+        ]
+      },
+      "norm_label": "mockpermissionrepo",
+      "source_file": "tests/Miautrix.Mail.SecurityTests/Isolation/IsolationTests.cs",
+      "source_location": "L11"
     },
     {
       "id": "src_miautrix_mail_cli_commands_systeminfocommand_miautrix_mail_cli_commands_systeminfocommand",
@@ -1493,6 +1455,82 @@
       "source_location": "L8"
     },
     {
+      "id": "src_miautrix_mail_application_queue_imailqueueservice_miautrix_mail_application_queue_imailqueueservice",
+      "label": "IMailQueueService",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 18,
+      "community_name": ".List",
+      "file_type": "code",
+      "metadata": {
+        "namespace": "Miautrix.Mail.Application.Queue",
+        "scope_chain": [
+          "s29"
+        ]
+      },
+      "norm_label": "imailqueueservice",
+      "source_file": "src/Miautrix.Mail.Application/Queue/IMailQueueService.cs",
+      "source_location": "L5"
+    },
+    {
+      "id": "src_miautrix_mail_application_queue_queuecontracts_miautrix_mail_application_queue_queuefilter",
+      "label": "QueueFilter",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 18,
+      "community_name": ".List",
+      "file_type": "code",
+      "metadata": {
+        "namespace": "Miautrix.Mail.Application.Queue",
+        "scope_chain": [
+          "s29"
+        ]
+      },
+      "norm_label": "queuefilter",
+      "source_file": "src/Miautrix.Mail.Application/Queue/QueueContracts.cs",
+      "source_location": "L19"
+    },
+    {
+      "id": "src_miautrix_mail_application_queue_queuecontracts_miautrix_mail_application_queue_queuepage",
+      "label": "QueuePage",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 18,
+      "community_name": ".List",
+      "file_type": "code",
+      "metadata": {
+        "namespace": "Miautrix.Mail.Application.Queue",
+        "scope_chain": [
+          "s29"
+        ]
+      },
+      "norm_label": "queuepage",
+      "source_file": "src/Miautrix.Mail.Application/Queue/QueueContracts.cs",
+      "source_location": "L26"
+    },
+    {
+      "id": "src_miautrix_mail_application_queue_queuecontracts_miautrix_mail_application_queue_queuestatusfilter",
+      "label": "QueueStatusFilter",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 18,
+      "community_name": ".List",
+      "file_type": "code",
+      "metadata": {
+        "namespace": "Miautrix.Mail.Application.Queue",
+        "scope_chain": [
+          "s29"
+        ]
+      },
+      "norm_label": "queuestatusfilter",
+      "source_file": "src/Miautrix.Mail.Application/Queue/QueueContracts.cs",
+      "source_location": "L10"
+    },
+    {
       "id": "src_miautrix_mail_web_contracts_apienvelope_miautrix_mail_web_contracts_apiresponse",
       "label": "ApiResponse",
       "_callable": true,
@@ -1529,6 +1567,44 @@
       "norm_label": "paginationmeta",
       "source_file": "src/Miautrix.Mail.Web/Contracts/ApiEnvelope.cs",
       "source_location": "L14"
+    },
+    {
+      "id": "src_miautrix_mail_web_contracts_queuedtos_miautrix_mail_web_contracts_queueitemdto",
+      "label": "QueueItemDto",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 18,
+      "community_name": ".List",
+      "file_type": "code",
+      "metadata": {
+        "namespace": "Miautrix.Mail.Web.Contracts",
+        "scope_chain": [
+          "s0"
+        ]
+      },
+      "norm_label": "queueitemdto",
+      "source_file": "src/Miautrix.Mail.Web/Contracts/QueueDtos.cs",
+      "source_location": "L7"
+    },
+    {
+      "id": "src_miautrix_mail_web_contracts_requestdtos_miautrix_mail_web_contracts_retryqueueitemrequest",
+      "label": "RetryQueueItemRequest",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 18,
+      "community_name": ".List",
+      "file_type": "code",
+      "metadata": {
+        "namespace": "Miautrix.Mail.Web.Contracts",
+        "scope_chain": [
+          "s46"
+        ]
+      },
+      "norm_label": "retryqueueitemrequest",
+      "source_file": "src/Miautrix.Mail.Web/Contracts/RequestDtos.cs",
+      "source_location": "L9"
     },
     {
       "id": "src_miautrix_mail_web_controllers_mailqueuecontroller_miautrix_mail_web_controllers_mailqueuecontroller",
@@ -1594,7 +1670,7 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 20,
-      "community_name": "Miautrix.Mail.Identity",
+      "community_name": "ImapEngine.cs",
       "file_type": "code",
       "metadata": {
         "namespace": "Miautrix.Mail.Identity",
@@ -1605,44 +1681,6 @@
       "norm_label": "securityeventcodes",
       "source_file": "src/Miautrix.Mail.Identity/SecurityEventCodes.cs",
       "source_location": "L3"
-    },
-    {
-      "id": "src_miautrix_mail_identity_sessionmanager_miautrix_mail_identity_refreshtokeninfo",
-      "label": "RefreshTokenInfo",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 20,
-      "community_name": "Miautrix.Mail.Identity",
-      "file_type": "code",
-      "metadata": {
-        "namespace": "Miautrix.Mail.Identity",
-        "scope_chain": [
-          "s56"
-        ]
-      },
-      "norm_label": "refreshtokeninfo",
-      "source_file": "src/Miautrix.Mail.Identity/SessionManager.cs",
-      "source_location": "L10"
-    },
-    {
-      "id": "src_miautrix_mail_identity_sessionmanager_miautrix_mail_identity_sessioninfo",
-      "label": "SessionInfo",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 20,
-      "community_name": "Miautrix.Mail.Identity",
-      "file_type": "code",
-      "metadata": {
-        "namespace": "Miautrix.Mail.Identity",
-        "scope_chain": [
-          "s56"
-        ]
-      },
-      "norm_label": "sessioninfo",
-      "source_file": "src/Miautrix.Mail.Identity/SessionManager.cs",
-      "source_location": "L8"
     },
     {
       "id": "src_miautrix_mail_domain_entities_miautrix_mail_domain_membership",
@@ -1846,7 +1884,7 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 28,
-      "community_name": ".Main",
+      "community_name": "InMemoryIdempotencyStore",
       "file_type": "code",
       "metadata": {
         "namespace": "Miautrix.Mail.Web.Infrastructure",
@@ -1865,7 +1903,7 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 28,
-      "community_name": ".Main",
+      "community_name": "InMemoryIdempotencyStore",
       "file_type": "code",
       "metadata": {
         "namespace": "Miautrix.Mail.Web.Infrastructure",
@@ -1884,7 +1922,7 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 28,
-      "community_name": ".Main",
+      "community_name": "InMemoryIdempotencyStore",
       "file_type": "code",
       "metadata": {
         "namespace": "Miautrix.Mail.Web.Infrastructure",
@@ -1903,7 +1941,7 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 28,
-      "community_name": ".Main",
+      "community_name": "InMemoryIdempotencyStore",
       "file_type": "code",
       "metadata": {
         "namespace": "Miautrix.Mail.Web.Infrastructure",
@@ -1914,82 +1952,6 @@
       "norm_label": "inmemoryidempotencystore",
       "source_file": "src/Miautrix.Mail.Web/Infrastructure/IdempotencyStore.cs",
       "source_location": "L20"
-    },
-    {
-      "id": "src_miautrix_mail_web_program_miautrix_mail_web_program",
-      "label": "Program",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 28,
-      "community_name": ".Main",
-      "file_type": "code",
-      "metadata": {
-        "namespace": "Miautrix.Mail.Web",
-        "scope_chain": [
-          "s334"
-        ]
-      },
-      "norm_label": "program",
-      "source_file": "src/Miautrix.Mail.Web/Program.cs",
-      "source_location": "L19"
-    },
-    {
-      "id": "src_miautrix_mail_web_contracts_queuedtos_miautrix_mail_web_contracts_queueitemdto",
-      "label": "QueueItemDto",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 29,
-      "community_name": "Miautrix.Mail.Web.Infrastructure",
-      "file_type": "code",
-      "metadata": {
-        "namespace": "Miautrix.Mail.Web.Contracts",
-        "scope_chain": [
-          "s0"
-        ]
-      },
-      "norm_label": "queueitemdto",
-      "source_file": "src/Miautrix.Mail.Web/Contracts/QueueDtos.cs",
-      "source_location": "L7"
-    },
-    {
-      "id": "src_miautrix_mail_web_contracts_requestdtos_miautrix_mail_web_contracts_retryqueueitemrequest",
-      "label": "RetryQueueItemRequest",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 29,
-      "community_name": "Miautrix.Mail.Web.Infrastructure",
-      "file_type": "code",
-      "metadata": {
-        "namespace": "Miautrix.Mail.Web.Contracts",
-        "scope_chain": [
-          "s46"
-        ]
-      },
-      "norm_label": "retryqueueitemrequest",
-      "source_file": "src/Miautrix.Mail.Web/Contracts/RequestDtos.cs",
-      "source_location": "L9"
-    },
-    {
-      "id": "src_miautrix_mail_web_infrastructure_apiresults_miautrix_mail_web_infrastructure_apiresults",
-      "label": "ApiResults",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 29,
-      "community_name": "Miautrix.Mail.Web.Infrastructure",
-      "file_type": "code",
-      "metadata": {
-        "namespace": "Miautrix.Mail.Web.Infrastructure",
-        "scope_chain": [
-          "s36"
-        ]
-      },
-      "norm_label": "apiresults",
-      "source_file": "src/Miautrix.Mail.Web/Infrastructure/ApiResults.cs",
-      "source_location": "L9"
     },
     {
       "id": "src_miautrix_mail_antispam_quarantineservice_miautrix_mail_antispam_iquarantineservice",
@@ -2276,6 +2238,25 @@
       "norm_label": "audittests",
       "source_file": "tests/Miautrix.Mail.IntegrationTests/Audit/AuditTests.cs",
       "source_location": "L9"
+    },
+    {
+      "id": "src_miautrix_mail_web_program_miautrix_mail_web_program",
+      "label": "Program",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 33,
+      "community_name": "MailQueueApiTests",
+      "file_type": "code",
+      "metadata": {
+        "namespace": "Miautrix.Mail.Web",
+        "scope_chain": [
+          "s334"
+        ]
+      },
+      "norm_label": "program",
+      "source_file": "src/Miautrix.Mail.Web/Program.cs",
+      "source_location": "L19"
     },
     {
       "id": "tests_miautrix_mail_integrationtests_api_mailqueueapitests_miautrix_mail_integrationtests_api_mailqueueapitests",
@@ -2869,6 +2850,44 @@
       "source_location": "L12"
     },
     {
+      "id": "src_miautrix_mail_identity_sessionmanager_miautrix_mail_identity_refreshtokeninfo",
+      "label": "RefreshTokenInfo",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 50,
+      "community_name": "InMemorySecurityEventSink",
+      "file_type": "code",
+      "metadata": {
+        "namespace": "Miautrix.Mail.Identity",
+        "scope_chain": [
+          "s56"
+        ]
+      },
+      "norm_label": "refreshtokeninfo",
+      "source_file": "src/Miautrix.Mail.Identity/SessionManager.cs",
+      "source_location": "L10"
+    },
+    {
+      "id": "src_miautrix_mail_identity_sessionmanager_miautrix_mail_identity_sessioninfo",
+      "label": "SessionInfo",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 50,
+      "community_name": "InMemorySecurityEventSink",
+      "file_type": "code",
+      "metadata": {
+        "namespace": "Miautrix.Mail.Identity",
+        "scope_chain": [
+          "s56"
+        ]
+      },
+      "norm_label": "sessioninfo",
+      "source_file": "src/Miautrix.Mail.Identity/SessionManager.cs",
+      "source_location": "L8"
+    },
+    {
       "id": "src_miautrix_mail_identity_sessionmanager_miautrix_mail_identity_sessionmanager",
       "label": "SessionManager",
       "_callable": true,
@@ -3211,6 +3230,25 @@
       "norm_label": "apierror",
       "source_file": "src/Miautrix.Mail.Web/Contracts/ApiError.cs",
       "source_location": "L7"
+    },
+    {
+      "id": "src_miautrix_mail_web_infrastructure_apiresults_miautrix_mail_web_infrastructure_apiresults",
+      "label": "ApiResults",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 73,
+      "community_name": ".Error",
+      "file_type": "code",
+      "metadata": {
+        "namespace": "Miautrix.Mail.Web.Infrastructure",
+        "scope_chain": [
+          "s36"
+        ]
+      },
+      "norm_label": "apiresults",
+      "source_file": "src/Miautrix.Mail.Web/Infrastructure/ApiResults.cs",
+      "source_location": "L9"
     },
     {
       "id": "src_miautrix_mail_web_infrastructure_apiexceptionmiddleware_miautrix_mail_web_infrastructure_apiexceptionmiddleware",
@@ -4011,44 +4049,6 @@
       "source_location": "L10"
     },
     {
-      "id": "src_miautrix_mail_cli_infrastructure_typeregistrar_miautrix_mail_cli_infrastructure_typeregistrar",
-      "label": "TypeRegistrar",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 92,
-      "community_name": "TypeRegistrar",
-      "file_type": "code",
-      "metadata": {
-        "namespace": "Miautrix.Mail.Cli.Infrastructure",
-        "scope_chain": [
-          "s90"
-        ]
-      },
-      "norm_label": "typeregistrar",
-      "source_file": "src/Miautrix.Mail.Cli/Infrastructure/TypeRegistrar.cs",
-      "source_location": "L7"
-    },
-    {
-      "id": "src_miautrix_mail_cli_infrastructure_typeregistrar_miautrix_mail_cli_infrastructure_typeresolver",
-      "label": "TypeResolver",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 92,
-      "community_name": "TypeRegistrar",
-      "file_type": "code",
-      "metadata": {
-        "namespace": "Miautrix.Mail.Cli.Infrastructure",
-        "scope_chain": [
-          "s90"
-        ]
-      },
-      "norm_label": "typeresolver",
-      "source_file": "src/Miautrix.Mail.Cli/Infrastructure/TypeRegistrar.cs",
-      "source_location": "L37"
-    },
-    {
       "id": "src_miautrix_mail_cli_commands_restorecommand_miautrix_mail_cli_commands_restorecommand",
       "label": "RestoreCommand",
       "_callable": true,
@@ -4296,120 +4296,12 @@
       "source_location": "L10"
     },
     {
-      "id": "src_miautrix_mail_application_queue_mailqueueservice_miautrix_mail_application_queue_mailqueueservice_deleteasync",
-      "label": ".DeleteAsync()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "MailQueueService",
-      "file_type": "code",
-      "metadata": {
-        "namespace": "Miautrix.Mail.Application.Queue",
-        "scope_chain": [
-          "s129"
-        ]
-      },
-      "norm_label": ".deleteasync()",
-      "source_file": "src/Miautrix.Mail.Application/Queue/MailQueueService.cs",
-      "source_location": "L108"
-    },
-    {
-      "id": "src_miautrix_mail_application_queue_mailqueueservice_miautrix_mail_application_queue_mailqueueservice_encodecursor",
-      "label": ".EncodeCursor()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "MailQueueService",
-      "file_type": "code",
-      "metadata": {
-        "namespace": "Miautrix.Mail.Application.Queue",
-        "scope_chain": [
-          "s129"
-        ]
-      },
-      "norm_label": ".encodecursor()",
-      "source_file": "src/Miautrix.Mail.Application/Queue/MailQueueService.cs",
-      "source_location": "L138"
-    },
-    {
-      "id": "src_miautrix_mail_application_queue_mailqueueservice_miautrix_mail_application_queue_mailqueueservice_listasync",
-      "label": ".ListAsync()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "MailQueueService",
-      "file_type": "code",
-      "metadata": {
-        "namespace": "Miautrix.Mail.Application.Queue",
-        "scope_chain": [
-          "s129"
-        ]
-      },
-      "norm_label": ".listasync()",
-      "source_file": "src/Miautrix.Mail.Application/Queue/MailQueueService.cs",
-      "source_location": "L27"
-    },
-    {
-      "id": "src_miautrix_mail_application_queue_mailqueueservice_miautrix_mail_application_queue_mailqueueservice_retryasync",
-      "label": ".RetryAsync()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "MailQueueService",
-      "file_type": "code",
-      "metadata": {
-        "namespace": "Miautrix.Mail.Application.Queue",
-        "scope_chain": [
-          "s129"
-        ]
-      },
-      "norm_label": ".retryasync()",
-      "source_file": "src/Miautrix.Mail.Application/Queue/MailQueueService.cs",
-      "source_location": "L79"
-    },
-    {
-      "id": "src_miautrix_mail_application_queue_mailqueueservice_miautrix_mail_application_queue_mailqueueservice_todomainstatuses",
-      "label": ".ToDomainStatuses()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "MailQueueService",
-      "file_type": "code",
-      "metadata": {
-        "namespace": "Miautrix.Mail.Application.Queue",
-        "scope_chain": [
-          "s129"
-        ]
-      },
-      "norm_label": ".todomainstatuses()",
-      "source_file": "src/Miautrix.Mail.Application/Queue/MailQueueService.cs",
-      "source_location": "L129"
-    },
-    {
-      "id": "src_miautrix_mail_application_queue_mailqueueservice_miautrix_mail_application_queue_mailqueueservice_trydecodecursor",
-      "label": ".TryDecodeCursor()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "MailQueueService",
-      "file_type": "code",
-      "metadata": {
-        "namespace": "Miautrix.Mail.Application.Queue",
-        "scope_chain": [
-          "s129"
-        ]
-      },
-      "norm_label": ".trydecodecursor()",
-      "source_file": "src/Miautrix.Mail.Application/Queue/MailQueueService.cs",
-      "source_location": "L147"
-    },
-    {
       "id": "src_miautrix_mail_security_tenantauthorizationhelper_miautrix_mail_security_ipermissionrepository_gettenantownercount",
       "label": ".GetTenantOwnerCount()",
       "_callable": true,
       "_origin": "ast",
       "community": 0,
-      "community_name": "MailQueueService",
+      "community_name": ".Main",
       "file_type": "code",
       "metadata": {
         "namespace": "Miautrix.Mail.Security",
@@ -4427,7 +4319,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 0,
-      "community_name": "MailQueueService",
+      "community_name": ".Main",
       "file_type": "code",
       "metadata": {
         "namespace": "Miautrix.Mail.Security",
@@ -4445,7 +4337,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 0,
-      "community_name": "MailQueueService",
+      "community_name": ".Main",
       "file_type": "code",
       "metadata": {
         "namespace": "Miautrix.Mail.Security",
@@ -4463,7 +4355,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 0,
-      "community_name": "MailQueueService",
+      "community_name": ".Main",
       "file_type": "code",
       "metadata": {
         "namespace": "Miautrix.Mail.Security",
@@ -4476,30 +4368,12 @@
       "source_location": "L31"
     },
     {
-      "id": "src_miautrix_mail_security_tenantauthorizationhelper_miautrix_mail_security_itenantauthorizationhelper_authorizeaccess",
-      "label": ".AuthorizeAccess()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "MailQueueService",
-      "file_type": "code",
-      "metadata": {
-        "namespace": "Miautrix.Mail.Security",
-        "scope_chain": [
-          "s59"
-        ]
-      },
-      "norm_label": ".authorizeaccess()",
-      "source_file": "src/Miautrix.Mail.Security/TenantAuthorizationHelper.cs",
-      "source_location": "L25"
-    },
-    {
       "id": "src_miautrix_mail_security_tenantauthorizationhelper_miautrix_mail_security_itenantauthorizationhelper_validateownerdemotion",
       "label": ".ValidateOwnerDemotion()",
       "_callable": true,
       "_origin": "ast",
       "community": 0,
-      "community_name": "MailQueueService",
+      "community_name": ".Main",
       "file_type": "code",
       "metadata": {
         "namespace": "Miautrix.Mail.Security",
@@ -4517,7 +4391,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 0,
-      "community_name": "MailQueueService",
+      "community_name": ".Main",
       "file_type": "code",
       "metadata": {
         "namespace": "Miautrix.Mail.Security",
@@ -4535,7 +4409,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 0,
-      "community_name": "MailQueueService",
+      "community_name": ".Main",
       "file_type": "code",
       "metadata": {
         "namespace": "Miautrix.Mail.Security",
@@ -4553,7 +4427,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 0,
-      "community_name": "MailQueueService",
+      "community_name": ".Main",
       "file_type": "code",
       "metadata": {
         "namespace": "Miautrix.Mail.Security",
@@ -4566,112 +4440,130 @@
       "source_location": "L99"
     },
     {
-      "id": "tests_miautrix_mail_securitytests_isolation_isolationtests_miautrix_mail_securitytests_isolation_isolationtests_when_attempting_to_demote_last_tenant_owner_throws_exception",
-      "label": ".When_attempting_to_demote_last_tenant_owner_throws_exception()",
+      "id": "src_miautrix_mail_web_program_miautrix_mail_web_program_main",
+      "label": ".Main()",
       "_callable": true,
       "_origin": "ast",
       "community": 0,
-      "community_name": "MailQueueService",
+      "community_name": ".Main",
       "file_type": "code",
       "metadata": {
-        "namespace": "Miautrix.Mail.SecurityTests.Isolation",
+        "namespace": "Miautrix.Mail.Web",
         "scope_chain": [
-          "s102"
+          "s334"
         ]
       },
-      "norm_label": ".when_attempting_to_demote_last_tenant_owner_throws_exception()",
-      "source_file": "tests/Miautrix.Mail.SecurityTests/Isolation/IsolationTests.cs",
-      "source_location": "L80"
+      "norm_label": ".main()",
+      "source_file": "src/Miautrix.Mail.Web/Program.cs",
+      "source_location": "L21"
     },
     {
-      "id": "tests_miautrix_mail_securitytests_isolation_isolationtests_miautrix_mail_securitytests_isolation_isolationtests_when_user_in_tenant_a_requests_mailbox_belonging_to_tenant_a_succeeds",
-      "label": ".When_user_in_tenant_A_requests_mailbox_belonging_to_tenant_A_succeeds()",
+      "id": "src_miautrix_mail_cli_infrastructure_typeregistrar_miautrix_mail_cli_infrastructure_typeregistrar_build",
+      "label": ".Build()",
       "_callable": true,
       "_origin": "ast",
-      "community": 0,
-      "community_name": "MailQueueService",
+      "community": 10,
+      "community_name": ".SimulateAsync",
       "file_type": "code",
       "metadata": {
-        "namespace": "Miautrix.Mail.SecurityTests.Isolation",
+        "namespace": "Miautrix.Mail.Cli.Infrastructure",
         "scope_chain": [
-          "s102"
+          "s90"
         ]
       },
-      "norm_label": ".when_user_in_tenant_a_requests_mailbox_belonging_to_tenant_a_succeeds()",
-      "source_file": "tests/Miautrix.Mail.SecurityTests/Isolation/IsolationTests.cs",
-      "source_location": "L55"
+      "norm_label": ".build()",
+      "source_file": "src/Miautrix.Mail.Cli/Infrastructure/TypeRegistrar.cs",
+      "source_location": "L16"
     },
     {
-      "id": "tests_miautrix_mail_securitytests_isolation_isolationtests_miautrix_mail_securitytests_isolation_isolationtests_when_user_in_tenant_a_requests_mailbox_belonging_to_tenant_b_returns_404_and_does_not_leak_existence",
-      "label": ".When_user_in_tenant_A_requests_mailbox_belonging_to_tenant_B_returns_404_and_does_not_leak_existence()",
+      "id": "src_miautrix_mail_cli_infrastructure_typeregistrar_miautrix_mail_cli_infrastructure_typeregistrar_register",
+      "label": ".Register()",
       "_callable": true,
       "_origin": "ast",
-      "community": 0,
-      "community_name": "MailQueueService",
+      "community": 10,
+      "community_name": ".SimulateAsync",
       "file_type": "code",
       "metadata": {
-        "namespace": "Miautrix.Mail.SecurityTests.Isolation",
+        "namespace": "Miautrix.Mail.Cli.Infrastructure",
         "scope_chain": [
-          "s102"
+          "s90"
         ]
       },
-      "norm_label": ".when_user_in_tenant_a_requests_mailbox_belonging_to_tenant_b_returns_404_and_does_not_leak_existence()",
-      "source_file": "tests/Miautrix.Mail.SecurityTests/Isolation/IsolationTests.cs",
-      "source_location": "L23"
+      "norm_label": ".register()",
+      "source_file": "src/Miautrix.Mail.Cli/Infrastructure/TypeRegistrar.cs",
+      "source_location": "L21"
     },
     {
-      "id": "tests_miautrix_mail_securitytests_isolation_isolationtests_miautrix_mail_securitytests_isolation_mockpermissionrepo_gettenantownercount",
-      "label": ".GetTenantOwnerCount()",
+      "id": "src_miautrix_mail_cli_infrastructure_typeregistrar_miautrix_mail_cli_infrastructure_typeregistrar_registerinstance",
+      "label": ".RegisterInstance()",
       "_callable": true,
       "_origin": "ast",
-      "community": 0,
-      "community_name": "MailQueueService",
+      "community": 10,
+      "community_name": ".SimulateAsync",
       "file_type": "code",
       "metadata": {
-        "namespace": "Miautrix.Mail.SecurityTests.Isolation",
+        "namespace": "Miautrix.Mail.Cli.Infrastructure",
         "scope_chain": [
-          "s102"
+          "s90"
         ]
       },
-      "norm_label": ".gettenantownercount()",
-      "source_file": "tests/Miautrix.Mail.SecurityTests/Isolation/IsolationTests.cs",
-      "source_location": "L18"
+      "norm_label": ".registerinstance()",
+      "source_file": "src/Miautrix.Mail.Cli/Infrastructure/TypeRegistrar.cs",
+      "source_location": "L26"
     },
     {
-      "id": "tests_miautrix_mail_securitytests_isolation_isolationtests_miautrix_mail_securitytests_isolation_mockpermissionrepo_haspermission",
-      "label": ".HasPermission()",
+      "id": "src_miautrix_mail_cli_infrastructure_typeregistrar_miautrix_mail_cli_infrastructure_typeregistrar_registerlazy",
+      "label": ".RegisterLazy()",
       "_callable": true,
       "_origin": "ast",
-      "community": 0,
-      "community_name": "MailQueueService",
+      "community": 10,
+      "community_name": ".SimulateAsync",
       "file_type": "code",
       "metadata": {
-        "namespace": "Miautrix.Mail.SecurityTests.Isolation",
+        "namespace": "Miautrix.Mail.Cli.Infrastructure",
         "scope_chain": [
-          "s102"
+          "s90"
         ]
       },
-      "norm_label": ".haspermission()",
-      "source_file": "tests/Miautrix.Mail.SecurityTests/Isolation/IsolationTests.cs",
-      "source_location": "L13"
+      "norm_label": ".registerlazy()",
+      "source_file": "src/Miautrix.Mail.Cli/Infrastructure/TypeRegistrar.cs",
+      "source_location": "L31"
     },
     {
-      "id": "tests_miautrix_mail_securitytests_isolation_isolationtests_miautrix_mail_securitytests_isolation_mockpermissionrepo_isusertenantowner",
-      "label": ".IsUserTenantOwner()",
+      "id": "src_miautrix_mail_cli_infrastructure_typeregistrar_miautrix_mail_cli_infrastructure_typeresolver_dispose",
+      "label": ".Dispose()",
       "_callable": true,
       "_origin": "ast",
-      "community": 0,
-      "community_name": "MailQueueService",
+      "community": 10,
+      "community_name": ".SimulateAsync",
       "file_type": "code",
       "metadata": {
-        "namespace": "Miautrix.Mail.SecurityTests.Isolation",
+        "namespace": "Miautrix.Mail.Cli.Infrastructure",
         "scope_chain": [
-          "s102"
+          "s90"
         ]
       },
-      "norm_label": ".isusertenantowner()",
-      "source_file": "tests/Miautrix.Mail.SecurityTests/Isolation/IsolationTests.cs",
-      "source_location": "L20"
+      "norm_label": ".dispose()",
+      "source_file": "src/Miautrix.Mail.Cli/Infrastructure/TypeRegistrar.cs",
+      "source_location": "L56"
+    },
+    {
+      "id": "src_miautrix_mail_cli_infrastructure_typeregistrar_miautrix_mail_cli_infrastructure_typeresolver_resolve",
+      "label": ".Resolve()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 10,
+      "community_name": ".SimulateAsync",
+      "file_type": "code",
+      "metadata": {
+        "namespace": "Miautrix.Mail.Cli.Infrastructure",
+        "scope_chain": [
+          "s90"
+        ]
+      },
+      "norm_label": ".resolve()",
+      "source_file": "src/Miautrix.Mail.Cli/Infrastructure/TypeRegistrar.cs",
+      "source_location": "L46"
     },
     {
       "id": "src_miautrix_mail_mailflow_mailflowengine_miautrix_mail_mailflow_imailflowengine_executeasync",
@@ -5052,6 +4944,132 @@
       "source_location": "L15"
     },
     {
+      "id": "src_miautrix_mail_application_queue_mailqueueservice_miautrix_mail_application_queue_mailqueueservice_deleteasync",
+      "label": ".DeleteAsync()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 108,
+      "community_name": "MailQueueService",
+      "file_type": "code",
+      "metadata": {
+        "namespace": "Miautrix.Mail.Application.Queue",
+        "scope_chain": [
+          "s129"
+        ]
+      },
+      "norm_label": ".deleteasync()",
+      "source_file": "src/Miautrix.Mail.Application/Queue/MailQueueService.cs",
+      "source_location": "L108"
+    },
+    {
+      "id": "src_miautrix_mail_application_queue_mailqueueservice_miautrix_mail_application_queue_mailqueueservice_encodecursor",
+      "label": ".EncodeCursor()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 108,
+      "community_name": "MailQueueService",
+      "file_type": "code",
+      "metadata": {
+        "namespace": "Miautrix.Mail.Application.Queue",
+        "scope_chain": [
+          "s129"
+        ]
+      },
+      "norm_label": ".encodecursor()",
+      "source_file": "src/Miautrix.Mail.Application/Queue/MailQueueService.cs",
+      "source_location": "L138"
+    },
+    {
+      "id": "src_miautrix_mail_application_queue_mailqueueservice_miautrix_mail_application_queue_mailqueueservice_listasync",
+      "label": ".ListAsync()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 108,
+      "community_name": "MailQueueService",
+      "file_type": "code",
+      "metadata": {
+        "namespace": "Miautrix.Mail.Application.Queue",
+        "scope_chain": [
+          "s129"
+        ]
+      },
+      "norm_label": ".listasync()",
+      "source_file": "src/Miautrix.Mail.Application/Queue/MailQueueService.cs",
+      "source_location": "L27"
+    },
+    {
+      "id": "src_miautrix_mail_application_queue_mailqueueservice_miautrix_mail_application_queue_mailqueueservice_retryasync",
+      "label": ".RetryAsync()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 108,
+      "community_name": "MailQueueService",
+      "file_type": "code",
+      "metadata": {
+        "namespace": "Miautrix.Mail.Application.Queue",
+        "scope_chain": [
+          "s129"
+        ]
+      },
+      "norm_label": ".retryasync()",
+      "source_file": "src/Miautrix.Mail.Application/Queue/MailQueueService.cs",
+      "source_location": "L79"
+    },
+    {
+      "id": "src_miautrix_mail_application_queue_mailqueueservice_miautrix_mail_application_queue_mailqueueservice_todomainstatuses",
+      "label": ".ToDomainStatuses()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 108,
+      "community_name": "MailQueueService",
+      "file_type": "code",
+      "metadata": {
+        "namespace": "Miautrix.Mail.Application.Queue",
+        "scope_chain": [
+          "s129"
+        ]
+      },
+      "norm_label": ".todomainstatuses()",
+      "source_file": "src/Miautrix.Mail.Application/Queue/MailQueueService.cs",
+      "source_location": "L129"
+    },
+    {
+      "id": "src_miautrix_mail_application_queue_mailqueueservice_miautrix_mail_application_queue_mailqueueservice_trydecodecursor",
+      "label": ".TryDecodeCursor()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 108,
+      "community_name": "MailQueueService",
+      "file_type": "code",
+      "metadata": {
+        "namespace": "Miautrix.Mail.Application.Queue",
+        "scope_chain": [
+          "s129"
+        ]
+      },
+      "norm_label": ".trydecodecursor()",
+      "source_file": "src/Miautrix.Mail.Application/Queue/MailQueueService.cs",
+      "source_location": "L147"
+    },
+    {
+      "id": "src_miautrix_mail_security_tenantauthorizationhelper_miautrix_mail_security_itenantauthorizationhelper_authorizeaccess",
+      "label": ".AuthorizeAccess()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 108,
+      "community_name": "MailQueueService",
+      "file_type": "code",
+      "metadata": {
+        "namespace": "Miautrix.Mail.Security",
+        "scope_chain": [
+          "s59"
+        ]
+      },
+      "norm_label": ".authorizeaccess()",
+      "source_file": "src/Miautrix.Mail.Security/TenantAuthorizationHelper.cs",
+      "source_location": "L25"
+    },
+    {
       "id": "src_miautrix_mail_cli_commands_quarantinelistcommand_miautrix_mail_cli_commands_quarantinelistcommand_executeasync",
       "label": ".ExecuteAsync()",
       "_callable": true,
@@ -5238,58 +5256,112 @@
       "source_location": "L66"
     },
     {
-      "id": "src_miautrix_mail_application_queue_imailqueueservice_miautrix_mail_application_queue_imailqueueservice_deleteasync",
-      "label": ".DeleteAsync()",
+      "id": "tests_miautrix_mail_securitytests_isolation_isolationtests_miautrix_mail_securitytests_isolation_isolationtests_when_attempting_to_demote_last_tenant_owner_throws_exception",
+      "label": ".When_attempting_to_demote_last_tenant_owner_throws_exception()",
       "_callable": true,
       "_origin": "ast",
       "community": 110,
-      "community_name": ".ListAsync",
+      "community_name": ".When_user_in_tenant_A_requests_mailbox_belonging_to_tenant_B_returns_404_and_does_not_leak_existence",
       "file_type": "code",
       "metadata": {
-        "namespace": "Miautrix.Mail.Application.Queue",
+        "namespace": "Miautrix.Mail.SecurityTests.Isolation",
         "scope_chain": [
-          "s29"
+          "s102"
         ]
       },
-      "norm_label": ".deleteasync()",
-      "source_file": "src/Miautrix.Mail.Application/Queue/IMailQueueService.cs",
-      "source_location": "L20"
+      "norm_label": ".when_attempting_to_demote_last_tenant_owner_throws_exception()",
+      "source_file": "tests/Miautrix.Mail.SecurityTests/Isolation/IsolationTests.cs",
+      "source_location": "L80"
     },
     {
-      "id": "src_miautrix_mail_application_queue_imailqueueservice_miautrix_mail_application_queue_imailqueueservice_listasync",
-      "label": ".ListAsync()",
+      "id": "tests_miautrix_mail_securitytests_isolation_isolationtests_miautrix_mail_securitytests_isolation_isolationtests_when_user_in_tenant_a_requests_mailbox_belonging_to_tenant_a_succeeds",
+      "label": ".When_user_in_tenant_A_requests_mailbox_belonging_to_tenant_A_succeeds()",
       "_callable": true,
       "_origin": "ast",
       "community": 110,
-      "community_name": ".ListAsync",
+      "community_name": ".When_user_in_tenant_A_requests_mailbox_belonging_to_tenant_B_returns_404_and_does_not_leak_existence",
       "file_type": "code",
       "metadata": {
-        "namespace": "Miautrix.Mail.Application.Queue",
+        "namespace": "Miautrix.Mail.SecurityTests.Isolation",
         "scope_chain": [
-          "s29"
+          "s102"
         ]
       },
-      "norm_label": ".listasync()",
-      "source_file": "src/Miautrix.Mail.Application/Queue/IMailQueueService.cs",
-      "source_location": "L7"
+      "norm_label": ".when_user_in_tenant_a_requests_mailbox_belonging_to_tenant_a_succeeds()",
+      "source_file": "tests/Miautrix.Mail.SecurityTests/Isolation/IsolationTests.cs",
+      "source_location": "L55"
     },
     {
-      "id": "src_miautrix_mail_application_queue_imailqueueservice_miautrix_mail_application_queue_imailqueueservice_retryasync",
-      "label": ".RetryAsync()",
+      "id": "tests_miautrix_mail_securitytests_isolation_isolationtests_miautrix_mail_securitytests_isolation_isolationtests_when_user_in_tenant_a_requests_mailbox_belonging_to_tenant_b_returns_404_and_does_not_leak_existence",
+      "label": ".When_user_in_tenant_A_requests_mailbox_belonging_to_tenant_B_returns_404_and_does_not_leak_existence()",
       "_callable": true,
       "_origin": "ast",
       "community": 110,
-      "community_name": ".ListAsync",
+      "community_name": ".When_user_in_tenant_A_requests_mailbox_belonging_to_tenant_B_returns_404_and_does_not_leak_existence",
       "file_type": "code",
       "metadata": {
-        "namespace": "Miautrix.Mail.Application.Queue",
+        "namespace": "Miautrix.Mail.SecurityTests.Isolation",
         "scope_chain": [
-          "s29"
+          "s102"
         ]
       },
-      "norm_label": ".retryasync()",
-      "source_file": "src/Miautrix.Mail.Application/Queue/IMailQueueService.cs",
+      "norm_label": ".when_user_in_tenant_a_requests_mailbox_belonging_to_tenant_b_returns_404_and_does_not_leak_existence()",
+      "source_file": "tests/Miautrix.Mail.SecurityTests/Isolation/IsolationTests.cs",
+      "source_location": "L23"
+    },
+    {
+      "id": "tests_miautrix_mail_securitytests_isolation_isolationtests_miautrix_mail_securitytests_isolation_mockpermissionrepo_gettenantownercount",
+      "label": ".GetTenantOwnerCount()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 110,
+      "community_name": ".When_user_in_tenant_A_requests_mailbox_belonging_to_tenant_B_returns_404_and_does_not_leak_existence",
+      "file_type": "code",
+      "metadata": {
+        "namespace": "Miautrix.Mail.SecurityTests.Isolation",
+        "scope_chain": [
+          "s102"
+        ]
+      },
+      "norm_label": ".gettenantownercount()",
+      "source_file": "tests/Miautrix.Mail.SecurityTests/Isolation/IsolationTests.cs",
+      "source_location": "L18"
+    },
+    {
+      "id": "tests_miautrix_mail_securitytests_isolation_isolationtests_miautrix_mail_securitytests_isolation_mockpermissionrepo_haspermission",
+      "label": ".HasPermission()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 110,
+      "community_name": ".When_user_in_tenant_A_requests_mailbox_belonging_to_tenant_B_returns_404_and_does_not_leak_existence",
+      "file_type": "code",
+      "metadata": {
+        "namespace": "Miautrix.Mail.SecurityTests.Isolation",
+        "scope_chain": [
+          "s102"
+        ]
+      },
+      "norm_label": ".haspermission()",
+      "source_file": "tests/Miautrix.Mail.SecurityTests/Isolation/IsolationTests.cs",
       "source_location": "L13"
+    },
+    {
+      "id": "tests_miautrix_mail_securitytests_isolation_isolationtests_miautrix_mail_securitytests_isolation_mockpermissionrepo_isusertenantowner",
+      "label": ".IsUserTenantOwner()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 110,
+      "community_name": ".When_user_in_tenant_A_requests_mailbox_belonging_to_tenant_B_returns_404_and_does_not_leak_existence",
+      "file_type": "code",
+      "metadata": {
+        "namespace": "Miautrix.Mail.SecurityTests.Isolation",
+        "scope_chain": [
+          "s102"
+        ]
+      },
+      "norm_label": ".isusertenantowner()",
+      "source_file": "tests/Miautrix.Mail.SecurityTests/Isolation/IsolationTests.cs",
+      "source_location": "L20"
     },
     {
       "id": "src_miautrix_mail_cli_commands_systeminfocommand_miautrix_mail_cli_commands_systeminfocommand_execute",
@@ -5808,6 +5880,60 @@
       "source_location": "L172"
     },
     {
+      "id": "src_miautrix_mail_application_queue_imailqueueservice_miautrix_mail_application_queue_imailqueueservice_deleteasync",
+      "label": ".DeleteAsync()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 18,
+      "community_name": ".List",
+      "file_type": "code",
+      "metadata": {
+        "namespace": "Miautrix.Mail.Application.Queue",
+        "scope_chain": [
+          "s29"
+        ]
+      },
+      "norm_label": ".deleteasync()",
+      "source_file": "src/Miautrix.Mail.Application/Queue/IMailQueueService.cs",
+      "source_location": "L20"
+    },
+    {
+      "id": "src_miautrix_mail_application_queue_imailqueueservice_miautrix_mail_application_queue_imailqueueservice_listasync",
+      "label": ".ListAsync()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 18,
+      "community_name": ".List",
+      "file_type": "code",
+      "metadata": {
+        "namespace": "Miautrix.Mail.Application.Queue",
+        "scope_chain": [
+          "s29"
+        ]
+      },
+      "norm_label": ".listasync()",
+      "source_file": "src/Miautrix.Mail.Application/Queue/IMailQueueService.cs",
+      "source_location": "L7"
+    },
+    {
+      "id": "src_miautrix_mail_application_queue_imailqueueservice_miautrix_mail_application_queue_imailqueueservice_retryasync",
+      "label": ".RetryAsync()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 18,
+      "community_name": ".List",
+      "file_type": "code",
+      "metadata": {
+        "namespace": "Miautrix.Mail.Application.Queue",
+        "scope_chain": [
+          "s29"
+        ]
+      },
+      "norm_label": ".retryasync()",
+      "source_file": "src/Miautrix.Mail.Application/Queue/IMailQueueService.cs",
+      "source_location": "L13"
+    },
+    {
       "id": "src_miautrix_mail_web_controllers_mailqueuecontroller_miautrix_mail_web_controllers_mailqueuecontroller_delete",
       "label": ".Delete()",
       "_callable": true,
@@ -6245,7 +6371,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 28,
-      "community_name": ".Main",
+      "community_name": "InMemoryIdempotencyStore",
       "file_type": "code",
       "metadata": {
         "namespace": "Miautrix.Mail.Web.Infrastructure",
@@ -6263,7 +6389,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 28,
-      "community_name": ".Main",
+      "community_name": "InMemoryIdempotencyStore",
       "file_type": "code",
       "metadata": {
         "namespace": "Miautrix.Mail.Web.Infrastructure",
@@ -6281,7 +6407,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 28,
-      "community_name": ".Main",
+      "community_name": "InMemoryIdempotencyStore",
       "file_type": "code",
       "metadata": {
         "namespace": "Miautrix.Mail.Web.Infrastructure",
@@ -6299,7 +6425,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 28,
-      "community_name": ".Main",
+      "community_name": "InMemoryIdempotencyStore",
       "file_type": "code",
       "metadata": {
         "namespace": "Miautrix.Mail.Web.Infrastructure",
@@ -6317,7 +6443,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 28,
-      "community_name": ".Main",
+      "community_name": "InMemoryIdempotencyStore",
       "file_type": "code",
       "metadata": {
         "namespace": "Miautrix.Mail.Web.Infrastructure",
@@ -6335,7 +6461,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 28,
-      "community_name": ".Main",
+      "community_name": "InMemoryIdempotencyStore",
       "file_type": "code",
       "metadata": {
         "namespace": "Miautrix.Mail.Web.Infrastructure",
@@ -6346,24 +6472,6 @@
       "norm_label": ".tryget()",
       "source_file": "src/Miautrix.Mail.Web/Infrastructure/IdempotencyStore.cs",
       "source_location": "L24"
-    },
-    {
-      "id": "src_miautrix_mail_web_program_miautrix_mail_web_program_main",
-      "label": ".Main()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 28,
-      "community_name": ".Main",
-      "file_type": "code",
-      "metadata": {
-        "namespace": "Miautrix.Mail.Web",
-        "scope_chain": [
-          "s334"
-        ]
-      },
-      "norm_label": ".main()",
-      "source_file": "src/Miautrix.Mail.Web/Program.cs",
-      "source_location": "L21"
     },
     {
       "id": "src_miautrix_mail_antispam_quarantineservice_miautrix_mail_antispam_iquarantineservice_getquarantinelistasync",
@@ -8868,114 +8976,6 @@
       "source_location": "L19"
     },
     {
-      "id": "src_miautrix_mail_cli_infrastructure_typeregistrar_miautrix_mail_cli_infrastructure_typeregistrar_build",
-      "label": ".Build()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 92,
-      "community_name": "TypeRegistrar",
-      "file_type": "code",
-      "metadata": {
-        "namespace": "Miautrix.Mail.Cli.Infrastructure",
-        "scope_chain": [
-          "s90"
-        ]
-      },
-      "norm_label": ".build()",
-      "source_file": "src/Miautrix.Mail.Cli/Infrastructure/TypeRegistrar.cs",
-      "source_location": "L16"
-    },
-    {
-      "id": "src_miautrix_mail_cli_infrastructure_typeregistrar_miautrix_mail_cli_infrastructure_typeregistrar_register",
-      "label": ".Register()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 92,
-      "community_name": "TypeRegistrar",
-      "file_type": "code",
-      "metadata": {
-        "namespace": "Miautrix.Mail.Cli.Infrastructure",
-        "scope_chain": [
-          "s90"
-        ]
-      },
-      "norm_label": ".register()",
-      "source_file": "src/Miautrix.Mail.Cli/Infrastructure/TypeRegistrar.cs",
-      "source_location": "L21"
-    },
-    {
-      "id": "src_miautrix_mail_cli_infrastructure_typeregistrar_miautrix_mail_cli_infrastructure_typeregistrar_registerinstance",
-      "label": ".RegisterInstance()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 92,
-      "community_name": "TypeRegistrar",
-      "file_type": "code",
-      "metadata": {
-        "namespace": "Miautrix.Mail.Cli.Infrastructure",
-        "scope_chain": [
-          "s90"
-        ]
-      },
-      "norm_label": ".registerinstance()",
-      "source_file": "src/Miautrix.Mail.Cli/Infrastructure/TypeRegistrar.cs",
-      "source_location": "L26"
-    },
-    {
-      "id": "src_miautrix_mail_cli_infrastructure_typeregistrar_miautrix_mail_cli_infrastructure_typeregistrar_registerlazy",
-      "label": ".RegisterLazy()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 92,
-      "community_name": "TypeRegistrar",
-      "file_type": "code",
-      "metadata": {
-        "namespace": "Miautrix.Mail.Cli.Infrastructure",
-        "scope_chain": [
-          "s90"
-        ]
-      },
-      "norm_label": ".registerlazy()",
-      "source_file": "src/Miautrix.Mail.Cli/Infrastructure/TypeRegistrar.cs",
-      "source_location": "L31"
-    },
-    {
-      "id": "src_miautrix_mail_cli_infrastructure_typeregistrar_miautrix_mail_cli_infrastructure_typeresolver_dispose",
-      "label": ".Dispose()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 92,
-      "community_name": "TypeRegistrar",
-      "file_type": "code",
-      "metadata": {
-        "namespace": "Miautrix.Mail.Cli.Infrastructure",
-        "scope_chain": [
-          "s90"
-        ]
-      },
-      "norm_label": ".dispose()",
-      "source_file": "src/Miautrix.Mail.Cli/Infrastructure/TypeRegistrar.cs",
-      "source_location": "L56"
-    },
-    {
-      "id": "src_miautrix_mail_cli_infrastructure_typeregistrar_miautrix_mail_cli_infrastructure_typeresolver_resolve",
-      "label": ".Resolve()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 92,
-      "community_name": "TypeRegistrar",
-      "file_type": "code",
-      "metadata": {
-        "namespace": "Miautrix.Mail.Cli.Infrastructure",
-        "scope_chain": [
-          "s90"
-        ]
-      },
-      "norm_label": ".resolve()",
-      "source_file": "src/Miautrix.Mail.Cli/Infrastructure/TypeRegistrar.cs",
-      "source_location": "L46"
-    },
-    {
       "id": "src_miautrix_mail_cli_commands_restorecommand_miautrix_mail_cli_commands_restorecommand_executeasync",
       "label": ".ExecuteAsync()",
       "_callable": true,
@@ -9246,68 +9246,24 @@
       "source_location": "L36"
     },
     {
+      "id": "apibehavioroptions",
+      "label": "ApiBehaviorOptions",
+      "_origin": "ast",
+      "community": 0,
+      "community_name": ".Main",
+      "file_type": "code",
+      "norm_label": "apibehavioroptions",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
       "id": "exception",
       "label": "Exception",
       "_origin": "ast",
       "community": 0,
-      "community_name": "MailQueueService",
+      "community_name": ".Main",
       "file_type": "code",
       "norm_label": "exception",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "invalidoperationexception",
-      "label": "InvalidOperationException",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "MailQueueService",
-      "file_type": "code",
-      "norm_label": "invalidoperationexception",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "src_miautrix_mail_application_queue_mailqueueservice_cs_cancellationtoken",
-      "label": "CancellationToken",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "MailQueueService",
-      "file_type": "code",
-      "norm_label": "cancellationtoken",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "src_miautrix_mail_application_queue_mailqueueservice_cs_datetimeoffset",
-      "label": "DateTimeOffset",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "MailQueueService",
-      "file_type": "code",
-      "norm_label": "datetimeoffset",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "src_miautrix_mail_application_queue_mailqueueservice_cs_guid",
-      "label": "Guid",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "MailQueueService",
-      "file_type": "code",
-      "norm_label": "guid",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "src_miautrix_mail_application_queue_mailqueueservice_cs_task",
-      "label": "Task",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "MailQueueService",
-      "file_type": "code",
-      "norm_label": "task",
       "source_file": "",
       "source_location": ""
     },
@@ -9316,7 +9272,7 @@
       "label": "TenantAuthorizationHelper.cs",
       "_origin": "ast",
       "community": 0,
-      "community_name": "MailQueueService",
+      "community_name": ".Main",
       "file_type": "code",
       "norm_label": "tenantauthorizationhelper.cs",
       "source_file": "src/Miautrix.Mail.Security/TenantAuthorizationHelper.cs",
@@ -9327,29 +9283,7 @@
       "label": "Guid",
       "_origin": "ast",
       "community": 0,
-      "community_name": "MailQueueService",
-      "file_type": "code",
-      "norm_label": "guid",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "tests_miautrix_mail_securitytests_isolation_isolationtests_cs_fact",
-      "label": "Fact",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "MailQueueService",
-      "file_type": "code",
-      "norm_label": "fact",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "tests_miautrix_mail_securitytests_isolation_isolationtests_cs_guid",
-      "label": "Guid",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "MailQueueService",
+      "community_name": ".Main",
       "file_type": "code",
       "norm_label": "guid",
       "source_file": "",
@@ -9631,6 +9565,22 @@
       "source_location": null
     },
     {
+      "id": "csharp_namespace:d10eab843185d25f",
+      "label": "Miautrix.Mail.Cli.Infrastructure",
+      "_origin": "ast",
+      "community": 10,
+      "community_name": ".SimulateAsync",
+      "file_type": "code",
+      "metadata": {
+        "kind": "csharp_namespace",
+        "namespace": "Miautrix.Mail.Cli.Infrastructure"
+      },
+      "norm_label": "miautrix.mail.cli.infrastructure",
+      "source_file": "src/Miautrix.Mail.Cli/Infrastructure/TypeRegistrar.cs",
+      "source_location": "L5",
+      "type": "namespace"
+    },
+    {
       "id": "csharp_namespace:d4c175a2733a86fa",
       "label": "Miautrix.Mail.MailFlow",
       "_origin": "ast",
@@ -9658,6 +9608,50 @@
       "source_location": ""
     },
     {
+      "id": "iservicecollection",
+      "label": "IServiceCollection",
+      "_origin": "ast",
+      "community": 10,
+      "community_name": ".SimulateAsync",
+      "file_type": "code",
+      "norm_label": "iservicecollection",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "iserviceprovider",
+      "label": "IServiceProvider",
+      "_origin": "ast",
+      "community": 10,
+      "community_name": ".SimulateAsync",
+      "file_type": "code",
+      "norm_label": "iserviceprovider",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "ityperegistrar",
+      "label": "ITypeRegistrar",
+      "_origin": "ast",
+      "community": 10,
+      "community_name": ".SimulateAsync",
+      "file_type": "code",
+      "norm_label": "ityperegistrar",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "ityperesolver",
+      "label": "ITypeResolver",
+      "_origin": "ast",
+      "community": 10,
+      "community_name": ".SimulateAsync",
+      "file_type": "code",
+      "norm_label": "ityperesolver",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
       "id": "jsonserializeroptions",
       "label": "JsonSerializerOptions",
       "_origin": "ast",
@@ -9665,6 +9659,28 @@
       "community_name": ".SimulateAsync",
       "file_type": "code",
       "norm_label": "jsonserializeroptions",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "src_miautrix_mail_cli_infrastructure_typeregistrar",
+      "label": "TypeRegistrar.cs",
+      "_origin": "ast",
+      "community": 10,
+      "community_name": ".SimulateAsync",
+      "file_type": "code",
+      "norm_label": "typeregistrar.cs",
+      "source_file": "src/Miautrix.Mail.Cli/Infrastructure/TypeRegistrar.cs",
+      "source_location": "L1"
+    },
+    {
+      "id": "src_miautrix_mail_cli_infrastructure_typeregistrar_cs_func",
+      "label": "Func",
+      "_origin": "ast",
+      "community": 10,
+      "community_name": ".SimulateAsync",
+      "file_type": "code",
+      "norm_label": "func",
       "source_file": "",
       "source_location": ""
     },
@@ -9764,6 +9780,17 @@
       "community_name": ".SimulateAsync",
       "file_type": "code",
       "norm_label": "task",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "type",
+      "label": "Type",
+      "_origin": "ast",
+      "community": 10,
+      "community_name": ".SimulateAsync",
+      "file_type": "code",
+      "norm_label": "type",
       "source_file": "",
       "source_location": ""
     },
@@ -10471,94 +10498,59 @@
       "source_location": ""
     },
     {
-      "id": "src_miautrix_mail_application_queue_queuecontracts",
-      "label": "QueueContracts.cs",
+      "id": "invalidoperationexception",
+      "label": "InvalidOperationException",
       "_origin": "ast",
       "community": 108,
-      "community_name": "QueueStatusFilter",
+      "community_name": "MailQueueService",
       "file_type": "code",
-      "norm_label": "queuecontracts.cs",
-      "source_file": "src/Miautrix.Mail.Application/Queue/QueueContracts.cs",
-      "source_location": "L1"
-    },
-    {
-      "id": "src_miautrix_mail_application_queue_queuecontracts_cs_ireadonlylist",
-      "label": "IReadOnlyList",
-      "_origin": "ast",
-      "community": 108,
-      "community_name": "QueueStatusFilter",
-      "file_type": "code",
-      "norm_label": "ireadonlylist",
+      "norm_label": "invalidoperationexception",
       "source_file": "",
       "source_location": ""
     },
     {
-      "id": "src_miautrix_mail_application_queue_queuecontracts_miautrix_mail_application_queue_queuestatusfilter_deadletter",
-      "label": "DeadLetter",
+      "id": "src_miautrix_mail_application_queue_mailqueueservice_cs_cancellationtoken",
+      "label": "CancellationToken",
       "_origin": "ast",
       "community": 108,
-      "community_name": "QueueStatusFilter",
+      "community_name": "MailQueueService",
       "file_type": "code",
-      "metadata": {
-        "namespace": "Miautrix.Mail.Application.Queue",
-        "scope_chain": [
-          "s29"
-        ]
-      },
-      "norm_label": "deadletter",
-      "source_file": "src/Miautrix.Mail.Application/Queue/QueueContracts.cs",
-      "source_location": "L14"
+      "norm_label": "cancellationtoken",
+      "source_file": "",
+      "source_location": ""
     },
     {
-      "id": "src_miautrix_mail_application_queue_queuecontracts_miautrix_mail_application_queue_queuestatusfilter_delivered",
-      "label": "Delivered",
+      "id": "src_miautrix_mail_application_queue_mailqueueservice_cs_datetimeoffset",
+      "label": "DateTimeOffset",
       "_origin": "ast",
       "community": 108,
-      "community_name": "QueueStatusFilter",
+      "community_name": "MailQueueService",
       "file_type": "code",
-      "metadata": {
-        "namespace": "Miautrix.Mail.Application.Queue",
-        "scope_chain": [
-          "s29"
-        ]
-      },
-      "norm_label": "delivered",
-      "source_file": "src/Miautrix.Mail.Application/Queue/QueueContracts.cs",
-      "source_location": "L15"
+      "norm_label": "datetimeoffset",
+      "source_file": "",
+      "source_location": ""
     },
     {
-      "id": "src_miautrix_mail_application_queue_queuecontracts_miautrix_mail_application_queue_queuestatusfilter_queued",
-      "label": "Queued",
+      "id": "src_miautrix_mail_application_queue_mailqueueservice_cs_guid",
+      "label": "Guid",
       "_origin": "ast",
       "community": 108,
-      "community_name": "QueueStatusFilter",
+      "community_name": "MailQueueService",
       "file_type": "code",
-      "metadata": {
-        "namespace": "Miautrix.Mail.Application.Queue",
-        "scope_chain": [
-          "s29"
-        ]
-      },
-      "norm_label": "queued",
-      "source_file": "src/Miautrix.Mail.Application/Queue/QueueContracts.cs",
-      "source_location": "L12"
+      "norm_label": "guid",
+      "source_file": "",
+      "source_location": ""
     },
     {
-      "id": "src_miautrix_mail_application_queue_queuecontracts_miautrix_mail_application_queue_queuestatusfilter_retrying",
-      "label": "Retrying",
+      "id": "src_miautrix_mail_application_queue_mailqueueservice_cs_task",
+      "label": "Task",
       "_origin": "ast",
       "community": 108,
-      "community_name": "QueueStatusFilter",
+      "community_name": "MailQueueService",
       "file_type": "code",
-      "metadata": {
-        "namespace": "Miautrix.Mail.Application.Queue",
-        "scope_chain": [
-          "s29"
-        ]
-      },
-      "norm_label": "retrying",
-      "source_file": "src/Miautrix.Mail.Application/Queue/QueueContracts.cs",
-      "source_location": "L13"
+      "norm_label": "task",
+      "source_file": "",
+      "source_location": ""
     },
     {
       "id": "src_miautrix_mail_cli_commands_quarantinelistcommand",
@@ -10798,46 +10790,24 @@
       "source_location": "L1"
     },
     {
-      "id": "src_miautrix_mail_application_queue_imailqueueservice",
-      "label": "IMailQueueService.cs",
+      "id": "tests_miautrix_mail_securitytests_isolation_isolationtests_cs_fact",
+      "label": "Fact",
       "_origin": "ast",
       "community": 110,
-      "community_name": ".ListAsync",
+      "community_name": ".When_user_in_tenant_A_requests_mailbox_belonging_to_tenant_B_returns_404_and_does_not_leak_existence",
       "file_type": "code",
-      "norm_label": "imailqueueservice.cs",
-      "source_file": "src/Miautrix.Mail.Application/Queue/IMailQueueService.cs",
-      "source_location": "L1"
-    },
-    {
-      "id": "src_miautrix_mail_application_queue_imailqueueservice_cs_cancellationtoken",
-      "label": "CancellationToken",
-      "_origin": "ast",
-      "community": 110,
-      "community_name": ".ListAsync",
-      "file_type": "code",
-      "norm_label": "cancellationtoken",
+      "norm_label": "fact",
       "source_file": "",
       "source_location": ""
     },
     {
-      "id": "src_miautrix_mail_application_queue_imailqueueservice_cs_guid",
+      "id": "tests_miautrix_mail_securitytests_isolation_isolationtests_cs_guid",
       "label": "Guid",
       "_origin": "ast",
       "community": 110,
-      "community_name": ".ListAsync",
+      "community_name": ".When_user_in_tenant_A_requests_mailbox_belonging_to_tenant_B_returns_404_and_does_not_leak_existence",
       "file_type": "code",
       "norm_label": "guid",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "src_miautrix_mail_application_queue_imailqueueservice_cs_task",
-      "label": "Task",
-      "_origin": "ast",
-      "community": 110,
-      "community_name": ".ListAsync",
-      "file_type": "code",
-      "norm_label": "task",
       "source_file": "",
       "source_location": ""
     },
@@ -11305,11 +11275,22 @@
       "source_location": "L1"
     },
     {
+      "id": "deploy",
+      "label": "deploy.ps1",
+      "_origin": "ast",
+      "community": 124,
+      "community_name": "deploy.ps1",
+      "file_type": "code",
+      "norm_label": "deploy.ps1",
+      "source_file": "deploy.ps1",
+      "source_location": "L1"
+    },
+    {
       "id": "csharp_namespace:b1a428061f37ebb6",
       "label": "Miautrix.Mail.Persistence.Migrations",
       "_origin": "ast",
       "community": 13,
-      "community_name": "Miautrix.Mail.Persistence.Migrations",
+      "community_name": "microsoft_entityframeworkcore",
       "file_type": "code",
       "metadata": {
         "kind": "csharp_namespace",
@@ -11325,7 +11306,7 @@
       "label": "20260918021252_InitialCreate.cs",
       "_origin": "ast",
       "community": 13,
-      "community_name": "Miautrix.Mail.Persistence.Migrations",
+      "community_name": "microsoft_entityframeworkcore",
       "file_type": "code",
       "norm_label": "20260918021252_initialcreate.cs",
       "source_file": "src/Miautrix.Mail.Persistence/Migrations/20260918021252_InitialCreate.cs",
@@ -11336,7 +11317,7 @@
       "label": "20260918021252_InitialCreate.Designer.cs",
       "_origin": "ast",
       "community": 13,
-      "community_name": "Miautrix.Mail.Persistence.Migrations",
+      "community_name": "microsoft_entityframeworkcore",
       "file_type": "code",
       "norm_label": "20260918021252_initialcreate.designer.cs",
       "source_file": "src/Miautrix.Mail.Persistence/Migrations/20260918021252_InitialCreate.Designer.cs",
@@ -11347,7 +11328,7 @@
       "label": "20260918030618_AddCatalogFields.cs",
       "_origin": "ast",
       "community": 13,
-      "community_name": "Miautrix.Mail.Persistence.Migrations",
+      "community_name": "microsoft_entityframeworkcore",
       "file_type": "code",
       "norm_label": "20260918030618_addcatalogfields.cs",
       "source_file": "src/Miautrix.Mail.Persistence/Migrations/20260918030618_AddCatalogFields.cs",
@@ -11358,7 +11339,7 @@
       "label": "20260918030618_AddCatalogFields.Designer.cs",
       "_origin": "ast",
       "community": 13,
-      "community_name": "Miautrix.Mail.Persistence.Migrations",
+      "community_name": "microsoft_entityframeworkcore",
       "file_type": "code",
       "norm_label": "20260918030618_addcatalogfields.designer.cs",
       "source_file": "src/Miautrix.Mail.Persistence/Migrations/20260918030618_AddCatalogFields.Designer.cs",
@@ -11369,7 +11350,7 @@
       "label": "20260918034003_AddAuditLogColumns.cs",
       "_origin": "ast",
       "community": 13,
-      "community_name": "Miautrix.Mail.Persistence.Migrations",
+      "community_name": "microsoft_entityframeworkcore",
       "file_type": "code",
       "norm_label": "20260918034003_addauditlogcolumns.cs",
       "source_file": "src/Miautrix.Mail.Persistence/Migrations/20260918034003_AddAuditLogColumns.cs",
@@ -11380,7 +11361,7 @@
       "label": "20260918034003_AddAuditLogColumns.Designer.cs",
       "_origin": "ast",
       "community": 13,
-      "community_name": "Miautrix.Mail.Persistence.Migrations",
+      "community_name": "microsoft_entityframeworkcore",
       "file_type": "code",
       "norm_label": "20260918034003_addauditlogcolumns.designer.cs",
       "source_file": "src/Miautrix.Mail.Persistence/Migrations/20260918034003_AddAuditLogColumns.Designer.cs",
@@ -11391,7 +11372,7 @@
       "label": "20260918034216_AddSmtpQueueColumns.cs",
       "_origin": "ast",
       "community": 13,
-      "community_name": "Miautrix.Mail.Persistence.Migrations",
+      "community_name": "microsoft_entityframeworkcore",
       "file_type": "code",
       "norm_label": "20260918034216_addsmtpqueuecolumns.cs",
       "source_file": "src/Miautrix.Mail.Persistence/Migrations/20260918034216_AddSmtpQueueColumns.cs",
@@ -11402,7 +11383,7 @@
       "label": "20260918034216_AddSmtpQueueColumns.Designer.cs",
       "_origin": "ast",
       "community": 13,
-      "community_name": "Miautrix.Mail.Persistence.Migrations",
+      "community_name": "microsoft_entityframeworkcore",
       "file_type": "code",
       "norm_label": "20260918034216_addsmtpqueuecolumns.designer.cs",
       "source_file": "src/Miautrix.Mail.Persistence/Migrations/20260918034216_AddSmtpQueueColumns.Designer.cs",
@@ -11413,7 +11394,7 @@
       "label": "20260918035154_AddMailAndSpamColumns.cs",
       "_origin": "ast",
       "community": 13,
-      "community_name": "Miautrix.Mail.Persistence.Migrations",
+      "community_name": "microsoft_entityframeworkcore",
       "file_type": "code",
       "norm_label": "20260918035154_addmailandspamcolumns.cs",
       "source_file": "src/Miautrix.Mail.Persistence/Migrations/20260918035154_AddMailAndSpamColumns.cs",
@@ -11424,7 +11405,7 @@
       "label": "20260918035154_AddMailAndSpamColumns.Designer.cs",
       "_origin": "ast",
       "community": 13,
-      "community_name": "Miautrix.Mail.Persistence.Migrations",
+      "community_name": "microsoft_entityframeworkcore",
       "file_type": "code",
       "norm_label": "20260918035154_addmailandspamcolumns.designer.cs",
       "source_file": "src/Miautrix.Mail.Persistence/Migrations/20260918035154_AddMailAndSpamColumns.Designer.cs",
@@ -11435,7 +11416,7 @@
       "label": "20260918181732_AddMembershipAndRolePermissionFks.cs",
       "_origin": "ast",
       "community": 13,
-      "community_name": "Miautrix.Mail.Persistence.Migrations",
+      "community_name": "microsoft_entityframeworkcore",
       "file_type": "code",
       "norm_label": "20260918181732_addmembershipandrolepermissionfks.cs",
       "source_file": "src/Miautrix.Mail.Persistence/Migrations/20260918181732_AddMembershipAndRolePermissionFks.cs",
@@ -11446,7 +11427,7 @@
       "label": "20260918181732_AddMembershipAndRolePermissionFks.Designer.cs",
       "_origin": "ast",
       "community": 13,
-      "community_name": "Miautrix.Mail.Persistence.Migrations",
+      "community_name": "microsoft_entityframeworkcore",
       "file_type": "code",
       "norm_label": "20260918181732_addmembershipandrolepermissionfks.designer.cs",
       "source_file": "src/Miautrix.Mail.Persistence/Migrations/20260918181732_AddMembershipAndRolePermissionFks.Designer.cs",
@@ -11457,7 +11438,7 @@
       "label": "AppDbContextModelSnapshot.cs",
       "_origin": "ast",
       "community": 13,
-      "community_name": "Miautrix.Mail.Persistence.Migrations",
+      "community_name": "microsoft_entityframeworkcore",
       "file_type": "code",
       "norm_label": "appdbcontextmodelsnapshot.cs",
       "source_file": "src/Miautrix.Mail.Persistence/Migrations/AppDbContextModelSnapshot.cs",
@@ -12147,6 +12128,129 @@
       "source_location": ""
     },
     {
+      "id": "src_miautrix_mail_application_queue_imailqueueservice_cs_cancellationtoken",
+      "label": "CancellationToken",
+      "_origin": "ast",
+      "community": 18,
+      "community_name": ".List",
+      "file_type": "code",
+      "norm_label": "cancellationtoken",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "src_miautrix_mail_application_queue_imailqueueservice_cs_guid",
+      "label": "Guid",
+      "_origin": "ast",
+      "community": 18,
+      "community_name": ".List",
+      "file_type": "code",
+      "norm_label": "guid",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "src_miautrix_mail_application_queue_imailqueueservice_cs_task",
+      "label": "Task",
+      "_origin": "ast",
+      "community": 18,
+      "community_name": ".List",
+      "file_type": "code",
+      "norm_label": "task",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "src_miautrix_mail_application_queue_queuecontracts",
+      "label": "QueueContracts.cs",
+      "_origin": "ast",
+      "community": 18,
+      "community_name": ".List",
+      "file_type": "code",
+      "norm_label": "queuecontracts.cs",
+      "source_file": "src/Miautrix.Mail.Application/Queue/QueueContracts.cs",
+      "source_location": "L1"
+    },
+    {
+      "id": "src_miautrix_mail_application_queue_queuecontracts_cs_ireadonlylist",
+      "label": "IReadOnlyList",
+      "_origin": "ast",
+      "community": 18,
+      "community_name": ".List",
+      "file_type": "code",
+      "norm_label": "ireadonlylist",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "src_miautrix_mail_application_queue_queuecontracts_miautrix_mail_application_queue_queuestatusfilter_deadletter",
+      "label": "DeadLetter",
+      "_origin": "ast",
+      "community": 18,
+      "community_name": ".List",
+      "file_type": "code",
+      "metadata": {
+        "namespace": "Miautrix.Mail.Application.Queue",
+        "scope_chain": [
+          "s29"
+        ]
+      },
+      "norm_label": "deadletter",
+      "source_file": "src/Miautrix.Mail.Application/Queue/QueueContracts.cs",
+      "source_location": "L14"
+    },
+    {
+      "id": "src_miautrix_mail_application_queue_queuecontracts_miautrix_mail_application_queue_queuestatusfilter_delivered",
+      "label": "Delivered",
+      "_origin": "ast",
+      "community": 18,
+      "community_name": ".List",
+      "file_type": "code",
+      "metadata": {
+        "namespace": "Miautrix.Mail.Application.Queue",
+        "scope_chain": [
+          "s29"
+        ]
+      },
+      "norm_label": "delivered",
+      "source_file": "src/Miautrix.Mail.Application/Queue/QueueContracts.cs",
+      "source_location": "L15"
+    },
+    {
+      "id": "src_miautrix_mail_application_queue_queuecontracts_miautrix_mail_application_queue_queuestatusfilter_queued",
+      "label": "Queued",
+      "_origin": "ast",
+      "community": 18,
+      "community_name": ".List",
+      "file_type": "code",
+      "metadata": {
+        "namespace": "Miautrix.Mail.Application.Queue",
+        "scope_chain": [
+          "s29"
+        ]
+      },
+      "norm_label": "queued",
+      "source_file": "src/Miautrix.Mail.Application/Queue/QueueContracts.cs",
+      "source_location": "L12"
+    },
+    {
+      "id": "src_miautrix_mail_application_queue_queuecontracts_miautrix_mail_application_queue_queuestatusfilter_retrying",
+      "label": "Retrying",
+      "_origin": "ast",
+      "community": 18,
+      "community_name": ".List",
+      "file_type": "code",
+      "metadata": {
+        "namespace": "Miautrix.Mail.Application.Queue",
+        "scope_chain": [
+          "s29"
+        ]
+      },
+      "norm_label": "retrying",
+      "source_file": "src/Miautrix.Mail.Application/Queue/QueueContracts.cs",
+      "source_location": "L13"
+    },
+    {
       "id": "src_miautrix_mail_web_contracts_apienvelope",
       "label": "ApiEnvelope.cs",
       "_origin": "ast",
@@ -12156,6 +12260,56 @@
       "norm_label": "apienvelope.cs",
       "source_file": "src/Miautrix.Mail.Web/Contracts/ApiEnvelope.cs",
       "source_location": "L1"
+    },
+    {
+      "id": "src_miautrix_mail_web_contracts_queuedtos",
+      "label": "QueueDtos.cs",
+      "_origin": "ast",
+      "community": 18,
+      "community_name": ".List",
+      "file_type": "code",
+      "norm_label": "queuedtos.cs",
+      "source_file": "src/Miautrix.Mail.Web/Contracts/QueueDtos.cs",
+      "source_location": "L1"
+    },
+    {
+      "id": "src_miautrix_mail_web_contracts_queuedtos_cs_datetimeoffset",
+      "label": "DateTimeOffset",
+      "_origin": "ast",
+      "community": 18,
+      "community_name": ".List",
+      "file_type": "code",
+      "norm_label": "datetimeoffset",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "src_miautrix_mail_web_contracts_requestdtos",
+      "label": "RequestDtos.cs",
+      "_origin": "ast",
+      "community": 18,
+      "community_name": ".List",
+      "file_type": "code",
+      "norm_label": "requestdtos.cs",
+      "source_file": "src/Miautrix.Mail.Web/Contracts/RequestDtos.cs",
+      "source_location": "L1"
+    },
+    {
+      "id": "src_miautrix_mail_web_contracts_requestdtos_miautrix_mail_web_contracts_retryqueueitemrequest_reason",
+      "label": "Reason",
+      "_origin": "ast",
+      "community": 18,
+      "community_name": ".List",
+      "file_type": "code",
+      "metadata": {
+        "namespace": "Miautrix.Mail.Web.Contracts",
+        "scope_chain": [
+          "s46"
+        ]
+      },
+      "norm_label": "reason",
+      "source_file": "src/Miautrix.Mail.Web/Contracts/RequestDtos.cs",
+      "source_location": "L11"
     },
     {
       "id": "src_miautrix_mail_web_controllers_mailqueuecontroller_cs_cancellationtoken",
@@ -13379,11 +13533,43 @@
       "source_location": "L17"
     },
     {
+      "id": "csharp_namespace:012bfce10ccc2aa9",
+      "label": "Miautrix.Mail.Protocols.Imap",
+      "_origin": "ast",
+      "community": 20,
+      "community_name": "ImapEngine.cs",
+      "file_type": "code",
+      "metadata": {
+        "kind": "csharp_namespace",
+        "namespace": "Miautrix.Mail.Protocols.Imap"
+      },
+      "norm_label": "miautrix.mail.protocols.imap",
+      "source_file": "src/Miautrix.Mail.Protocols.Imap/ImapEngine.cs",
+      "source_location": "L8",
+      "type": "namespace"
+    },
+    {
+      "id": "csharp_namespace:45a2aa24d0b2c375",
+      "label": "Miautrix.Mail.Storage",
+      "_origin": "ast",
+      "community": 20,
+      "community_name": "ImapEngine.cs",
+      "file_type": "code",
+      "metadata": {
+        "kind": "csharp_namespace",
+        "namespace": "Miautrix.Mail.Storage"
+      },
+      "norm_label": "miautrix.mail.storage",
+      "source_file": "src/Miautrix.Mail.Storage/MailStorage.cs",
+      "source_location": "L3",
+      "type": "namespace"
+    },
+    {
       "id": "csharp_namespace:5e72832097039de8",
       "label": "Miautrix.Mail.Identity",
       "_origin": "ast",
       "community": 20,
-      "community_name": "Miautrix.Mail.Identity",
+      "community_name": "ImapEngine.cs",
       "file_type": "code",
       "metadata": {
         "kind": "csharp_namespace",
@@ -13395,11 +13581,27 @@
       "type": "namespace"
     },
     {
+      "id": "csharp_namespace:b98487c9eec294ab",
+      "label": "Miautrix.Mail.Seeder",
+      "_origin": "ast",
+      "community": 20,
+      "community_name": "ImapEngine.cs",
+      "file_type": "code",
+      "metadata": {
+        "kind": "csharp_namespace",
+        "namespace": "Miautrix.Mail.Seeder"
+      },
+      "norm_label": "miautrix.mail.seeder",
+      "source_file": "src/Miautrix.Mail.Seeder/Program.cs",
+      "source_location": "L7",
+      "type": "namespace"
+    },
+    {
       "id": "csharp_namespace:c0cfa784ab238c0b",
       "label": "Miautrix.Mail.SecurityTests.Identity",
       "_origin": "ast",
       "community": 20,
-      "community_name": "Miautrix.Mail.Identity",
+      "community_name": "ImapEngine.cs",
       "file_type": "code",
       "metadata": {
         "kind": "csharp_namespace",
@@ -13411,11 +13613,27 @@
       "type": "namespace"
     },
     {
+      "id": "csharp_namespace:c2384be97a6a1e1d",
+      "label": "Miautrix.Mail.ProtocolTests.Imap",
+      "_origin": "ast",
+      "community": 20,
+      "community_name": "ImapEngine.cs",
+      "file_type": "code",
+      "metadata": {
+        "kind": "csharp_namespace",
+        "namespace": "Miautrix.Mail.ProtocolTests.Imap"
+      },
+      "norm_label": "miautrix.mail.protocoltests.imap",
+      "source_file": "tests/Miautrix.Mail.ProtocolTests/Imap/ImapTests.cs",
+      "source_location": "L9",
+      "type": "namespace"
+    },
+    {
       "id": "src_miautrix_mail_identity_argon2idpasswordhasher",
       "label": "Argon2idPasswordHasher.cs",
       "_origin": "ast",
       "community": 20,
-      "community_name": "Miautrix.Mail.Identity",
+      "community_name": "ImapEngine.cs",
       "file_type": "code",
       "norm_label": "argon2idpasswordhasher.cs",
       "source_file": "src/Miautrix.Mail.Identity/Argon2idPasswordHasher.cs",
@@ -13426,7 +13644,7 @@
       "label": "SecurityEventCodes.cs",
       "_origin": "ast",
       "community": 20,
-      "community_name": "Miautrix.Mail.Identity",
+      "community_name": "ImapEngine.cs",
       "file_type": "code",
       "norm_label": "securityeventcodes.cs",
       "source_file": "src/Miautrix.Mail.Identity/SecurityEventCodes.cs",
@@ -13437,43 +13655,65 @@
       "label": "SessionManager.cs",
       "_origin": "ast",
       "community": 20,
-      "community_name": "Miautrix.Mail.Identity",
+      "community_name": "ImapEngine.cs",
       "file_type": "code",
       "norm_label": "sessionmanager.cs",
       "source_file": "src/Miautrix.Mail.Identity/SessionManager.cs",
       "source_location": "L1"
     },
     {
-      "id": "src_miautrix_mail_identity_sessionmanager_cs_datetimeoffset",
-      "label": "DateTimeOffset",
+      "id": "src_miautrix_mail_protocols_imap_imapengine",
+      "label": "ImapEngine.cs",
       "_origin": "ast",
       "community": 20,
-      "community_name": "Miautrix.Mail.Identity",
+      "community_name": "ImapEngine.cs",
       "file_type": "code",
-      "norm_label": "datetimeoffset",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "src_miautrix_mail_identity_sessionmanager_cs_guid",
-      "label": "Guid",
-      "_origin": "ast",
-      "community": 20,
-      "community_name": "Miautrix.Mail.Identity",
-      "file_type": "code",
-      "norm_label": "guid",
-      "source_file": "",
-      "source_location": ""
+      "norm_label": "imapengine.cs",
+      "source_file": "src/Miautrix.Mail.Protocols.Imap/ImapEngine.cs",
+      "source_location": "L1"
     },
     {
       "id": "src_miautrix_mail_protocols_smtp_dkimservice",
       "label": "DkimService.cs",
       "_origin": "ast",
       "community": 20,
-      "community_name": "Miautrix.Mail.Identity",
+      "community_name": "ImapEngine.cs",
       "file_type": "code",
       "norm_label": "dkimservice.cs",
       "source_file": "src/Miautrix.Mail.Protocols.Smtp/DkimService.cs",
+      "source_location": "L1"
+    },
+    {
+      "id": "src_miautrix_mail_seeder_program",
+      "label": "Miautrix.Mail.Seeder/Program.cs",
+      "_origin": "ast",
+      "community": 20,
+      "community_name": "ImapEngine.cs",
+      "file_type": "code",
+      "norm_label": "miautrix.mail.seeder/program.cs",
+      "source_file": "src/Miautrix.Mail.Seeder/Program.cs",
+      "source_location": "L1"
+    },
+    {
+      "id": "src_miautrix_mail_web_infrastructure_idempotencystore",
+      "label": "IdempotencyStore.cs",
+      "_origin": "ast",
+      "community": 20,
+      "community_name": "ImapEngine.cs",
+      "file_type": "code",
+      "norm_label": "idempotencystore.cs",
+      "source_file": "src/Miautrix.Mail.Web/Infrastructure/IdempotencyStore.cs",
+      "source_location": "L1"
+    },
+    {
+      "id": "tests_miautrix_mail_protocoltests_imap_imaptests",
+      "label": "ImapTests.cs",
+      "_origin": "ast",
+      "community": 20,
+      "community_name": "ImapEngine.cs",
+      "file_type": "code",
+      "norm_label": "imaptests.cs",
+      "source_file": "tests/Miautrix.Mail.ProtocolTests/Imap/ImapTests.cs",
       "source_location": "L1"
     },
     {
@@ -13481,7 +13721,7 @@
       "label": "IdentityTests.cs",
       "_origin": "ast",
       "community": 20,
-      "community_name": "Miautrix.Mail.Identity",
+      "community_name": "ImapEngine.cs",
       "file_type": "code",
       "norm_label": "identitytests.cs",
       "source_file": "tests/Miautrix.Mail.SecurityTests/Identity/IdentityTests.cs",
@@ -14228,22 +14468,11 @@
       "source_location": ""
     },
     {
-      "id": "apibehavioroptions",
-      "label": "ApiBehaviorOptions",
-      "_origin": "ast",
-      "community": 28,
-      "community_name": ".Main",
-      "file_type": "code",
-      "norm_label": "apibehavioroptions",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
       "id": "concurrentdictionary",
       "label": "ConcurrentDictionary",
       "_origin": "ast",
       "community": 28,
-      "community_name": ".Main",
+      "community_name": "InMemoryIdempotencyStore",
       "file_type": "code",
       "norm_label": "concurrentdictionary",
       "source_file": "",
@@ -14254,7 +14483,7 @@
       "label": "HashSet",
       "_origin": "ast",
       "community": 28,
-      "community_name": ".Main",
+      "community_name": "InMemoryIdempotencyStore",
       "file_type": "code",
       "norm_label": "hashset",
       "source_file": "",
@@ -14265,7 +14494,7 @@
       "label": "HttpContext",
       "_origin": "ast",
       "community": 28,
-      "community_name": ".Main",
+      "community_name": "InMemoryIdempotencyStore",
       "file_type": "code",
       "norm_label": "httpcontext",
       "source_file": "",
@@ -14276,7 +14505,7 @@
       "label": "RequestDelegate",
       "_origin": "ast",
       "community": 28,
-      "community_name": ".Main",
+      "community_name": "InMemoryIdempotencyStore",
       "file_type": "code",
       "norm_label": "requestdelegate",
       "source_file": "",
@@ -14287,29 +14516,18 @@
       "label": "Task",
       "_origin": "ast",
       "community": 28,
-      "community_name": ".Main",
+      "community_name": "InMemoryIdempotencyStore",
       "file_type": "code",
       "norm_label": "task",
       "source_file": "",
       "source_location": ""
     },
     {
-      "id": "src_miautrix_mail_web_infrastructure_idempotencystore",
-      "label": "IdempotencyStore.cs",
-      "_origin": "ast",
-      "community": 28,
-      "community_name": ".Main",
-      "file_type": "code",
-      "norm_label": "idempotencystore.cs",
-      "source_file": "src/Miautrix.Mail.Web/Infrastructure/IdempotencyStore.cs",
-      "source_location": "L1"
-    },
-    {
       "id": "csharp_namespace:0cf58f1f4ccedb6d",
       "label": "Miautrix.Mail.Web.Infrastructure",
       "_origin": "ast",
       "community": 29,
-      "community_name": "Miautrix.Mail.Web.Infrastructure",
+      "community_name": "Miautrix.Mail.Web/Program.cs",
       "file_type": "code",
       "metadata": {
         "kind": "csharp_namespace",
@@ -14325,7 +14543,7 @@
       "label": "Miautrix.Mail.Web.Controllers",
       "_origin": "ast",
       "community": 29,
-      "community_name": "Miautrix.Mail.Web.Infrastructure",
+      "community_name": "Miautrix.Mail.Web/Program.cs",
       "file_type": "code",
       "metadata": {
         "kind": "csharp_namespace",
@@ -14341,7 +14559,7 @@
       "label": "Miautrix.Mail.Application.Queue",
       "_origin": "ast",
       "community": 29,
-      "community_name": "Miautrix.Mail.Web.Infrastructure",
+      "community_name": "Miautrix.Mail.Web/Program.cs",
       "file_type": "code",
       "metadata": {
         "kind": "csharp_namespace",
@@ -14353,11 +14571,27 @@
       "type": "namespace"
     },
     {
+      "id": "csharp_namespace:883eb4a8797dff98",
+      "label": "Miautrix.Mail.Security",
+      "_origin": "ast",
+      "community": 29,
+      "community_name": "Miautrix.Mail.Web/Program.cs",
+      "file_type": "code",
+      "metadata": {
+        "kind": "csharp_namespace",
+        "namespace": "Miautrix.Mail.Security"
+      },
+      "norm_label": "miautrix.mail.security",
+      "source_file": "src/Miautrix.Mail.Security/TenantAuthorizationHelper.cs",
+      "source_location": "L4",
+      "type": "namespace"
+    },
+    {
       "id": "csharp_namespace:e1cd5193005b88ec",
       "label": "Miautrix.Mail.Web.Contracts",
       "_origin": "ast",
       "community": 29,
-      "community_name": "Miautrix.Mail.Web.Infrastructure",
+      "community_name": "Miautrix.Mail.Web/Program.cs",
       "file_type": "code",
       "metadata": {
         "kind": "csharp_namespace",
@@ -14369,75 +14603,58 @@
       "type": "namespace"
     },
     {
-      "id": "src_miautrix_mail_web_contracts_queuedtos",
-      "label": "QueueDtos.cs",
+      "id": "src_miautrix_mail_application_queue_imailqueueservice",
+      "label": "IMailQueueService.cs",
       "_origin": "ast",
       "community": 29,
-      "community_name": "Miautrix.Mail.Web.Infrastructure",
+      "community_name": "Miautrix.Mail.Web/Program.cs",
       "file_type": "code",
-      "norm_label": "queuedtos.cs",
-      "source_file": "src/Miautrix.Mail.Web/Contracts/QueueDtos.cs",
+      "norm_label": "imailqueueservice.cs",
+      "source_file": "src/Miautrix.Mail.Application/Queue/IMailQueueService.cs",
       "source_location": "L1"
     },
     {
-      "id": "src_miautrix_mail_web_contracts_queuedtos_cs_datetimeoffset",
-      "label": "DateTimeOffset",
+      "id": "src_miautrix_mail_application_queue_mailqueueservice",
+      "label": "MailQueueService.cs",
       "_origin": "ast",
       "community": 29,
-      "community_name": "Miautrix.Mail.Web.Infrastructure",
+      "community_name": "Miautrix.Mail.Web/Program.cs",
       "file_type": "code",
-      "norm_label": "datetimeoffset",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "src_miautrix_mail_web_contracts_requestdtos",
-      "label": "RequestDtos.cs",
-      "_origin": "ast",
-      "community": 29,
-      "community_name": "Miautrix.Mail.Web.Infrastructure",
-      "file_type": "code",
-      "norm_label": "requestdtos.cs",
-      "source_file": "src/Miautrix.Mail.Web/Contracts/RequestDtos.cs",
+      "norm_label": "mailqueueservice.cs",
+      "source_file": "src/Miautrix.Mail.Application/Queue/MailQueueService.cs",
       "source_location": "L1"
     },
     {
-      "id": "src_miautrix_mail_web_contracts_requestdtos_miautrix_mail_web_contracts_retryqueueitemrequest_reason",
-      "label": "Reason",
+      "id": "src_miautrix_mail_persistence_efpermissionrepository",
+      "label": "EfPermissionRepository.cs",
       "_origin": "ast",
       "community": 29,
-      "community_name": "Miautrix.Mail.Web.Infrastructure",
+      "community_name": "Miautrix.Mail.Web/Program.cs",
       "file_type": "code",
-      "metadata": {
-        "namespace": "Miautrix.Mail.Web.Contracts",
-        "scope_chain": [
-          "s46"
-        ]
-      },
-      "norm_label": "reason",
-      "source_file": "src/Miautrix.Mail.Web/Contracts/RequestDtos.cs",
-      "source_location": "L11"
+      "norm_label": "efpermissionrepository.cs",
+      "source_file": "src/Miautrix.Mail.Persistence/EfPermissionRepository.cs",
+      "source_location": "L1"
     },
     {
       "id": "src_miautrix_mail_web_controllers_mailqueuecontroller",
       "label": "MailQueueController.cs",
       "_origin": "ast",
       "community": 29,
-      "community_name": "Miautrix.Mail.Web.Infrastructure",
+      "community_name": "Miautrix.Mail.Web/Program.cs",
       "file_type": "code",
       "norm_label": "mailqueuecontroller.cs",
       "source_file": "src/Miautrix.Mail.Web/Controllers/MailQueueController.cs",
       "source_location": "L1"
     },
     {
-      "id": "src_miautrix_mail_web_infrastructure_apijson",
-      "label": "ApiJson.cs",
+      "id": "src_miautrix_mail_web_infrastructure_apiexceptionmiddleware",
+      "label": "ApiExceptionMiddleware.cs",
       "_origin": "ast",
       "community": 29,
-      "community_name": "Miautrix.Mail.Web.Infrastructure",
+      "community_name": "Miautrix.Mail.Web/Program.cs",
       "file_type": "code",
-      "norm_label": "apijson.cs",
-      "source_file": "src/Miautrix.Mail.Web/Infrastructure/ApiJson.cs",
+      "norm_label": "apiexceptionmiddleware.cs",
+      "source_file": "src/Miautrix.Mail.Web/Infrastructure/ApiExceptionMiddleware.cs",
       "source_location": "L1"
     },
     {
@@ -14445,7 +14662,7 @@
       "label": "ApiResults.cs",
       "_origin": "ast",
       "community": 29,
-      "community_name": "Miautrix.Mail.Web.Infrastructure",
+      "community_name": "Miautrix.Mail.Web/Program.cs",
       "file_type": "code",
       "norm_label": "apiresults.cs",
       "source_file": "src/Miautrix.Mail.Web/Infrastructure/ApiResults.cs",
@@ -14456,21 +14673,21 @@
       "label": "IdempotencyMiddleware.cs",
       "_origin": "ast",
       "community": 29,
-      "community_name": "Miautrix.Mail.Web.Infrastructure",
+      "community_name": "Miautrix.Mail.Web/Program.cs",
       "file_type": "code",
       "norm_label": "idempotencymiddleware.cs",
       "source_file": "src/Miautrix.Mail.Web/Infrastructure/IdempotencyMiddleware.cs",
       "source_location": "L1"
     },
     {
-      "id": "src_miautrix_mail_web_infrastructure_requestcontextaccessor",
-      "label": "RequestContextAccessor.cs",
+      "id": "src_miautrix_mail_web_program",
+      "label": "Miautrix.Mail.Web/Program.cs",
       "_origin": "ast",
       "community": 29,
-      "community_name": "Miautrix.Mail.Web.Infrastructure",
+      "community_name": "Miautrix.Mail.Web/Program.cs",
       "file_type": "code",
-      "norm_label": "requestcontextaccessor.cs",
-      "source_file": "src/Miautrix.Mail.Web/Infrastructure/RequestContextAccessor.cs",
+      "norm_label": "miautrix.mail.web/program.cs",
+      "source_file": "src/Miautrix.Mail.Web/Program.cs",
       "source_location": "L1"
     },
     {
@@ -18552,6 +18769,28 @@
       "source_location": "L5"
     },
     {
+      "id": "src_miautrix_mail_identity_sessionmanager_cs_datetimeoffset",
+      "label": "DateTimeOffset",
+      "_origin": "ast",
+      "community": 50,
+      "community_name": "InMemorySecurityEventSink",
+      "file_type": "code",
+      "norm_label": "datetimeoffset",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "src_miautrix_mail_identity_sessionmanager_cs_guid",
+      "label": "Guid",
+      "_origin": "ast",
+      "community": 50,
+      "community_name": "InMemorySecurityEventSink",
+      "file_type": "code",
+      "norm_label": "guid",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
       "id": "src_miautrix_mail_identity_sessionmanager_cs_refreshtoken",
       "label": "RefreshToken",
       "_origin": "ast",
@@ -18946,6 +19185,17 @@
       "norm_label": "ihttpcontextaccessor",
       "source_file": "",
       "source_location": ""
+    },
+    {
+      "id": "src_miautrix_mail_web_infrastructure_requestcontextaccessor",
+      "label": "RequestContextAccessor.cs",
+      "_origin": "ast",
+      "community": 53,
+      "community_name": "HeaderRequestContextAccessor",
+      "file_type": "code",
+      "norm_label": "requestcontextaccessor.cs",
+      "source_file": "src/Miautrix.Mail.Web/Infrastructure/RequestContextAccessor.cs",
+      "source_location": "L1"
     },
     {
       "id": "src_miautrix_mail_web_infrastructure_requestcontextaccessor_cs_guid",
@@ -20262,17 +20512,6 @@
       "source_location": ""
     },
     {
-      "id": "src_miautrix_mail_web_infrastructure_apiexceptionmiddleware",
-      "label": "ApiExceptionMiddleware.cs",
-      "_origin": "ast",
-      "community": 75,
-      "community_name": "ApiExceptionMiddleware",
-      "file_type": "code",
-      "norm_label": "apiexceptionmiddleware.cs",
-      "source_file": "src/Miautrix.Mail.Web/Infrastructure/ApiExceptionMiddleware.cs",
-      "source_location": "L1"
-    },
-    {
       "id": "src_miautrix_mail_web_infrastructure_apiexceptionmiddleware_cs_httpcontext",
       "label": "HttpContext",
       "_origin": "ast",
@@ -20587,27 +20826,11 @@
       "source_location": "L432"
     },
     {
-      "id": "csharp_namespace:012bfce10ccc2aa9",
-      "label": "Miautrix.Mail.Protocols.Imap",
-      "_origin": "ast",
-      "community": 8,
-      "community_name": "microsoft_entityframeworkcore",
-      "file_type": "code",
-      "metadata": {
-        "kind": "csharp_namespace",
-        "namespace": "Miautrix.Mail.Protocols.Imap"
-      },
-      "norm_label": "miautrix.mail.protocols.imap",
-      "source_file": "src/Miautrix.Mail.Protocols.Imap/ImapEngine.cs",
-      "source_location": "L8",
-      "type": "namespace"
-    },
-    {
       "id": "csharp_namespace:01a4787d6b2b0bb2",
       "label": "Miautrix.Mail.IntegrationTests.MailFlow",
       "_origin": "ast",
       "community": 8,
-      "community_name": "microsoft_entityframeworkcore",
+      "community_name": "Miautrix.Mail.Domain",
       "file_type": "code",
       "metadata": {
         "kind": "csharp_namespace",
@@ -20623,7 +20846,7 @@
       "label": "Miautrix.Mail.IntegrationTests.Audit",
       "_origin": "ast",
       "community": 8,
-      "community_name": "microsoft_entityframeworkcore",
+      "community_name": "Miautrix.Mail.Domain",
       "file_type": "code",
       "metadata": {
         "kind": "csharp_namespace",
@@ -20639,7 +20862,7 @@
       "label": "Miautrix.Mail.Web",
       "_origin": "ast",
       "community": 8,
-      "community_name": "microsoft_entityframeworkcore",
+      "community_name": "Miautrix.Mail.Domain",
       "file_type": "code",
       "metadata": {
         "kind": "csharp_namespace",
@@ -20655,7 +20878,7 @@
       "label": "Miautrix.Mail.AntiSpam",
       "_origin": "ast",
       "community": 8,
-      "community_name": "microsoft_entityframeworkcore",
+      "community_name": "Miautrix.Mail.Domain",
       "file_type": "code",
       "metadata": {
         "kind": "csharp_namespace",
@@ -20667,27 +20890,11 @@
       "type": "namespace"
     },
     {
-      "id": "csharp_namespace:45a2aa24d0b2c375",
-      "label": "Miautrix.Mail.Storage",
-      "_origin": "ast",
-      "community": 8,
-      "community_name": "microsoft_entityframeworkcore",
-      "file_type": "code",
-      "metadata": {
-        "kind": "csharp_namespace",
-        "namespace": "Miautrix.Mail.Storage"
-      },
-      "norm_label": "miautrix.mail.storage",
-      "source_file": "src/Miautrix.Mail.Storage/MailStorage.cs",
-      "source_location": "L3",
-      "type": "namespace"
-    },
-    {
       "id": "csharp_namespace:565a44b4b497096c",
       "label": "Miautrix.Mail.IntegrationTests.AntiSpam",
       "_origin": "ast",
       "community": 8,
-      "community_name": "microsoft_entityframeworkcore",
+      "community_name": "Miautrix.Mail.Domain",
       "file_type": "code",
       "metadata": {
         "kind": "csharp_namespace",
@@ -20699,35 +20906,19 @@
       "type": "namespace"
     },
     {
-      "id": "csharp_namespace:61b928a89f2d4065",
-      "label": "Miautrix.Mail.Search",
+      "id": "csharp_namespace:5ee88cd82d1d021d",
+      "label": "Miautrix.Mail.SecurityTests.Isolation",
       "_origin": "ast",
       "community": 8,
-      "community_name": "microsoft_entityframeworkcore",
+      "community_name": "Miautrix.Mail.Domain",
       "file_type": "code",
       "metadata": {
         "kind": "csharp_namespace",
-        "namespace": "Miautrix.Mail.Search"
+        "namespace": "Miautrix.Mail.SecurityTests.Isolation"
       },
-      "norm_label": "miautrix.mail.search",
-      "source_file": "src/Miautrix.Mail.Search/SearchProvider.cs",
-      "source_location": "L5",
-      "type": "namespace"
-    },
-    {
-      "id": "csharp_namespace:642c9d4b31ce2459",
-      "label": "Miautrix.Mail.IntegrationTests.Search",
-      "_origin": "ast",
-      "community": 8,
-      "community_name": "microsoft_entityframeworkcore",
-      "file_type": "code",
-      "metadata": {
-        "kind": "csharp_namespace",
-        "namespace": "Miautrix.Mail.IntegrationTests.Search"
-      },
-      "norm_label": "miautrix.mail.integrationtests.search",
-      "source_file": "tests/Miautrix.Mail.IntegrationTests/Search/SearchTests.cs",
-      "source_location": "L7",
+      "norm_label": "miautrix.mail.securitytests.isolation",
+      "source_file": "tests/Miautrix.Mail.SecurityTests/Isolation/IsolationTests.cs",
+      "source_location": "L6",
       "type": "namespace"
     },
     {
@@ -20735,7 +20926,7 @@
       "label": "Miautrix.Mail.IntegrationTests.Api",
       "_origin": "ast",
       "community": 8,
-      "community_name": "microsoft_entityframeworkcore",
+      "community_name": "Miautrix.Mail.Domain",
       "file_type": "code",
       "metadata": {
         "kind": "csharp_namespace",
@@ -20747,19 +20938,19 @@
       "type": "namespace"
     },
     {
-      "id": "csharp_namespace:79d69cffa1356b13",
-      "label": "Miautrix.Mail.Persistence",
+      "id": "csharp_namespace:6b4206ae8c80003f",
+      "label": "Miautrix.Mail.ProtocolTests.Smtp",
       "_origin": "ast",
       "community": 8,
-      "community_name": "microsoft_entityframeworkcore",
+      "community_name": "Miautrix.Mail.Domain",
       "file_type": "code",
       "metadata": {
         "kind": "csharp_namespace",
-        "namespace": "Miautrix.Mail.Persistence"
+        "namespace": "Miautrix.Mail.ProtocolTests.Smtp"
       },
-      "norm_label": "miautrix.mail.persistence",
-      "source_file": "src/Miautrix.Mail.Persistence/AppDbContext.cs",
-      "source_location": "L7",
+      "norm_label": "miautrix.mail.protocoltests.smtp",
+      "source_file": "tests/Miautrix.Mail.ProtocolTests/Smtp/DkimTests.cs",
+      "source_location": "L4",
       "type": "namespace"
     },
     {
@@ -20767,7 +20958,7 @@
       "label": "Miautrix.Mail.Domain",
       "_origin": "ast",
       "community": 8,
-      "community_name": "microsoft_entityframeworkcore",
+      "community_name": "Miautrix.Mail.Domain",
       "file_type": "code",
       "metadata": {
         "kind": "csharp_namespace",
@@ -20779,83 +20970,51 @@
       "type": "namespace"
     },
     {
-      "id": "csharp_namespace:7f6e6c85402bb0d6",
-      "label": "Miautrix.Mail.Protocols.Sieve",
+      "id": "csharp_namespace:87eb84b6c17074f2",
+      "label": "Miautrix.Mail.Queue",
       "_origin": "ast",
       "community": 8,
-      "community_name": "microsoft_entityframeworkcore",
+      "community_name": "Miautrix.Mail.Domain",
       "file_type": "code",
       "metadata": {
         "kind": "csharp_namespace",
-        "namespace": "Miautrix.Mail.Protocols.Sieve"
+        "namespace": "Miautrix.Mail.Queue"
       },
-      "norm_label": "miautrix.mail.protocols.sieve",
-      "source_file": "src/Miautrix.Mail.Protocols.Sieve/SieveParser.cs",
-      "source_location": "L6",
+      "norm_label": "miautrix.mail.queue",
+      "source_file": "src/Miautrix.Mail.Queue/RetryPolicy.cs",
+      "source_location": "L1",
       "type": "namespace"
     },
     {
-      "id": "csharp_namespace:883eb4a8797dff98",
-      "label": "Miautrix.Mail.Security",
+      "id": "csharp_namespace:da5d5649e7e4f809",
+      "label": "Miautrix.Mail.Protocols.Smtp",
       "_origin": "ast",
       "community": 8,
-      "community_name": "microsoft_entityframeworkcore",
+      "community_name": "Miautrix.Mail.Domain",
       "file_type": "code",
       "metadata": {
         "kind": "csharp_namespace",
-        "namespace": "Miautrix.Mail.Security"
+        "namespace": "Miautrix.Mail.Protocols.Smtp"
       },
-      "norm_label": "miautrix.mail.security",
-      "source_file": "src/Miautrix.Mail.Security/TenantAuthorizationHelper.cs",
-      "source_location": "L4",
+      "norm_label": "miautrix.mail.protocols.smtp",
+      "source_file": "src/Miautrix.Mail.Protocols.Smtp/DkimService.cs",
+      "source_location": "L5",
       "type": "namespace"
     },
     {
-      "id": "csharp_namespace:9b475d0d62b8a556",
-      "label": "Miautrix.Mail.ProtocolTests.Sieve",
+      "id": "csharp_namespace:e0dc105570934870",
+      "label": "Miautrix.Mail.IntegrationTests.Smtp",
       "_origin": "ast",
       "community": 8,
-      "community_name": "microsoft_entityframeworkcore",
+      "community_name": "Miautrix.Mail.Domain",
       "file_type": "code",
       "metadata": {
         "kind": "csharp_namespace",
-        "namespace": "Miautrix.Mail.ProtocolTests.Sieve"
+        "namespace": "Miautrix.Mail.IntegrationTests.Smtp"
       },
-      "norm_label": "miautrix.mail.protocoltests.sieve",
-      "source_file": "tests/Miautrix.Mail.ProtocolTests/Sieve/SieveTests.cs",
-      "source_location": "L6",
-      "type": "namespace"
-    },
-    {
-      "id": "csharp_namespace:b98487c9eec294ab",
-      "label": "Miautrix.Mail.Seeder",
-      "_origin": "ast",
-      "community": 8,
-      "community_name": "microsoft_entityframeworkcore",
-      "file_type": "code",
-      "metadata": {
-        "kind": "csharp_namespace",
-        "namespace": "Miautrix.Mail.Seeder"
-      },
-      "norm_label": "miautrix.mail.seeder",
-      "source_file": "src/Miautrix.Mail.Seeder/Program.cs",
+      "norm_label": "miautrix.mail.integrationtests.smtp",
+      "source_file": "tests/Miautrix.Mail.IntegrationTests/Smtp/SmtpQueueDatabaseTests.cs",
       "source_location": "L7",
-      "type": "namespace"
-    },
-    {
-      "id": "csharp_namespace:c2384be97a6a1e1d",
-      "label": "Miautrix.Mail.ProtocolTests.Imap",
-      "_origin": "ast",
-      "community": 8,
-      "community_name": "microsoft_entityframeworkcore",
-      "file_type": "code",
-      "metadata": {
-        "kind": "csharp_namespace",
-        "namespace": "Miautrix.Mail.ProtocolTests.Imap"
-      },
-      "norm_label": "miautrix.mail.protocoltests.imap",
-      "source_file": "tests/Miautrix.Mail.ProtocolTests/Imap/ImapTests.cs",
-      "source_location": "L9",
       "type": "namespace"
     },
     {
@@ -20863,7 +21022,7 @@
       "label": "QuarantineService.cs",
       "_origin": "ast",
       "community": 8,
-      "community_name": "microsoft_entityframeworkcore",
+      "community_name": "Miautrix.Mail.Domain",
       "file_type": "code",
       "norm_label": "quarantineservice.cs",
       "source_file": "src/Miautrix.Mail.AntiSpam/QuarantineService.cs",
@@ -20874,65 +21033,32 @@
       "label": "SpamProvider.cs",
       "_origin": "ast",
       "community": 8,
-      "community_name": "microsoft_entityframeworkcore",
+      "community_name": "Miautrix.Mail.Domain",
       "file_type": "code",
       "norm_label": "spamprovider.cs",
       "source_file": "src/Miautrix.Mail.AntiSpam/SpamProvider.cs",
       "source_location": "L1"
     },
     {
-      "id": "src_miautrix_mail_application_queue_mailqueueservice",
-      "label": "MailQueueService.cs",
+      "id": "src_miautrix_mail_protocols_smtp_smtpinboundhandler",
+      "label": "SmtpInboundHandler.cs",
       "_origin": "ast",
       "community": 8,
-      "community_name": "microsoft_entityframeworkcore",
+      "community_name": "Miautrix.Mail.Domain",
       "file_type": "code",
-      "norm_label": "mailqueueservice.cs",
-      "source_file": "src/Miautrix.Mail.Application/Queue/MailQueueService.cs",
+      "norm_label": "smtpinboundhandler.cs",
+      "source_file": "src/Miautrix.Mail.Protocols.Smtp/SmtpInboundHandler.cs",
       "source_location": "L1"
     },
     {
-      "id": "src_miautrix_mail_persistence_appdbcontext",
-      "label": "AppDbContext.cs",
+      "id": "src_miautrix_mail_protocols_smtp_smtpsubmissionhandler",
+      "label": "SmtpSubmissionHandler.cs",
       "_origin": "ast",
       "community": 8,
-      "community_name": "microsoft_entityframeworkcore",
+      "community_name": "Miautrix.Mail.Domain",
       "file_type": "code",
-      "norm_label": "appdbcontext.cs",
-      "source_file": "src/Miautrix.Mail.Persistence/AppDbContext.cs",
-      "source_location": "L1"
-    },
-    {
-      "id": "src_miautrix_mail_persistence_efpermissionrepository",
-      "label": "EfPermissionRepository.cs",
-      "_origin": "ast",
-      "community": 8,
-      "community_name": "microsoft_entityframeworkcore",
-      "file_type": "code",
-      "norm_label": "efpermissionrepository.cs",
-      "source_file": "src/Miautrix.Mail.Persistence/EfPermissionRepository.cs",
-      "source_location": "L1"
-    },
-    {
-      "id": "src_miautrix_mail_protocols_imap_imapengine",
-      "label": "ImapEngine.cs",
-      "_origin": "ast",
-      "community": 8,
-      "community_name": "microsoft_entityframeworkcore",
-      "file_type": "code",
-      "norm_label": "imapengine.cs",
-      "source_file": "src/Miautrix.Mail.Protocols.Imap/ImapEngine.cs",
-      "source_location": "L1"
-    },
-    {
-      "id": "src_miautrix_mail_protocols_sieve_sieveparser",
-      "label": "SieveParser.cs",
-      "_origin": "ast",
-      "community": 8,
-      "community_name": "microsoft_entityframeworkcore",
-      "file_type": "code",
-      "norm_label": "sieveparser.cs",
-      "source_file": "src/Miautrix.Mail.Protocols.Sieve/SieveParser.cs",
+      "norm_label": "smtpsubmissionhandler.cs",
+      "source_file": "src/Miautrix.Mail.Protocols.Smtp/SmtpSubmissionHandler.cs",
       "source_location": "L1"
     },
     {
@@ -20940,43 +21066,21 @@
       "label": "SmtpQueueManager.cs",
       "_origin": "ast",
       "community": 8,
-      "community_name": "microsoft_entityframeworkcore",
+      "community_name": "Miautrix.Mail.Domain",
       "file_type": "code",
       "norm_label": "smtpqueuemanager.cs",
       "source_file": "src/Miautrix.Mail.Queue/SmtpQueueManager.cs",
       "source_location": "L1"
     },
     {
-      "id": "src_miautrix_mail_search_searchprovider",
-      "label": "SearchProvider.cs",
+      "id": "src_miautrix_mail_web_infrastructure_apijson",
+      "label": "ApiJson.cs",
       "_origin": "ast",
       "community": 8,
-      "community_name": "microsoft_entityframeworkcore",
+      "community_name": "Miautrix.Mail.Domain",
       "file_type": "code",
-      "norm_label": "searchprovider.cs",
-      "source_file": "src/Miautrix.Mail.Search/SearchProvider.cs",
-      "source_location": "L1"
-    },
-    {
-      "id": "src_miautrix_mail_seeder_program",
-      "label": "Miautrix.Mail.Seeder/Program.cs",
-      "_origin": "ast",
-      "community": 8,
-      "community_name": "microsoft_entityframeworkcore",
-      "file_type": "code",
-      "norm_label": "miautrix.mail.seeder/program.cs",
-      "source_file": "src/Miautrix.Mail.Seeder/Program.cs",
-      "source_location": "L1"
-    },
-    {
-      "id": "src_miautrix_mail_web_program",
-      "label": "Miautrix.Mail.Web/Program.cs",
-      "_origin": "ast",
-      "community": 8,
-      "community_name": "microsoft_entityframeworkcore",
-      "file_type": "code",
-      "norm_label": "miautrix.mail.web/program.cs",
-      "source_file": "src/Miautrix.Mail.Web/Program.cs",
+      "norm_label": "apijson.cs",
+      "source_file": "src/Miautrix.Mail.Web/Infrastructure/ApiJson.cs",
       "source_location": "L1"
     },
     {
@@ -20984,7 +21088,7 @@
       "label": "AntiSpamTests.cs",
       "_origin": "ast",
       "community": 8,
-      "community_name": "microsoft_entityframeworkcore",
+      "community_name": "Miautrix.Mail.Domain",
       "file_type": "code",
       "norm_label": "antispamtests.cs",
       "source_file": "tests/Miautrix.Mail.IntegrationTests/AntiSpam/AntiSpamTests.cs",
@@ -20995,7 +21099,7 @@
       "label": "MailQueueApiTests.cs",
       "_origin": "ast",
       "community": 8,
-      "community_name": "microsoft_entityframeworkcore",
+      "community_name": "Miautrix.Mail.Domain",
       "file_type": "code",
       "norm_label": "mailqueueapitests.cs",
       "source_file": "tests/Miautrix.Mail.IntegrationTests/Api/MailQueueApiTests.cs",
@@ -21006,7 +21110,7 @@
       "label": "AuditTests.cs",
       "_origin": "ast",
       "community": 8,
-      "community_name": "microsoft_entityframeworkcore",
+      "community_name": "Miautrix.Mail.Domain",
       "file_type": "code",
       "norm_label": "audittests.cs",
       "source_file": "tests/Miautrix.Mail.IntegrationTests/Audit/AuditTests.cs",
@@ -21017,43 +21121,54 @@
       "label": "MailFlowTests.cs",
       "_origin": "ast",
       "community": 8,
-      "community_name": "microsoft_entityframeworkcore",
+      "community_name": "Miautrix.Mail.Domain",
       "file_type": "code",
       "norm_label": "mailflowtests.cs",
       "source_file": "tests/Miautrix.Mail.IntegrationTests/MailFlow/MailFlowTests.cs",
       "source_location": "L1"
     },
     {
-      "id": "tests_miautrix_mail_integrationtests_search_searchtests",
-      "label": "SearchTests.cs",
+      "id": "tests_miautrix_mail_integrationtests_smtp_smtpqueuedatabasetests",
+      "label": "SmtpQueueDatabaseTests.cs",
       "_origin": "ast",
       "community": 8,
-      "community_name": "microsoft_entityframeworkcore",
+      "community_name": "Miautrix.Mail.Domain",
       "file_type": "code",
-      "norm_label": "searchtests.cs",
-      "source_file": "tests/Miautrix.Mail.IntegrationTests/Search/SearchTests.cs",
+      "norm_label": "smtpqueuedatabasetests.cs",
+      "source_file": "tests/Miautrix.Mail.IntegrationTests/Smtp/SmtpQueueDatabaseTests.cs",
       "source_location": "L1"
     },
     {
-      "id": "tests_miautrix_mail_protocoltests_imap_imaptests",
-      "label": "ImapTests.cs",
+      "id": "tests_miautrix_mail_protocoltests_smtp_dkimtests",
+      "label": "DkimTests.cs",
       "_origin": "ast",
       "community": 8,
-      "community_name": "microsoft_entityframeworkcore",
+      "community_name": "Miautrix.Mail.Domain",
       "file_type": "code",
-      "norm_label": "imaptests.cs",
-      "source_file": "tests/Miautrix.Mail.ProtocolTests/Imap/ImapTests.cs",
+      "norm_label": "dkimtests.cs",
+      "source_file": "tests/Miautrix.Mail.ProtocolTests/Smtp/DkimTests.cs",
       "source_location": "L1"
     },
     {
-      "id": "tests_miautrix_mail_protocoltests_sieve_sievetests",
-      "label": "SieveTests.cs",
+      "id": "tests_miautrix_mail_protocoltests_smtp_smtpprotocoltests",
+      "label": "SmtpProtocolTests.cs",
       "_origin": "ast",
       "community": 8,
-      "community_name": "microsoft_entityframeworkcore",
+      "community_name": "Miautrix.Mail.Domain",
       "file_type": "code",
-      "norm_label": "sievetests.cs",
-      "source_file": "tests/Miautrix.Mail.ProtocolTests/Sieve/SieveTests.cs",
+      "norm_label": "smtpprotocoltests.cs",
+      "source_file": "tests/Miautrix.Mail.ProtocolTests/Smtp/SmtpProtocolTests.cs",
+      "source_location": "L1"
+    },
+    {
+      "id": "tests_miautrix_mail_securitytests_isolation_isolationtests",
+      "label": "IsolationTests.cs",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "Miautrix.Mail.Domain",
+      "file_type": "code",
+      "norm_label": "isolationtests.cs",
+      "source_file": "tests/Miautrix.Mail.SecurityTests/Isolation/IsolationTests.cs",
       "source_location": "L1"
     },
     {
@@ -21219,17 +21334,6 @@
       "norm_label": "microsoft.net.sdk",
       "source_file": "src/Miautrix.Mail.Seeder/Miautrix.Mail.Seeder.csproj",
       "source_location": null
-    },
-    {
-      "id": "src_miautrix_mail_web_infrastructure_requestidmiddleware",
-      "label": "RequestIdMiddleware.cs",
-      "_origin": "ast",
-      "community": 83,
-      "community_name": "RequestIdMiddleware",
-      "file_type": "code",
-      "norm_label": "requestidmiddleware.cs",
-      "source_file": "src/Miautrix.Mail.Web/Infrastructure/RequestIdMiddleware.cs",
-      "source_location": "L1"
     },
     {
       "id": "src_miautrix_mail_web_infrastructure_requestidmiddleware_cs_httpcontext",
@@ -22552,97 +22656,184 @@
       "source_location": ""
     },
     {
-      "id": "csharp_namespace:d10eab843185d25f",
-      "label": "Miautrix.Mail.Cli.Infrastructure",
+      "id": "setup",
+      "label": "SETUP.md",
       "_origin": "ast",
       "community": 92,
-      "community_name": "TypeRegistrar",
-      "file_type": "code",
-      "metadata": {
-        "kind": "csharp_namespace",
-        "namespace": "Miautrix.Mail.Cli.Infrastructure"
-      },
-      "norm_label": "miautrix.mail.cli.infrastructure",
-      "source_file": "src/Miautrix.Mail.Cli/Infrastructure/TypeRegistrar.cs",
-      "source_location": "L5",
-      "type": "namespace"
-    },
-    {
-      "id": "iservicecollection",
-      "label": "IServiceCollection",
-      "_origin": "ast",
-      "community": 92,
-      "community_name": "TypeRegistrar",
-      "file_type": "code",
-      "norm_label": "iservicecollection",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "iserviceprovider",
-      "label": "IServiceProvider",
-      "_origin": "ast",
-      "community": 92,
-      "community_name": "TypeRegistrar",
-      "file_type": "code",
-      "norm_label": "iserviceprovider",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "ityperegistrar",
-      "label": "ITypeRegistrar",
-      "_origin": "ast",
-      "community": 92,
-      "community_name": "TypeRegistrar",
-      "file_type": "code",
-      "norm_label": "ityperegistrar",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "ityperesolver",
-      "label": "ITypeResolver",
-      "_origin": "ast",
-      "community": 92,
-      "community_name": "TypeRegistrar",
-      "file_type": "code",
-      "norm_label": "ityperesolver",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "src_miautrix_mail_cli_infrastructure_typeregistrar",
-      "label": "TypeRegistrar.cs",
-      "_origin": "ast",
-      "community": 92,
-      "community_name": "TypeRegistrar",
-      "file_type": "code",
-      "norm_label": "typeregistrar.cs",
-      "source_file": "src/Miautrix.Mail.Cli/Infrastructure/TypeRegistrar.cs",
+      "community_name": "Miautrix Mail Server - Production Deployment Guide (Debian LXC)",
+      "file_type": "document",
+      "node_kind": "page",
+      "norm_label": "setup.md",
+      "source_file": "SETUP.md",
       "source_location": "L1"
     },
     {
-      "id": "src_miautrix_mail_cli_infrastructure_typeregistrar_cs_func",
-      "label": "Func",
+      "id": "setup_1_1_install_system_dependencies_nginx",
+      "label": "1.1. Install System Dependencies & NGINX",
       "_origin": "ast",
       "community": 92,
-      "community_name": "TypeRegistrar",
-      "file_type": "code",
-      "norm_label": "func",
-      "source_file": "",
-      "source_location": ""
+      "community_name": "Miautrix Mail Server - Production Deployment Guide (Debian LXC)",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "1.1. install system dependencies & nginx",
+      "source_file": "SETUP.md",
+      "source_location": "L24"
     },
     {
-      "id": "type",
-      "label": "Type",
+      "id": "setup_1_2_configure_systemd_service_for_net_backend",
+      "label": "1.2. Configure Systemd Service for .NET Backend",
       "_origin": "ast",
       "community": 92,
-      "community_name": "TypeRegistrar",
-      "file_type": "code",
-      "norm_label": "type",
-      "source_file": "",
-      "source_location": ""
+      "community_name": "Miautrix Mail Server - Production Deployment Guide (Debian LXC)",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "1.2. configure systemd service for .net backend",
+      "source_file": "SETUP.md",
+      "source_location": "L37"
+    },
+    {
+      "id": "setup_1_3_configure_nginx_for_cloudflare_tunnel_mail_miautrix_tech",
+      "label": "1.3. Configure NGINX for Cloudflare Tunnel (`mail.miautrix.tech`)",
+      "_origin": "ast",
+      "community": 92,
+      "community_name": "Miautrix Mail Server - Production Deployment Guide (Debian LXC)",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "1.3. configure nginx for cloudflare tunnel (`mail.miautrix.tech`)",
+      "source_file": "SETUP.md",
+      "source_location": "L66"
+    },
+    {
+      "id": "setup_2_1_publish_net_10_self_contained_binary",
+      "label": "2.1. Publish .NET 10 Self-Contained Binary",
+      "_origin": "ast",
+      "community": 92,
+      "community_name": "Miautrix Mail Server - Production Deployment Guide (Debian LXC)",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "2.1. publish .net 10 self-contained binary",
+      "source_file": "SETUP.md",
+      "source_location": "L127"
+    },
+    {
+      "id": "setup_2_2_build_frontends_web_admin_webmail",
+      "label": "2.2. Build Frontends (Web Admin & Webmail)",
+      "_origin": "ast",
+      "community": 92,
+      "community_name": "Miautrix Mail Server - Production Deployment Guide (Debian LXC)",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "2.2. build frontends (web admin & webmail)",
+      "source_file": "SETUP.md",
+      "source_location": "L135"
+    },
+    {
+      "id": "setup_2_3_apply_database_migrations_to_miautrix_mail_pro",
+      "label": "2.3. Apply Database Migrations to `miautrix-mail-pro`",
+      "_origin": "ast",
+      "community": 92,
+      "community_name": "Miautrix Mail Server - Production Deployment Guide (Debian LXC)",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "2.3. apply database migrations to `miautrix-mail-pro`",
+      "source_file": "SETUP.md",
+      "source_location": "L149"
+    },
+    {
+      "id": "setup_3_1_copy_published_files_using_windows_built_in_scp",
+      "label": "3.1. Copy Published Files using Windows Built-in `scp`",
+      "_origin": "ast",
+      "community": 92,
+      "community_name": "Miautrix Mail Server - Production Deployment Guide (Debian LXC)",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "3.1. copy published files using windows built-in `scp`",
+      "source_file": "SETUP.md",
+      "source_location": "L162"
+    },
+    {
+      "id": "setup_architecture_configuration_summary",
+      "label": "Architecture & Configuration Summary",
+      "_origin": "ast",
+      "community": 92,
+      "community_name": "Miautrix Mail Server - Production Deployment Guide (Debian LXC)",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "architecture & configuration summary",
+      "source_file": "SETUP.md",
+      "source_location": "L7"
+    },
+    {
+      "id": "setup_miautrix_mail_server_production_deployment_guide_debian_lxc",
+      "label": "Miautrix Mail Server - Production Deployment Guide (Debian LXC)",
+      "_origin": "ast",
+      "community": 92,
+      "community_name": "Miautrix Mail Server - Production Deployment Guide (Debian LXC)",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "miautrix mail server - production deployment guide (debian lxc)",
+      "source_file": "SETUP.md",
+      "source_location": "L1"
+    },
+    {
+      "id": "setup_part_1_prepare_the_debian_lxc_container_run_on_container",
+      "label": "PART 1: Prepare the Debian LXC Container (Run on Container)",
+      "_origin": "ast",
+      "community": 92,
+      "community_name": "Miautrix Mail Server - Production Deployment Guide (Debian LXC)",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "part 1: prepare the debian lxc container (run on container)",
+      "source_file": "SETUP.md",
+      "source_location": "L20"
+    },
+    {
+      "id": "setup_part_2_build_publish_artifacts_run_from_windows_powershell",
+      "label": "PART 2: Build & Publish Artifacts (Run from Windows PowerShell)",
+      "_origin": "ast",
+      "community": 92,
+      "community_name": "Miautrix Mail Server - Production Deployment Guide (Debian LXC)",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "part 2: build & publish artifacts (run from windows powershell)",
+      "source_file": "SETUP.md",
+      "source_location": "L123"
+    },
+    {
+      "id": "setup_part_3_deploy_artifacts_to_debian_lxc_via_windows_scp",
+      "label": "PART 3: Deploy Artifacts to Debian LXC via Windows SCP",
+      "_origin": "ast",
+      "community": 92,
+      "community_name": "Miautrix Mail Server - Production Deployment Guide (Debian LXC)",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "part 3: deploy artifacts to debian lxc via windows scp",
+      "source_file": "SETUP.md",
+      "source_location": "L158"
+    },
+    {
+      "id": "setup_part_4_start_and_verify_services_run_on_container",
+      "label": "PART 4: Start and Verify Services (Run on Container)",
+      "_origin": "ast",
+      "community": 92,
+      "community_name": "Miautrix Mail Server - Production Deployment Guide (Debian LXC)",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "part 4: start and verify services (run on container)",
+      "source_file": "SETUP.md",
+      "source_location": "L179"
+    },
+    {
+      "id": "setup_part_5_verification_testing",
+      "label": "PART 5: Verification & Testing",
+      "_origin": "ast",
+      "community": 92,
+      "community_name": "Miautrix Mail Server - Production Deployment Guide (Debian LXC)",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "part 5: verification & testing",
+      "source_file": "SETUP.md",
+      "source_location": "L198"
     },
     {
       "id": "csharp_namespace:1c9cbd86116d8723",
@@ -23187,149 +23378,149 @@
       "source_location": "L20"
     },
     {
-      "id": "csharp_namespace:5ee88cd82d1d021d",
-      "label": "Miautrix.Mail.SecurityTests.Isolation",
+      "id": "csharp_namespace:61b928a89f2d4065",
+      "label": "Miautrix.Mail.Search",
       "_origin": "ast",
       "community": 98,
-      "community_name": "xunit",
+      "community_name": "Miautrix.Mail.Persistence",
       "file_type": "code",
       "metadata": {
         "kind": "csharp_namespace",
-        "namespace": "Miautrix.Mail.SecurityTests.Isolation"
+        "namespace": "Miautrix.Mail.Search"
       },
-      "norm_label": "miautrix.mail.securitytests.isolation",
-      "source_file": "tests/Miautrix.Mail.SecurityTests/Isolation/IsolationTests.cs",
-      "source_location": "L6",
-      "type": "namespace"
-    },
-    {
-      "id": "csharp_namespace:6b4206ae8c80003f",
-      "label": "Miautrix.Mail.ProtocolTests.Smtp",
-      "_origin": "ast",
-      "community": 98,
-      "community_name": "xunit",
-      "file_type": "code",
-      "metadata": {
-        "kind": "csharp_namespace",
-        "namespace": "Miautrix.Mail.ProtocolTests.Smtp"
-      },
-      "norm_label": "miautrix.mail.protocoltests.smtp",
-      "source_file": "tests/Miautrix.Mail.ProtocolTests/Smtp/DkimTests.cs",
-      "source_location": "L4",
-      "type": "namespace"
-    },
-    {
-      "id": "csharp_namespace:87eb84b6c17074f2",
-      "label": "Miautrix.Mail.Queue",
-      "_origin": "ast",
-      "community": 98,
-      "community_name": "xunit",
-      "file_type": "code",
-      "metadata": {
-        "kind": "csharp_namespace",
-        "namespace": "Miautrix.Mail.Queue"
-      },
-      "norm_label": "miautrix.mail.queue",
-      "source_file": "src/Miautrix.Mail.Queue/RetryPolicy.cs",
-      "source_location": "L1",
-      "type": "namespace"
-    },
-    {
-      "id": "csharp_namespace:da5d5649e7e4f809",
-      "label": "Miautrix.Mail.Protocols.Smtp",
-      "_origin": "ast",
-      "community": 98,
-      "community_name": "xunit",
-      "file_type": "code",
-      "metadata": {
-        "kind": "csharp_namespace",
-        "namespace": "Miautrix.Mail.Protocols.Smtp"
-      },
-      "norm_label": "miautrix.mail.protocols.smtp",
-      "source_file": "src/Miautrix.Mail.Protocols.Smtp/DkimService.cs",
+      "norm_label": "miautrix.mail.search",
+      "source_file": "src/Miautrix.Mail.Search/SearchProvider.cs",
       "source_location": "L5",
       "type": "namespace"
     },
     {
-      "id": "csharp_namespace:e0dc105570934870",
-      "label": "Miautrix.Mail.IntegrationTests.Smtp",
+      "id": "csharp_namespace:642c9d4b31ce2459",
+      "label": "Miautrix.Mail.IntegrationTests.Search",
       "_origin": "ast",
       "community": 98,
-      "community_name": "xunit",
+      "community_name": "Miautrix.Mail.Persistence",
       "file_type": "code",
       "metadata": {
         "kind": "csharp_namespace",
-        "namespace": "Miautrix.Mail.IntegrationTests.Smtp"
+        "namespace": "Miautrix.Mail.IntegrationTests.Search"
       },
-      "norm_label": "miautrix.mail.integrationtests.smtp",
-      "source_file": "tests/Miautrix.Mail.IntegrationTests/Smtp/SmtpQueueDatabaseTests.cs",
+      "norm_label": "miautrix.mail.integrationtests.search",
+      "source_file": "tests/Miautrix.Mail.IntegrationTests/Search/SearchTests.cs",
       "source_location": "L7",
       "type": "namespace"
     },
     {
-      "id": "src_miautrix_mail_protocols_smtp_smtpinboundhandler",
-      "label": "SmtpInboundHandler.cs",
+      "id": "csharp_namespace:79d69cffa1356b13",
+      "label": "Miautrix.Mail.Persistence",
       "_origin": "ast",
       "community": 98,
-      "community_name": "xunit",
+      "community_name": "Miautrix.Mail.Persistence",
       "file_type": "code",
-      "norm_label": "smtpinboundhandler.cs",
-      "source_file": "src/Miautrix.Mail.Protocols.Smtp/SmtpInboundHandler.cs",
+      "metadata": {
+        "kind": "csharp_namespace",
+        "namespace": "Miautrix.Mail.Persistence"
+      },
+      "norm_label": "miautrix.mail.persistence",
+      "source_file": "src/Miautrix.Mail.Persistence/AppDbContext.cs",
+      "source_location": "L7",
+      "type": "namespace"
+    },
+    {
+      "id": "csharp_namespace:7f6e6c85402bb0d6",
+      "label": "Miautrix.Mail.Protocols.Sieve",
+      "_origin": "ast",
+      "community": 98,
+      "community_name": "Miautrix.Mail.Persistence",
+      "file_type": "code",
+      "metadata": {
+        "kind": "csharp_namespace",
+        "namespace": "Miautrix.Mail.Protocols.Sieve"
+      },
+      "norm_label": "miautrix.mail.protocols.sieve",
+      "source_file": "src/Miautrix.Mail.Protocols.Sieve/SieveParser.cs",
+      "source_location": "L6",
+      "type": "namespace"
+    },
+    {
+      "id": "csharp_namespace:9b475d0d62b8a556",
+      "label": "Miautrix.Mail.ProtocolTests.Sieve",
+      "_origin": "ast",
+      "community": 98,
+      "community_name": "Miautrix.Mail.Persistence",
+      "file_type": "code",
+      "metadata": {
+        "kind": "csharp_namespace",
+        "namespace": "Miautrix.Mail.ProtocolTests.Sieve"
+      },
+      "norm_label": "miautrix.mail.protocoltests.sieve",
+      "source_file": "tests/Miautrix.Mail.ProtocolTests/Sieve/SieveTests.cs",
+      "source_location": "L6",
+      "type": "namespace"
+    },
+    {
+      "id": "src_miautrix_mail_persistence_appdbcontext",
+      "label": "AppDbContext.cs",
+      "_origin": "ast",
+      "community": 98,
+      "community_name": "Miautrix.Mail.Persistence",
+      "file_type": "code",
+      "norm_label": "appdbcontext.cs",
+      "source_file": "src/Miautrix.Mail.Persistence/AppDbContext.cs",
       "source_location": "L1"
     },
     {
-      "id": "src_miautrix_mail_protocols_smtp_smtpsubmissionhandler",
-      "label": "SmtpSubmissionHandler.cs",
+      "id": "src_miautrix_mail_protocols_sieve_sieveparser",
+      "label": "SieveParser.cs",
       "_origin": "ast",
       "community": 98,
-      "community_name": "xunit",
+      "community_name": "Miautrix.Mail.Persistence",
       "file_type": "code",
-      "norm_label": "smtpsubmissionhandler.cs",
-      "source_file": "src/Miautrix.Mail.Protocols.Smtp/SmtpSubmissionHandler.cs",
+      "norm_label": "sieveparser.cs",
+      "source_file": "src/Miautrix.Mail.Protocols.Sieve/SieveParser.cs",
       "source_location": "L1"
     },
     {
-      "id": "tests_miautrix_mail_integrationtests_smtp_smtpqueuedatabasetests",
-      "label": "SmtpQueueDatabaseTests.cs",
+      "id": "src_miautrix_mail_search_searchprovider",
+      "label": "SearchProvider.cs",
       "_origin": "ast",
       "community": 98,
-      "community_name": "xunit",
+      "community_name": "Miautrix.Mail.Persistence",
       "file_type": "code",
-      "norm_label": "smtpqueuedatabasetests.cs",
-      "source_file": "tests/Miautrix.Mail.IntegrationTests/Smtp/SmtpQueueDatabaseTests.cs",
+      "norm_label": "searchprovider.cs",
+      "source_file": "src/Miautrix.Mail.Search/SearchProvider.cs",
       "source_location": "L1"
     },
     {
-      "id": "tests_miautrix_mail_protocoltests_smtp_dkimtests",
-      "label": "DkimTests.cs",
+      "id": "src_miautrix_mail_web_infrastructure_requestidmiddleware",
+      "label": "RequestIdMiddleware.cs",
       "_origin": "ast",
       "community": 98,
-      "community_name": "xunit",
+      "community_name": "Miautrix.Mail.Persistence",
       "file_type": "code",
-      "norm_label": "dkimtests.cs",
-      "source_file": "tests/Miautrix.Mail.ProtocolTests/Smtp/DkimTests.cs",
+      "norm_label": "requestidmiddleware.cs",
+      "source_file": "src/Miautrix.Mail.Web/Infrastructure/RequestIdMiddleware.cs",
       "source_location": "L1"
     },
     {
-      "id": "tests_miautrix_mail_protocoltests_smtp_smtpprotocoltests",
-      "label": "SmtpProtocolTests.cs",
+      "id": "tests_miautrix_mail_integrationtests_search_searchtests",
+      "label": "SearchTests.cs",
       "_origin": "ast",
       "community": 98,
-      "community_name": "xunit",
+      "community_name": "Miautrix.Mail.Persistence",
       "file_type": "code",
-      "norm_label": "smtpprotocoltests.cs",
-      "source_file": "tests/Miautrix.Mail.ProtocolTests/Smtp/SmtpProtocolTests.cs",
+      "norm_label": "searchtests.cs",
+      "source_file": "tests/Miautrix.Mail.IntegrationTests/Search/SearchTests.cs",
       "source_location": "L1"
     },
     {
-      "id": "tests_miautrix_mail_securitytests_isolation_isolationtests",
-      "label": "IsolationTests.cs",
+      "id": "tests_miautrix_mail_protocoltests_sieve_sievetests",
+      "label": "SieveTests.cs",
       "_origin": "ast",
       "community": 98,
-      "community_name": "xunit",
+      "community_name": "Miautrix.Mail.Persistence",
       "file_type": "code",
-      "norm_label": "isolationtests.cs",
-      "source_file": "tests/Miautrix.Mail.SecurityTests/Isolation/IsolationTests.cs",
+      "norm_label": "sievetests.cs",
+      "source_file": "tests/Miautrix.Mail.ProtocolTests/Sieve/SieveTests.cs",
       "source_location": "L1"
     },
     {
@@ -23905,11 +24096,23 @@
       "source_url": null
     },
     {
+      "id": "microsoft_entityframeworkcore",
+      "label": "microsoft_entityframeworkcore",
+      "_origin": "semantic",
+      "community": 13,
+      "community_name": "microsoft_entityframeworkcore",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "microsoft_entityframeworkcore",
+      "source_file": "",
+      "type": "external"
+    },
+    {
       "id": "microsoft_entityframeworkcore_infrastructure",
       "label": "microsoft_entityframeworkcore_infrastructure",
       "_origin": "semantic",
       "community": 13,
-      "community_name": "Miautrix.Mail.Persistence.Migrations",
+      "community_name": "microsoft_entityframeworkcore",
       "external": true,
       "file_type": "concept",
       "norm_label": "microsoft_entityframeworkcore_infrastructure",
@@ -23921,7 +24124,7 @@
       "label": "microsoft_entityframeworkcore_migrations",
       "_origin": "semantic",
       "community": 13,
-      "community_name": "Miautrix.Mail.Persistence.Migrations",
+      "community_name": "microsoft_entityframeworkcore",
       "external": true,
       "file_type": "concept",
       "norm_label": "microsoft_entityframeworkcore_migrations",
@@ -23933,7 +24136,7 @@
       "label": "microsoft_entityframeworkcore_storage_valueconversion",
       "_origin": "semantic",
       "community": 13,
-      "community_name": "Miautrix.Mail.Persistence.Migrations",
+      "community_name": "microsoft_entityframeworkcore",
       "external": true,
       "file_type": "concept",
       "norm_label": "microsoft_entityframeworkcore_storage_valueconversion",
@@ -23945,7 +24148,7 @@
       "label": "npgsql_entityframeworkcore_postgresql_metadata",
       "_origin": "semantic",
       "community": 13,
-      "community_name": "Miautrix.Mail.Persistence.Migrations",
+      "community_name": "microsoft_entityframeworkcore",
       "external": true,
       "file_type": "concept",
       "norm_label": "npgsql_entityframeworkcore_postgresql_metadata",
@@ -23957,7 +24160,7 @@
       "label": "system",
       "_origin": "semantic",
       "community": 13,
-      "community_name": "Miautrix.Mail.Persistence.Migrations",
+      "community_name": "microsoft_entityframeworkcore",
       "external": true,
       "file_type": "concept",
       "norm_label": "system",
@@ -23969,7 +24172,7 @@
       "label": "konscious_security_cryptography",
       "_origin": "semantic",
       "community": 20,
-      "community_name": "Miautrix.Mail.Identity",
+      "community_name": "ImapEngine.cs",
       "external": true,
       "file_type": "concept",
       "norm_label": "konscious_security_cryptography",
@@ -23981,7 +24184,7 @@
       "label": "system_security_cryptography",
       "_origin": "semantic",
       "community": 20,
-      "community_name": "Miautrix.Mail.Identity",
+      "community_name": "ImapEngine.cs",
       "external": true,
       "file_type": "concept",
       "norm_label": "system_security_cryptography",
@@ -23993,7 +24196,7 @@
       "label": "system_text",
       "_origin": "semantic",
       "community": 20,
-      "community_name": "Miautrix.Mail.Identity",
+      "community_name": "ImapEngine.cs",
       "external": true,
       "file_type": "concept",
       "norm_label": "system_text",
@@ -24001,11 +24204,23 @@
       "type": "external"
     },
     {
+      "id": "system_text_regularexpressions",
+      "label": "system_text_regularexpressions",
+      "_origin": "semantic",
+      "community": 20,
+      "community_name": "ImapEngine.cs",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "system_text_regularexpressions",
+      "source_file": "",
+      "type": "external"
+    },
+    {
       "id": "system_text_json_serialization",
       "label": "system_text_json_serialization",
       "_origin": "semantic",
-      "community": 29,
-      "community_name": "Miautrix.Mail.Web.Infrastructure",
+      "community": 3,
+      "community_name": "QuarantineItem",
       "external": true,
       "file_type": "concept",
       "norm_label": "system_text_json_serialization",
@@ -24049,35 +24264,11 @@
       "type": "external"
     },
     {
-      "id": "microsoft_entityframeworkcore",
-      "label": "microsoft_entityframeworkcore",
-      "_origin": "semantic",
-      "community": 8,
-      "community_name": "microsoft_entityframeworkcore",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "microsoft_entityframeworkcore",
-      "source_file": "",
-      "type": "external"
-    },
-    {
-      "id": "microsoft_entityframeworkcore_design",
-      "label": "microsoft_entityframeworkcore_design",
-      "_origin": "semantic",
-      "community": 8,
-      "community_name": "microsoft_entityframeworkcore",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "microsoft_entityframeworkcore_design",
-      "source_file": "",
-      "type": "external"
-    },
-    {
       "id": "system_text_json",
       "label": "system_text_json",
       "_origin": "semantic",
       "community": 8,
-      "community_name": "microsoft_entityframeworkcore",
+      "community_name": "Miautrix.Mail.Domain",
       "external": true,
       "file_type": "concept",
       "norm_label": "system_text_json",
@@ -24085,14 +24276,26 @@
       "type": "external"
     },
     {
-      "id": "system_text_regularexpressions",
-      "label": "system_text_regularexpressions",
+      "id": "xunit",
+      "label": "xunit",
       "_origin": "semantic",
       "community": 8,
-      "community_name": "microsoft_entityframeworkcore",
+      "community_name": "Miautrix.Mail.Domain",
       "external": true,
       "file_type": "concept",
-      "norm_label": "system_text_regularexpressions",
+      "norm_label": "xunit",
+      "source_file": "",
+      "type": "external"
+    },
+    {
+      "id": "microsoft_entityframeworkcore_design",
+      "label": "microsoft_entityframeworkcore_design",
+      "_origin": "semantic",
+      "community": 98,
+      "community_name": "Miautrix.Mail.Persistence",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "microsoft_entityframeworkcore_design",
       "source_file": "",
       "type": "external"
     },
@@ -24100,23 +24303,11 @@
       "id": "system_diagnostics",
       "label": "system_diagnostics",
       "_origin": "semantic",
-      "community": 83,
-      "community_name": "RequestIdMiddleware",
+      "community": 98,
+      "community_name": "Miautrix.Mail.Persistence",
       "external": true,
       "file_type": "concept",
       "norm_label": "system_diagnostics",
-      "source_file": "",
-      "type": "external"
-    },
-    {
-      "id": "xunit",
-      "label": "xunit",
-      "_origin": "semantic",
-      "community": 98,
-      "community_name": "xunit",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "xunit",
       "source_file": "",
       "type": "external"
     }
@@ -51169,6 +51360,160 @@
       "weight": 1.0
     },
     {
+      "source": "setup",
+      "target": "setup_miautrix_mail_server_production_deployment_guide_debian_lxc",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "SETUP.md",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "setup_miautrix_mail_server_production_deployment_guide_debian_lxc",
+      "target": "setup_part_2_build_publish_artifacts_run_from_windows_powershell",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "SETUP.md",
+      "source_location": "L123",
+      "weight": 1.0
+    },
+    {
+      "source": "setup_miautrix_mail_server_production_deployment_guide_debian_lxc",
+      "target": "setup_part_3_deploy_artifacts_to_debian_lxc_via_windows_scp",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "SETUP.md",
+      "source_location": "L158",
+      "weight": 1.0
+    },
+    {
+      "source": "setup_miautrix_mail_server_production_deployment_guide_debian_lxc",
+      "target": "setup_part_4_start_and_verify_services_run_on_container",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "SETUP.md",
+      "source_location": "L179",
+      "weight": 1.0
+    },
+    {
+      "source": "setup_miautrix_mail_server_production_deployment_guide_debian_lxc",
+      "target": "setup_part_5_verification_testing",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "SETUP.md",
+      "source_location": "L198",
+      "weight": 1.0
+    },
+    {
+      "source": "setup_miautrix_mail_server_production_deployment_guide_debian_lxc",
+      "target": "setup_part_1_prepare_the_debian_lxc_container_run_on_container",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "SETUP.md",
+      "source_location": "L20",
+      "weight": 1.0
+    },
+    {
+      "source": "setup_miautrix_mail_server_production_deployment_guide_debian_lxc",
+      "target": "setup_architecture_configuration_summary",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "SETUP.md",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "setup_part_1_prepare_the_debian_lxc_container_run_on_container",
+      "target": "setup_1_1_install_system_dependencies_nginx",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "SETUP.md",
+      "source_location": "L24",
+      "weight": 1.0
+    },
+    {
+      "source": "setup_part_1_prepare_the_debian_lxc_container_run_on_container",
+      "target": "setup_1_2_configure_systemd_service_for_net_backend",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "SETUP.md",
+      "source_location": "L37",
+      "weight": 1.0
+    },
+    {
+      "source": "setup_part_1_prepare_the_debian_lxc_container_run_on_container",
+      "target": "setup_1_3_configure_nginx_for_cloudflare_tunnel_mail_miautrix_tech",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "SETUP.md",
+      "source_location": "L66",
+      "weight": 1.0
+    },
+    {
+      "source": "setup_part_2_build_publish_artifacts_run_from_windows_powershell",
+      "target": "setup_2_1_publish_net_10_self_contained_binary",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "SETUP.md",
+      "source_location": "L127",
+      "weight": 1.0
+    },
+    {
+      "source": "setup_part_2_build_publish_artifacts_run_from_windows_powershell",
+      "target": "setup_2_2_build_frontends_web_admin_webmail",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "SETUP.md",
+      "source_location": "L135",
+      "weight": 1.0
+    },
+    {
+      "source": "setup_part_2_build_publish_artifacts_run_from_windows_powershell",
+      "target": "setup_2_3_apply_database_migrations_to_miautrix_mail_pro",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "SETUP.md",
+      "source_location": "L149",
+      "weight": 1.0
+    },
+    {
+      "source": "setup_part_3_deploy_artifacts_to_debian_lxc_via_windows_scp",
+      "target": "setup_3_1_copy_published_files_using_windows_built_in_scp",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "SETUP.md",
+      "source_location": "L162",
+      "weight": 1.0
+    },
+    {
       "source": "src_miautrix_mail_antispam_quarantineservice",
       "target": "src_miautrix_mail_antispam_quarantineservice_miautrix_mail_antispam_quarantineservice",
       "relation": "contains",
@@ -63111,5 +63456,5 @@
       "source_file": "blueprints/miautrix-mail-server/workspace/AGENTS.md"
     }
   ],
-  "built_at_commit": "bf3e9f2dacb4e111daea03194a085deea0cdf8f2"
+  "built_at_commit": "9e0a4d8b36cdd518e2cd3bf42cc78d83eeaeab59"
 }

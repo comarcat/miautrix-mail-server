@@ -1,21 +1,21 @@
 # Graph Report - miautrix-mail-server  (2026-09-18)
 
 ## Corpus Check
-- 197 files · ~1,679,335 words
+- 199 files · ~1,680,349 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1708 nodes · 3034 edges · 124 communities (99 shown, 18 thin omitted)
+- 1724 nodes · 3048 edges · 125 communities (99 shown, 18 thin omitted)
 - Extraction: 93% EXTRACTED · 7% INFERRED · 0% AMBIGUOUS · INFERRED: 227 edges (avg confidence: 0.84)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `bf3e9f2d`
+- Built from commit: `9e0a4d8b`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
-- MailQueueService
+- .Main
 - Miautrix.Mail.sln
 - AppDbContext
 - QuarantineItem
@@ -23,19 +23,19 @@
 - Message
 - DkimService
 - Epic 2: Mail Transport & Policy (T7-T13)
-- microsoft_entityframeworkcore
+- Miautrix.Mail.Domain
 - TenantScopedEntityBase
 - .SimulateAsync
 - App.tsx
 - SieveTests
-- Miautrix.Mail.Persistence.Migrations
+- microsoft_entityframeworkcore
 - Guid
 - Miautrix Mail Server Platform
 - webmail/src/App.tsx
 - MockSmtpQueueManager
 - .List
 - Components
-- Miautrix.Mail.Identity
+- ImapEngine.cs
 - Miautrix.Mail.Domain.csproj
 - Membership
 - Miautrix.Mail.Web.csproj
@@ -43,8 +43,8 @@
 - AddSmtpQueueColumns
 - AddMailAndSpamColumns
 - Migration
-- .Main
-- Miautrix.Mail.Web.Infrastructure
+- InMemoryIdempotencyStore
+- Miautrix.Mail.Web/Program.cs
 - SmtpDeliveryAttempt
 - Mailbox
 - Miautrix.Mail.SecurityTests.csproj
@@ -104,13 +104,13 @@
 - compilerOptions
 - Miautrix.Mail.IntegrationTests.csproj
 - SmtpQueueItem
-- TypeRegistrar
+- Miautrix Mail Server - Production Deployment Guide (Debian LXC)
 - Miautrix.Mail.Cli.Commands
 - .When_message_is_enqueued_and_fails_the_system_persists_queue_row_and_strictly_increasing_retry
 - MailboxCreateSettings
 - SmtpResponse
 - MailboxDeleteSettings
-- xunit
+- Miautrix.Mail.Persistence
 - Miautrix.Mail.Cli.csproj
 - DomainListCommand
 - MailboxListCommand
@@ -120,9 +120,9 @@
 - QueueListCommand
 - QueueRetryCommand
 - .Main
-- QueueStatusFilter
+- MailQueueService
 - QuarantineListCommand
-- .ListAsync
+- .When_user_in_tenant_A_requests_mailbox_belonging_to_tenant_B_returns_404_and_does_not_leak_existence
 - SystemInfoCommand
 - ExponentialBackoffWithJitterRetryPolicy
 - .IsDomainLocal
@@ -146,16 +146,16 @@
 10. `compilerOptions` - 18 edges
 
 ## Surprising Connections (you probably didn't know these)
+- `MockPermissionRepo` --implements--> `IPermissionRepository`  [EXTRACTED]
+  tests/Miautrix.Mail.SecurityTests/Isolation/IsolationTests.cs → src/Miautrix.Mail.Security/TenantAuthorizationHelper.cs
 - `MailFlowTests` --references--> `AppDbContext`  [EXTRACTED]
   tests/Miautrix.Mail.IntegrationTests/MailFlow/MailFlowTests.cs → src/Miautrix.Mail.Persistence/AppDbContext.cs
-- `SieveTests` --references--> `AppDbContext`  [EXTRACTED]
-  tests/Miautrix.Mail.ProtocolTests/Sieve/SieveTests.cs → src/Miautrix.Mail.Persistence/AppDbContext.cs
-- `MockSmtpQueueManager` --references--> `SmtpQueueItem`  [EXTRACTED]
-  tests/Miautrix.Mail.ProtocolTests/Smtp/SmtpProtocolTests.cs → src/Miautrix.Mail.Domain/Entities.cs
 - `MockAuthenticator` --implements--> `ISmtpAuthenticator`  [EXTRACTED]
   tests/Miautrix.Mail.ProtocolTests/Smtp/SmtpProtocolTests.cs → src/Miautrix.Mail.Protocols.Smtp/SmtpModels.cs
 - `MockDomainValidator` --implements--> `ISmtpDomainValidator`  [EXTRACTED]
   tests/Miautrix.Mail.ProtocolTests/Smtp/SmtpProtocolTests.cs → src/Miautrix.Mail.Protocols.Smtp/SmtpModels.cs
+- `SieveTests` --references--> `AppDbContext`  [EXTRACTED]
+  tests/Miautrix.Mail.ProtocolTests/Sieve/SieveTests.cs → src/Miautrix.Mail.Persistence/AppDbContext.cs
 
 ## Import Cycles
 - None detected.
@@ -164,11 +164,11 @@
 - **Miautrix Epics Hierarchy** — blueprints_miautrix_mail_server_epics_01_core_platform_epic_1, blueprints_miautrix_mail_server_epics_02_mail_transport_epic_2, blueprints_miautrix_mail_server_epics_03_surfaces_epic_3, blueprints_miautrix_mail_server_epics_04_operations_epic_4 [EXTRACTED 1.00]
 - **Miautrix Provider Seams** — miautrix_mail_server_final_architecture_design_iidentityprovider, miautrix_mail_server_final_architecture_design_ispamprovider, miautrix_mail_server_final_architecture_design_imalwareprovider, miautrix_mail_server_final_architecture_design_imailstorage, miautrix_mail_server_final_architecture_design_isearchprovider, miautrix_mail_server_final_architecture_design_iqueueprovider [EXTRACTED 1.00]
 
-## Communities (124 total, 18 thin omitted)
+## Communities (125 total, 18 thin omitted)
 
-### Community 0 - "MailQueueService"
-Cohesion: 0.12
-Nodes (17): Exception, InvalidOperationException, CancellationToken, DateTimeOffset, Guid, Task, MailQueueService, Guid (+9 more)
+### Community 0 - ".Main"
+Cohesion: 0.24
+Nodes (8): ApiBehaviorOptions, Exception, Guid, IPermissionRepository, ITenantAuthorizationHelper, LastOwnerDemotionException, ResourceNotFoundException, TenantAuthorizationHelper
 
 ### Community 1 - "Miautrix.Mail.sln"
 Cohesion: 0.10
@@ -180,7 +180,7 @@ Nodes (55): DbContext, DbSet, IDesignTimeDbContextFactory, ModelBuilder, AppDbCo
 
 ### Community 3 - "QuarantineItem"
 Cohesion: 0.06
-Nodes (47): CancellationToken, Guid, List, Task, IQuarantineService, QuarantineService, Guid, IReadOnlyList (+39 more)
+Nodes (48): CancellationToken, Guid, List, Task, IQuarantineService, QuarantineService, Guid, IReadOnlyList (+40 more)
 
 ### Community 4 - "ImapSession"
 Cohesion: 0.09
@@ -198,17 +198,17 @@ Nodes (13): Body, Headers, RSA, Dictionary, GeneratedRegex, List, Regex, DkimKey
 Cohesion: 0.25
 Nodes (8): Epic 2: Mail Transport & Policy (T7-T13), Anti-Spam & Quarantine Subsystem, DNS Authentication (SPF, DKIM, DMARC, ARC), Full-Text Search (FTS) Indexing, IMAP Protocol Listener, Mail-Flow Rule Engine & Simulator, ManageSieve Script Engine, SMTP Listener & Queue
 
-### Community 8 - "microsoft_entityframeworkcore"
-Cohesion: 0.11
-Nodes (21): Miautrix.Mail.Protocols.Imap, Miautrix.Mail.IntegrationTests.MailFlow, Miautrix.Mail.IntegrationTests.Audit, Miautrix.Mail.Web, Miautrix.Mail.AntiSpam, Miautrix.Mail.Storage, Miautrix.Mail.IntegrationTests.AntiSpam, Miautrix.Mail.Search (+13 more)
+### Community 8 - "Miautrix.Mail.Domain"
+Cohesion: 0.12
+Nodes (14): Miautrix.Mail.IntegrationTests.MailFlow, Miautrix.Mail.IntegrationTests.Audit, Miautrix.Mail.Web, Miautrix.Mail.AntiSpam, Miautrix.Mail.IntegrationTests.AntiSpam, Miautrix.Mail.SecurityTests.Isolation, Miautrix.Mail.IntegrationTests.Api, Miautrix.Mail.ProtocolTests.Smtp (+6 more)
 
 ### Community 9 - "TenantScopedEntityBase"
 Cohesion: 0.13
 Nodes (36): ApiKey, ApplicationPassword, BackupHistory, BackupJob, Deploy, Domain, DomainDnsSetting, Group (+28 more)
 
 ### Community 10 - ".SimulateAsync"
-Cohesion: 0.15
-Nodes (22): Miautrix.Mail.MailFlow, IDisposable, JsonSerializerOptions, CancellationToken, Guid, IReadOnlyDictionary, IReadOnlyList, List (+14 more)
+Cohesion: 0.08
+Nodes (31): Miautrix.Mail.Cli.Infrastructure, Miautrix.Mail.MailFlow, IDisposable, IServiceCollection, IServiceProvider, ITypeRegistrar, ITypeResolver, JsonSerializerOptions (+23 more)
 
 ### Community 11 - "App.tsx"
 Cohesion: 0.09
@@ -218,9 +218,9 @@ Nodes (22): AdminApiClient, apiClient, App(), PLACEHOLDER_DESCRIPTIONS, Dashboar
 Cohesion: 0.21
 Nodes (10): CancellationToken, Guid, HashSet, Task, SieveParser, SieveParseResult, SieveScriptService, Fact (+2 more)
 
-### Community 13 - "Miautrix.Mail.Persistence.Migrations"
+### Community 13 - "microsoft_entityframeworkcore"
 Cohesion: 0.35
-Nodes (6): Miautrix.Mail.Persistence.Migrations, microsoft_entityframeworkcore_infrastructure, microsoft_entityframeworkcore_migrations, microsoft_entityframeworkcore_storage_valueconversion, npgsql_entityframeworkcore_postgresql_metadata, system
+Nodes (7): Miautrix.Mail.Persistence.Migrations, microsoft_entityframeworkcore, microsoft_entityframeworkcore_infrastructure, microsoft_entityframeworkcore_migrations, microsoft_entityframeworkcore_storage_valueconversion, npgsql_entityframeworkcore_postgresql_metadata, system
 
 ### Community 14 - "Guid"
 Cohesion: 0.12
@@ -239,16 +239,16 @@ Cohesion: 0.22
 Nodes (11): CancellationToken, Fact, Guid, HashSet, List, Task, MockAuthenticator, MockDomainValidator (+3 more)
 
 ### Community 18 - ".List"
-Cohesion: 0.20
-Nodes (12): ControllerBase, HttpDelete, HttpGet, HttpPost, ProducesResponseType, ApiResponse, PaginationMeta, CancellationToken (+4 more)
+Cohesion: 0.08
+Nodes (28): ControllerBase, HttpDelete, HttpGet, HttpPost, ProducesResponseType, CancellationToken, Guid, Task (+20 more)
 
 ### Community 19 - "Components"
 Cohesion: 0.08
 Nodes (24): Border Radius, Buttons, Cards, Checkboxes, Chips, Colors, Components, Default Item (+16 more)
 
-### Community 20 - "Miautrix.Mail.Identity"
-Cohesion: 0.18
-Nodes (10): Miautrix.Mail.Identity, Miautrix.Mail.SecurityTests.Identity, konscious_security_cryptography, SecurityEventCodes, DateTimeOffset, Guid, RefreshTokenInfo, SessionInfo (+2 more)
+### Community 20 - "ImapEngine.cs"
+Cohesion: 0.14
+Nodes (11): Miautrix.Mail.Protocols.Imap, Miautrix.Mail.Storage, Miautrix.Mail.Identity, Miautrix.Mail.Seeder, Miautrix.Mail.SecurityTests.Identity, Miautrix.Mail.ProtocolTests.Imap, konscious_security_cryptography, SecurityEventCodes (+3 more)
 
 ### Community 21 - "Miautrix.Mail.Domain.csproj"
 Cohesion: 0.12
@@ -278,13 +278,13 @@ Nodes (7): DateTimeOffset, Guid, MigrationBuilder, DateTimeOffset, Guid, ModelBu
 Cohesion: 0.12
 Nodes (12): Migration, MigrationBuilder, DateTimeOffset, Guid, ModelBuilder, AddCatalogFields, Guid, MigrationBuilder (+4 more)
 
-### Community 28 - ".Main"
-Cohesion: 0.19
-Nodes (11): ApiBehaviorOptions, ConcurrentDictionary, HashSet, HttpContext, RequestDelegate, Task, IdempotencyMiddleware, CapturedResponse (+3 more)
+### Community 28 - "InMemoryIdempotencyStore"
+Cohesion: 0.24
+Nodes (9): ConcurrentDictionary, HashSet, HttpContext, RequestDelegate, Task, IdempotencyMiddleware, CapturedResponse, IIdempotencyStore (+1 more)
 
-### Community 29 - "Miautrix.Mail.Web.Infrastructure"
-Cohesion: 0.13
-Nodes (10): Miautrix.Mail.Web.Infrastructure, Miautrix.Mail.Web.Controllers, Miautrix.Mail.Application.Queue, Miautrix.Mail.Web.Contracts, DateTimeOffset, QueueItemDto, RetryQueueItemRequest, Reason (+2 more)
+### Community 29 - "Miautrix.Mail.Web/Program.cs"
+Cohesion: 0.23
+Nodes (5): Miautrix.Mail.Web.Infrastructure, Miautrix.Mail.Web.Controllers, Miautrix.Mail.Application.Queue, Miautrix.Mail.Security, Miautrix.Mail.Web.Contracts
 
 ### Community 30 - "SmtpDeliveryAttempt"
 Cohesion: 0.15
@@ -299,8 +299,8 @@ Cohesion: 0.14
 Nodes (12): Konscious.Security.Cryptography.Argon2 (1.3.1), Otp.NET (1.4.1), net10.0, Microsoft.NET.Sdk, net10.0, Microsoft.NET.Sdk, net10.0, coverlet.collector (6.0.4) (+4 more)
 
 ### Community 33 - "MailQueueApiTests"
-Cohesion: 0.32
-Nodes (6): IClassFixture, Fact, Guid, Task, MailQueueApiTests, WebApplicationFactory
+Cohesion: 0.29
+Nodes (7): IClassFixture, Program, Fact, Guid, Task, MailQueueApiTests, WebApplicationFactory
 
 ### Community 34 - ".BuildModel"
 Cohesion: 0.33
@@ -351,8 +351,8 @@ Cohesion: 0.06
 Nodes (31): dependencies, react, react-dom, devDependencies, jsdom, @testing-library/jest-dom, @testing-library/react, @types/react (+23 more)
 
 ### Community 50 - "InMemorySecurityEventSink"
-Cohesion: 0.08
-Nodes (29): otpnet, SessionToken, Argon2idPasswordHasher, IPasswordHasher, DateTimeOffset, Guid, IReadOnlyList, List (+21 more)
+Cohesion: 0.07
+Nodes (33): otpnet, SessionToken, Argon2idPasswordHasher, IPasswordHasher, DateTimeOffset, Guid, IReadOnlyList, List (+25 more)
 
 ### Community 51 - "compilerOptions"
 Cohesion: 0.09
@@ -363,7 +363,7 @@ Cohesion: 0.25
 Nodes (7): name, private, scripts, build, dev, test, version
 
 ### Community 53 - "HeaderRequestContextAccessor"
-Cohesion: 0.28
+Cohesion: 0.27
 Nodes (8): IHttpContextAccessor, Guid, HeaderRequestContextAccessor, CurrentTenantId, CurrentUserId, IRequestContextAccessor, CurrentTenantId, CurrentUserId
 
 ### Community 54 - "Attachment"
@@ -391,15 +391,15 @@ Cohesion: 0.25
 Nodes (6): Guid, MigrationBuilder, DateTimeOffset, Guid, ModelBuilder, AddMembershipAndRolePermissionFks
 
 ### Community 73 - ".Error"
-Cohesion: 0.29
-Nodes (5): IReadOnlyDictionary, ApiError, HttpContext, IReadOnlyDictionary, IResult
+Cohesion: 0.25
+Nodes (6): IReadOnlyDictionary, ApiError, HttpContext, IReadOnlyDictionary, IResult, ApiResults
 
 ### Community 74 - "Tokens"
 Cohesion: 0.29
 Nodes (7): Borders, Charts, Colors, Radius, Shadows, Tokens, Typography
 
 ### Community 75 - "ApiExceptionMiddleware"
-Cohesion: 0.36
+Cohesion: 0.43
 Nodes (5): ILogger, HttpContext, RequestDelegate, Task, ApiExceptionMiddleware
 
 ### Community 76 - "Miautrix.Mail.EndToEndTests.csproj"
@@ -427,8 +427,8 @@ Cohesion: 0.18
 Nodes (7): Miautrix.Mail.Application.Users, IUserService, net10.0, Microsoft.EntityFrameworkCore (10.0.4), Npgsql.EntityFrameworkCore.PostgreSQL (10.0.3), Microsoft.NET.Sdk, User
 
 ### Community 83 - "RequestIdMiddleware"
-Cohesion: 0.29
-Nodes (5): HttpContext, RequestDelegate, Task, RequestIdMiddleware, system_diagnostics
+Cohesion: 0.40
+Nodes (4): HttpContext, RequestDelegate, Task, RequestIdMiddleware
 
 ### Community 84 - "4. Buttons"
 Cohesion: 0.50
@@ -458,9 +458,9 @@ Nodes (15): coverlet.collector (6.0.4), Microsoft.AspNetCore.Mvc.Testing (10.0.4
 Cohesion: 0.15
 Nodes (14): SmtpQueueItem, Attempts, LastAttemptAt, LastError, NextAttemptAt, RawMessage, Recipient, Sender (+6 more)
 
-### Community 92 - "TypeRegistrar"
-Cohesion: 0.17
-Nodes (9): Miautrix.Mail.Cli.Infrastructure, IServiceCollection, IServiceProvider, ITypeRegistrar, ITypeResolver, Func, TypeRegistrar, TypeResolver (+1 more)
+### Community 92 - "Miautrix Mail Server - Production Deployment Guide (Debian LXC)"
+Cohesion: 0.13
+Nodes (14): 1.1. Install System Dependencies & NGINX, 1.2. Configure Systemd Service for .NET Backend, 1.3. Configure NGINX for Cloudflare Tunnel (`mail.miautrix.tech`), 2.1. Publish .NET 10 Self-Contained Binary, 2.2. Build Frontends (Web Admin & Webmail), 2.3. Apply Database Migrations to `miautrix-mail-pro`, 3.1. Copy Published Files using Windows Built-in `scp`, Architecture & Configuration Summary (+6 more)
 
 ### Community 93 - "Miautrix.Mail.Cli.Commands"
 Cohesion: 0.17
@@ -482,9 +482,9 @@ Nodes (9): SmtpResponse, IsSuccess, CancellationToken, Guid, QueueItem, Response
 Cohesion: 0.18
 Nodes (11): AppDbContext, CancellationToken, CommandContext, Guid, ITenantAuthorizationHelper, Task, MailboxDeleteCommand, MailboxDeleteSettings (+3 more)
 
-### Community 98 - "xunit"
-Cohesion: 0.24
-Nodes (6): Miautrix.Mail.SecurityTests.Isolation, Miautrix.Mail.ProtocolTests.Smtp, Miautrix.Mail.Queue, Miautrix.Mail.Protocols.Smtp, Miautrix.Mail.IntegrationTests.Smtp, xunit
+### Community 98 - "Miautrix.Mail.Persistence"
+Cohesion: 0.18
+Nodes (7): Miautrix.Mail.Search, Miautrix.Mail.IntegrationTests.Search, Miautrix.Mail.Persistence, Miautrix.Mail.Protocols.Sieve, Miautrix.Mail.ProtocolTests.Sieve, microsoft_entityframeworkcore_design, system_diagnostics
 
 ### Community 99 - "Miautrix.Mail.Cli.csproj"
 Cohesion: 0.17
@@ -522,17 +522,17 @@ Nodes (8): AppDbContext, CancellationToken, CommandContext, Guid, Task, QueueRet
 Cohesion: 0.22
 Nodes (8): EfPermissionRepository, InMemorySecurityEventSink, IPermissionRepository, ISecurityEventSink, AppDbContext, ITenantAuthorizationHelper, Task, TenantAuthorizationHelper
 
-### Community 108 - "QueueStatusFilter"
-Cohesion: 0.25
-Nodes (8): IReadOnlyList, QueueFilter, QueuePage, QueueStatusFilter, DeadLetter, Delivered, Queued, Retrying
+### Community 108 - "MailQueueService"
+Cohesion: 0.33
+Nodes (6): InvalidOperationException, CancellationToken, DateTimeOffset, Guid, Task, MailQueueService
 
 ### Community 109 - "QuarantineListCommand"
 Cohesion: 0.28
 Nodes (7): AppDbContext, CancellationToken, CommandContext, Task, QuarantineListCommand, QuarantineListSettings, Tenant
 
-### Community 110 - ".ListAsync"
-Cohesion: 0.46
-Nodes (4): CancellationToken, Guid, Task, IMailQueueService
+### Community 110 - ".When_user_in_tenant_A_requests_mailbox_belonging_to_tenant_B_returns_404_and_does_not_leak_existence"
+Cohesion: 0.36
+Nodes (4): Fact, Guid, IsolationTests, MockPermissionRepo
 
 ### Community 111 - "SystemInfoCommand"
 Cohesion: 0.38
@@ -563,24 +563,24 @@ Cohesion: 0.67
 Nodes (3): Alias, Address, TargetAddress
 
 ## Knowledge Gaps
-- **605 isolated node(s):** `name`, `version`, `type`, `dev`, `build` (+600 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 805 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **615 isolated node(s):** `Architecture & Configuration Summary`, `1.1. Install System Dependencies & NGINX`, `1.2. Configure Systemd Service for .NET Backend`, `1.3. Configure NGINX for Cloudflare Tunnel (`mail.miautrix.tech`)`, `2.1. Publish .NET 10 Self-Contained Binary` (+610 more)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 817 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
 - **18 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `AppDbContext` connect `AppDbContext` to `MailQueueService`, `QuarantineItem`, `ImapSession`, `Message`, `microsoft_entityframeworkcore`, `TenantScopedEntityBase`, `.SimulateAsync`, `SieveTests`, `Guid`, `Membership`, `.Main`, `SmtpDeliveryAttempt`, `Mailbox`, `MailQueueApiTests`, `MailFlowRule`, `MalwareVerdict`, `DkimKey`, `Attachment`, `EfPermissionRepository`, `SmtpQueueItem`, `.When_message_is_enqueued_and_fails_the_system_persists_queue_row_and_strictly_increasing_retry`, `SieveScript`, `Alias`?**
-  _High betweenness centrality (0.169) - this node is a cross-community bridge._
+- **Why does `AppDbContext` connect `AppDbContext` to `.Main`, `QuarantineItem`, `ImapSession`, `Message`, `TenantScopedEntityBase`, `.SimulateAsync`, `SieveTests`, `Guid`, `Membership`, `SmtpDeliveryAttempt`, `Mailbox`, `MailQueueApiTests`, `MailFlowRule`, `MalwareVerdict`, `DkimKey`, `Attachment`, `EfPermissionRepository`, `SmtpQueueItem`, `.When_message_is_enqueued_and_fails_the_system_persists_queue_row_and_strictly_increasing_retry`, `Miautrix.Mail.Persistence`, `MailQueueService`, `SieveScript`, `Alias`?**
+  _High betweenness centrality (0.151) - this node is a cross-community bridge._
 - **Why does `Mailbox` connect `webmail/src/App.tsx` to `.TenantOverAllowance_BlocksNewMailboxes_ContinuesMailDelivery_PreservesData`?**
-  _High betweenness centrality (0.051) - this node is a cross-community bridge._
-- **Why does `Mailbox` connect `Mailbox` to `MailQueueService`, `AppDbContext`, `ImapSession`, `Message`, `TenantScopedEntityBase`, `SieveTests`, `Guid`, `.RestoreBackupAsync`, `.TenantOverAllowance_BlocksNewMailboxes_ContinuesMailDelivery_PreservesData`, `MailboxCreateSettings`?**
-  _High betweenness centrality (0.050) - this node is a cross-community bridge._
+  _High betweenness centrality (0.071) - this node is a cross-community bridge._
+- **Why does `Mailbox` connect `Mailbox` to `AppDbContext`, `ImapSession`, `Message`, `TenantScopedEntityBase`, `SieveTests`, `Guid`, `.When_user_in_tenant_A_requests_mailbox_belonging_to_tenant_B_returns_404_and_does_not_leak_existence`, `.RestoreBackupAsync`, `.TenantOverAllowance_BlocksNewMailboxes_ContinuesMailDelivery_PreservesData`, `MailboxCreateSettings`?**
+  _High betweenness centrality (0.062) - this node is a cross-community bridge._
 - **Are the 2 inferred relationships involving `SmtpQueueItem` (e.g. with `.When_cross_tenant_retry_is_attempted_returns_404_not_found()` and `.When_listing_queue_returns_envelope_with_data_and_meta()`) actually correct?**
   _`SmtpQueueItem` has 2 INFERRED edges - model-reasoned connections that need verification._
-- **What connects `name`, `version`, `type` to the rest of the system?**
-  _605 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `MailQueueService` be split into smaller, more focused modules?**
-  _Cohesion score 0.1241565452091768 - nodes in this community are weakly interconnected._
+- **What connects `Architecture & Configuration Summary`, `1.1. Install System Dependencies & NGINX`, `1.2. Configure Systemd Service for .NET Backend` to the rest of the system?**
+  _615 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Miautrix.Mail.sln` be split into smaller, more focused modules?**
   _Cohesion score 0.1 - nodes in this community are weakly interconnected._
+- **Should `AppDbContext` be split into smaller, more focused modules?**
+  _Cohesion score 0.03571428571428571 - nodes in this community are weakly interconnected._

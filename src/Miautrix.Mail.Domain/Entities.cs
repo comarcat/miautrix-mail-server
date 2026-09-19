@@ -22,9 +22,29 @@ public class Tenant : EntityBase
 }
 
 // Tenancy/identity
-public class Domain : TenantScopedEntityBase { }
-public class User : TenantScopedEntityBase { }
-public class UserCredential : TenantScopedEntityBase { }
+public class Domain : TenantScopedEntityBase
+{
+    public string Name { get; set; } = string.Empty;
+    public bool IsVerified { get; set; }
+    public string? DkimSelector { get; set; }
+    public string? DkimPublicKey { get; set; }
+    public string? SpfRecord { get; set; }
+    public string? DmarcRecord { get; set; }
+    public bool IsPrimary { get; set; }
+}
+public class User : TenantScopedEntityBase
+{
+    public string Email { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public bool IsActive { get; set; } = true;
+}
+public class UserCredential : TenantScopedEntityBase
+{
+    public Guid UserId { get; set; }
+    public string PasswordHash { get; set; } = string.Empty;
+    public string Algorithm { get; set; } = "argon2id";
+    public bool MustChangePassword { get; set; }
+}
 public class UserIdentity : TenantScopedEntityBase { }
 public class IdentityProvider : TenantScopedEntityBase { }
 public class IdentityProviderGroup : TenantScopedEntityBase { }

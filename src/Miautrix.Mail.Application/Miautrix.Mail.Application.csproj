@@ -10,6 +10,7 @@
     <ProjectReference Include="..\Miautrix.Mail.Domain\Miautrix.Mail.Domain.csproj" />
     <ProjectReference Include="..\Miautrix.Mail.Persistence\Miautrix.Mail.Persistence.csproj" />
     <ProjectReference Include="..\Miautrix.Mail.Security\Miautrix.Mail.Security.csproj" />
+    <ProjectReference Include="..\Miautrix.Mail.Identity\Miautrix.Mail.Identity.csproj" />
   </ItemGroup>
 
 </Project>

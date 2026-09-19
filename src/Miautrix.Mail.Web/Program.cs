@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Miautrix.Mail.Application.Auth;
 using Miautrix.Mail.Application.Queue;
 using Miautrix.Mail.Identity;
 using Miautrix.Mail.Persistence;
@@ -31,9 +32,13 @@ public class Program
         builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
 
         builder.Services.AddSingleton<ISecurityEventSink, InMemorySecurityEventSink>();
+        builder.Services.AddSingleton<IPasswordHasher, Argon2idPasswordHasher>();
+        builder.Services.AddSingleton<ITotpService, TotpService>();
+        builder.Services.AddSingleton<ISessionManager, SessionManager>();
         builder.Services.AddScoped<IPermissionRepository, EfPermissionRepository>();
         builder.Services.AddScoped<ITenantAuthorizationHelper, TenantAuthorizationHelper>();
         builder.Services.AddScoped<IMailQueueService, MailQueueService>();
+        builder.Services.AddScoped<IAuthService, AuthService>();
 
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddSingleton<IRequestContextAccessor, HeaderRequestContextAccessor>();

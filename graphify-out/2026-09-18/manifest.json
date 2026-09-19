@@ -2422,5 +2422,17 @@
     "seen": 1789773881.7265863,
     "ast_hash": "1ad1516cb1a4534b36f1ec57f6344db6",
     "semantic_hash": ""
+  },
+  "deploy.ps1": {
+    "mtime": 1789780847.6025355,
+    "seen": 1789780859.2147908,
+    "ast_hash": "de816882a6772ceed1e43fd2b88fc627",
+    "semantic_hash": ""
+  },
+  "SETUP.md": {
+    "mtime": 1789780841.5977066,
+    "seen": 1789780859.2147908,
+    "ast_hash": "05bc888859eb1f05c5c087ca308899ab",
+    "semantic_hash": ""
   }
 }
