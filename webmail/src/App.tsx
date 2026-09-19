@@ -162,7 +162,7 @@ const INITIAL_RULES: SieveFilterRule[] = [
 ];
 
 export const App: React.FC = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'inbox' | 'compose' | 'contacts' | 'calendar' | 'rules'>('inbox');
   const [messages, setMessages] = useState<EmailMessage[]>(INITIAL_MESSAGES);
 

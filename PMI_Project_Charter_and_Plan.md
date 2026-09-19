@@ -64,12 +64,24 @@ Miautrix Mail Server
 
 ## 3. Project Schedule & Milestone Management
 
-| Milestone | Key Deliverables / Checkpoint | Pre-requisites | Primary Verification Gate |
-|---|---|---|---|
-| **M1: Core Foundation** | Scaffold, PostgreSQL schema, Seed data, Auth/MFA, RBAC, Audit | T1–T6 | `dotnet test --filter Category=Isolation\|Audit\|Identity` |
-| **M2: Mail Engine** | SMTP In/Out, SPF/DKIM/DMARC, Anti-Spam, IMAP, Sieve, FTS, Rules Engine | T7–T13 | `dotnet test --filter Category=Smtp\|Dkim\|Imap\|Rules` |
-| **M3: Surfaces & Client Apps** | OpenAPI REST endpoints, Web Admin, Webmail, CLI | T14–T17 | API Integration tests & `pnpm test` |
-| **M4: Operational Readiness** | Desktop Client, Backup/Restore drills, Blue/Green symlink updater, License gates | T18–T21 | End-to-end backup verification & licensing tests |
+| Milestone | Key Deliverables / Checkpoint | Status | Pre-requisites | Primary Verification Gate |
+|---|---|---|---|---|
+| **M1: Core Foundation** | Scaffold, PostgreSQL schema, Seed data, Auth/MFA, RBAC, Audit | ✅ Complete | T1–T6 | `dotnet test --filter Category=Isolation\|Audit\|Identity` |
+| **M2: Mail Engine** | SMTP In/Out, SPF/DKIM/DMARC, Anti-Spam, IMAP, Sieve, FTS, Rules Engine | ✅ Complete | T7–T13 | `dotnet test --filter Category=Smtp\|Dkim\|Imap\|Rules` |
+| **M3: Surfaces & Client Apps** | OpenAPI REST endpoints, Web Admin, Webmail, CLI | 🔄 In Progress (Tasks #12-#17) | T14–T17 | API Integration tests & `pnpm test` |
+| **M4: Operational Readiness** | Desktop Client, Backup/Restore drills, Blue/Green symlink updater, License gates | 🔄 In Progress (Task #18) | T18–T21 | End-to-end backup verification & licensing tests |
+
+### Active Execution Phase: Production Integration & Functional Delivery
+
+| Task ID | Task Description | Scope & Acceptance | Blocked By | Status |
+|---|---|---|---|---|
+| **#12** | Database Migration & Seeding | Apply EF Core migrations to PostgreSQL `10.11.1.52` (`miautrix-mail-pro`); seed default tenant, permissions, roles, and default admin (`admin@miautrix.org` / `CH@nGEm3!`) with temporary password flag. | None | ⏳ Pending |
+| **#13** | Backend Authentication REST API | Implement `/api/v1/auth/login`, `/me`, `/logout`, and TOTP MFA verification. | #12 | ⏳ Pending |
+| **#14** | Backend Mailbox & Message REST API | Implement `/api/v1/mailboxes`, `/messages`, `/send`, folder counts, and message search. | #12 | ⏳ Pending |
+| **#15** | Backend Admin Management REST API | Implement `/api/v1/tenants`, `/domains`, `/users`, `/rules`, and `/audit` endpoints. | #12 | ⏳ Pending |
+| **#16** | Functional Webmail Frontend | Fix 100% full-width responsive layout, fix asset/icon paths, and wire to Auth/Mailbox REST APIs. | #13, #14 | ⏳ Pending |
+| **#17** | Functional Admin Console Frontend | Replace placeholder screens with functional UI for Domains, Users, Mailboxes, and System logs wired to REST APIs. | #13, #15 | ⏳ Pending |
+| **#18** | Automated Deployment & Live Verification | Build, migrate, publish Linux x64 binaries & SPAs, deploy to Debian LXC `10.11.1.51` behind `mail.miautrix.tech`, and verify end-to-end. | #16, #17 | ⏳ Pending |
 
 ---
 

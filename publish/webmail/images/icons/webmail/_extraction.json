@@ -1,0 +1,443 @@
+{
+  "compose-pencil": {
+    "src_bbox": [
+      77,
+      175,
+      222,
+      287
+    ],
+    "scale": 1.443
+  },
+  "compose-envelope": {
+    "src_bbox": [
+      284,
+      178,
+      434,
+      290
+    ],
+    "scale": 1.443
+  },
+  "inbox": {
+    "src_bbox": [
+      496,
+      172,
+      628,
+      291
+    ],
+    "scale": 1.443
+  },
+  "sent": {
+    "src_bbox": [
+      704,
+      174,
+      836,
+      292
+    ],
+    "scale": 1.443
+  },
+  "drafts": {
+    "src_bbox": [
+      917,
+      170,
+      1045,
+      296
+    ],
+    "scale": 1.443
+  },
+  "bold": {
+    "src_bbox": [
+      1341,
+      183,
+      1418,
+      281
+    ],
+    "scale": 1.443
+  },
+  "italic": {
+    "src_bbox": [
+      1547,
+      183,
+      1620,
+      281
+    ],
+    "scale": 1.443
+  },
+  "underline": {
+    "src_bbox": [
+      1745,
+      181,
+      1836,
+      285
+    ],
+    "scale": 1.443
+  },
+  "strikethrough": {
+    "src_bbox": [
+      1940,
+      182,
+      2050,
+      283
+    ],
+    "scale": 1.443
+  },
+  "text-color": {
+    "src_bbox": [
+      2147,
+      177,
+      2254,
+      293
+    ],
+    "scale": 1.443
+  },
+  "text-size": {
+    "src_bbox": [
+      2348,
+      187,
+      2465,
+      278
+    ],
+    "scale": 1.443
+  },
+  "unordered-list": {
+    "src_bbox": [
+      2559,
+      181,
+      2669,
+      283
+    ],
+    "scale": 1.443
+  },
+  "ordered-list": {
+    "src_bbox": [
+      2768,
+      179,
+      2876,
+      286
+    ],
+    "scale": 1.443
+  },
+  "trash": {
+    "src_bbox": [
+      90,
+      414,
+      202,
+      572
+    ],
+    "scale": 1.443
+  },
+  "archive": {
+    "src_bbox": [
+      297,
+      414,
+      410,
+      540
+    ],
+    "scale": 1.443
+  },
+  "archive-box": {
+    "src_bbox": [
+      495,
+      424,
+      628,
+      572
+    ],
+    "scale": 1.443
+  },
+  "contacts": {
+    "src_bbox": [
+      703,
+      415,
+      837,
+      572
+    ],
+    "scale": 1.443
+  },
+  "calendar": {
+    "src_bbox": [
+      917,
+      417,
+      1039,
+      547
+    ],
+    "scale": 1.443
+  },
+  "align-left": {
+    "src_bbox": [
+      1323,
+      466,
+      1430,
+      566
+    ],
+    "scale": 1.443
+  },
+  "align-center": {
+    "src_bbox": [
+      1532,
+      466,
+      1637,
+      566
+    ],
+    "scale": 1.443
+  },
+  "align-right": {
+    "src_bbox": [
+      1739,
+      466,
+      1844,
+      566
+    ],
+    "scale": 1.443
+  },
+  "align-justify": {
+    "src_bbox": [
+      1943,
+      466,
+      2048,
+      566
+    ],
+    "scale": 1.443
+  },
+  "block-quote": {
+    "src_bbox": [
+      2140,
+      473,
+      2260,
+      562
+    ],
+    "scale": 1.443
+  },
+  "link": {
+    "src_bbox": [
+      2353,
+      463,
+      2460,
+      571
+    ],
+    "scale": 1.443
+  },
+  "attach-file": {
+    "src_bbox": [
+      2562,
+      463,
+      2667,
+      571
+    ],
+    "scale": 1.443
+  },
+  "insert-image": {
+    "src_bbox": [
+      2759,
+      462,
+      2884,
+      571
+    ],
+    "scale": 1.443
+  },
+  "payments": {
+    "src_bbox": [
+      80,
+      751,
+      213,
+      887
+    ],
+    "scale": 1.443
+  },
+  "invoices": {
+    "src_bbox": [
+      296,
+      731,
+      412,
+      887
+    ],
+    "scale": 1.443
+  },
+  "security": {
+    "src_bbox": [
+      497,
+      732,
+      626,
+      887
+    ],
+    "scale": 1.443
+  },
+  "settings": {
+    "src_bbox": [
+      704,
+      730,
+      836,
+      887
+    ],
+    "scale": 1.443
+  },
+  "preferences": {
+    "src_bbox": [
+      912,
+      730,
+      1044,
+      887
+    ],
+    "scale": 1.443
+  },
+  "insert-table": {
+    "src_bbox": [
+      1318,
+      749,
+      1438,
+      860
+    ],
+    "scale": 1.443
+  },
+  "microphone-dictate": {
+    "src_bbox": [
+      1543,
+      745,
+      1627,
+      865
+    ],
+    "scale": 1.443
+  },
+  "dictation-settings": {
+    "src_bbox": [
+      1748,
+      745,
+      1832,
+      865
+    ],
+    "scale": 1.443
+  },
+  "quick-parts": {
+    "src_bbox": [
+      1947,
+      745,
+      2044,
+      866
+    ],
+    "scale": 1.443
+  },
+  "flag": {
+    "src_bbox": [
+      2150,
+      746,
+      2251,
+      865
+    ],
+    "scale": 1.443
+  },
+  "encrypt": {
+    "src_bbox": [
+      2360,
+      747,
+      2454,
+      864
+    ],
+    "scale": 1.443
+  },
+  "print": {
+    "src_bbox": [
+      2555,
+      746,
+      2673,
+      863
+    ],
+    "scale": 1.443
+  },
+  "more-options": {
+    "src_bbox": [
+      2773,
+      793,
+      2870,
+      816
+    ],
+    "scale": 1.443
+  },
+  "simple-view": {
+    "src_bbox": [
+      85,
+      1043,
+      207,
+      1155
+    ],
+    "scale": 1.443
+  },
+  "relaxed-view": {
+    "src_bbox": [
+      292,
+      1043,
+      415,
+      1155
+    ],
+    "scale": 1.443
+  },
+  "spaced-view": {
+    "src_bbox": [
+      500,
+      1043,
+      622,
+      1155
+    ],
+    "scale": 1.443
+  },
+  "grid-view": {
+    "src_bbox": [
+      707,
+      1045,
+      828,
+      1188
+    ],
+    "scale": 1.443
+  },
+  "list-view": {
+    "src_bbox": [
+      912,
+      1043,
+      1033,
+      1155
+    ],
+    "scale": 1.443
+  },
+  "list-view-bullets": {
+    "src_bbox": [
+      1116,
+      1044,
+      1239,
+      1154
+    ],
+    "scale": 1.443
+  },
+  "preview-pane": {
+    "src_bbox": [
+      1322,
+      1043,
+      1442,
+      1155
+    ],
+    "scale": 1.443
+  },
+  "sidebar": {
+    "src_bbox": [
+      1526,
+      1043,
+      1647,
+      1156
+    ],
+    "scale": 1.443
+  },
+  "expand-collapse": {
+    "src_bbox": [
+      1731,
+      1043,
+      1853,
+      1156
+    ],
+    "scale": 1.443
+  },
+  "all": {
+    "src_bbox": [
+      1936,
+      1046,
+      2058,
+      1151
+    ],
+    "scale": 1.443
+  }
+}

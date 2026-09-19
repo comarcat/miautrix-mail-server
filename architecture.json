@@ -2,343 +2,291 @@
   "schema_version": 1,
   "diagram_type": "architecture",
   "meta": {
-    "title": "Miautrix Mail Server \u2014 System Architecture",
+    "title": "Miautrix Mail Server - System Architecture",
+    "output": "architecture.html",
     "quality_profile": "showcase",
     "views": [
       {
-        "id": "mail-path",
-        "label": "Mail Ingress & Flow",
-        "focus": [
-          "clients",
-          "ingress",
-          "core",
-          "mailflow",
-          "antispam",
-          "storage",
-          "db"
-        ],
-        "note": "Trace inbound and outbound mail through ingress, transport pipeline, security scans, and persistent storage."
+        "id": "ingres-and-ui",
+        "label": "Client Ingress & Surfaces",
+        "focus": ["webmail", "admin-gui", "cli-desktop", "edge-proxy", "core-api"],
+        "note": "Webmail, Admin Console, and CLI ingress through Cloudflare Tunnel and NGINX to the .NET 10 API."
       },
       {
-        "id": "security-isolation",
-        "label": "Identity & Multi-Tenancy",
-        "focus": [
-          "clients",
-          "ingress",
-          "auth",
-          "core",
-          "db",
-          "licensing"
-        ],
-        "note": "View identity verification, tenant authorization helper, and licensing boundaries."
+        "id": "mail-pipeline",
+        "label": "Mail Transport & Processing",
+        "focus": ["external-mta", "mail-transport", "security-engine", "mail-flow", "postgres-db", "cas-storage"],
+        "note": "SMTP delivery pipeline with Rspamd filtering, mail-flow rule execution, and content-addressable storage."
       },
       {
-        "id": "api-extensibility",
-        "label": "API & Provider Seams",
-        "focus": [
-          "clients",
-          "core",
-          "rules",
-          "mcp",
-          "antispam"
-        ],
-        "note": "Inspect rule engine, MCP tool execution, and swappable provider interfaces."
+        "id": "security-licensing",
+        "label": "Tenant Isolation & Gating",
+        "focus": ["core-api", "licensing", "postgres-db"],
+        "note": "Multi-tenant authorization, TOTP MFA, audit trail, and non-destructive quota enforcement."
       }
     ]
   },
   "components": [
     {
-      "id": "clients",
+      "id": "webmail",
       "type": "frontend",
-      "label": "Client Surfaces",
-      "sublabel": "Admin \u00b7 Webmail \u00b7 CLI",
-      "pos": [
-        40,
-        230
-      ],
-      "size": [
-        160,
-        68
-      ]
+      "label": "Webmail Client",
+      "sublabel": "React SPA",
+      "brand": "react",
+      "pos": [80, 80],
+      "size": [140, 60]
     },
     {
-      "id": "ingress",
-      "type": "security",
-      "label": "Ingress & TLS Proxy",
-      "sublabel": "SMTP \u00b7 IMAPS \u00b7 HTTPS",
-      "pos": [
-        270,
-        230
-      ],
-      "size": [
-        160,
-        68
-      ]
+      "id": "admin-gui",
+      "type": "frontend",
+      "label": "Admin Console",
+      "sublabel": "React SPA",
+      "brand": "react",
+      "pos": [260, 80],
+      "size": [140, 60]
     },
     {
-      "id": "auth",
-      "type": "security",
-      "label": "Identity & MFA",
-      "sublabel": "Argon2id \u00b7 TOTP \u00b7 WebAuthn",
-      "pos": [
-        270,
-        70
-      ],
-      "size": [
-        160,
-        68
-      ],
-      "tag": "Self-Hosted"
+      "id": "cli-desktop",
+      "type": "frontend",
+      "label": "CLI & Desktop",
+      "sublabel": "Terminal / Shell",
+      "pos": [480, 80],
+      "size": [140, 60]
     },
     {
-      "id": "core",
-      "type": "backend",
-      "label": "Core Monolith (.NET 10)",
-      "sublabel": "Clean Architecture",
-      "pos": [
-        510,
-        230
-      ],
-      "size": [
-        170,
-        68
-      ],
-      "tag": "Tenant Isolated"
-    },
-    {
-      "id": "mailflow",
-      "type": "backend",
-      "label": "Mail Transport Engine",
-      "sublabel": "SMTP Queue \u00b7 DKIM",
-      "pos": [
-        510,
-        390
-      ],
-      "size": [
-        170,
-        68
-      ]
-    },
-    {
-      "id": "antispam",
-      "type": "security",
-      "label": "Anti-Spam & Malware",
-      "sublabel": "ISpamProvider \u00b7 ClamAV",
-      "pos": [
-        270,
-        390
-      ],
-      "size": [
-        160,
-        68
-      ]
-    },
-    {
-      "id": "rules",
-      "type": "backend",
-      "label": "Rule Engine & Sieve",
-      "sublabel": "ManageSieve \u00b7 Simulator",
-      "pos": [
-        510,
-        70
-      ],
-      "size": [
-        170,
-        68
-      ]
-    },
-    {
-      "id": "db",
-      "type": "database",
-      "label": "PostgreSQL 17",
-      "sublabel": "Metadata \u00b7 FTS \u00b7 Audit",
-      "pos": [
-        770,
-        230
-      ],
-      "size": [
-        160,
-        68
-      ]
-    },
-    {
-      "id": "storage",
-      "type": "cloud",
-      "label": "MIME Storage Layer",
-      "sublabel": "IMailStorage FS / S3",
-      "pos": [
-        770,
-        390
-      ],
-      "size": [
-        160,
-        68
-      ]
-    },
-    {
-      "id": "mcp",
+      "id": "external-mta",
       "type": "external",
-      "label": "REST API & MCP",
-      "sublabel": "OpenAPI /api/v1/*",
-      "pos": [
-        770,
-        70
-      ],
-      "size": [
-        160,
-        68
-      ]
+      "label": "External MTAs",
+      "sublabel": "Mail Servers",
+      "pos": [880, 80],
+      "size": [140, 60]
     },
+
+    {
+      "id": "edge-proxy",
+      "type": "cloud",
+      "label": "Edge & Ingress",
+      "sublabel": "Cloudflare / NGINX",
+      "tag": "mail.miautrix.tech",
+      "pos": [170, 240],
+      "size": [150, 60]
+    },
+    {
+      "id": "mail-transport",
+      "type": "backend",
+      "label": "Mail Transport",
+      "sublabel": "SMTP / IMAP / Sieve",
+      "pos": [880, 240],
+      "size": [140, 60]
+    },
+
+    {
+      "id": "core-api",
+      "type": "backend",
+      "label": "Core API Engine",
+      "sublabel": ".NET 10 Monolith",
+      "tag": "Kestrel :5000",
+      "pos": [470, 380],
+      "size": [160, 64]
+    },
+    {
+      "id": "mail-flow",
+      "type": "backend",
+      "label": "Mail Flow Engine",
+      "sublabel": "Rule Engine & Queue",
+      "tag": "SmtpQueue / FTS",
+      "pos": [700, 380],
+      "size": [150, 64]
+    },
+
     {
       "id": "licensing",
       "type": "security",
-      "label": "Licensing Subsystem",
-      "sublabel": "Offline \u00b7 Fail-open",
-      "pos": [
-        1010,
-        230
-      ],
-      "size": [
-        150,
-        68
-      ]
+      "label": "Licensing & Quota",
+      "sublabel": "Tenant Enforcer",
+      "tag": "Non-Destructive",
+      "pos": [260, 540],
+      "size": [140, 60]
+    },
+    {
+      "id": "postgres-db",
+      "type": "database",
+      "label": "PostgreSQL 16",
+      "sublabel": "miautrix-mail-pro",
+      "tag": "10.11.1.52:5432",
+      "brand": "postgresql",
+      "pos": [470, 540],
+      "size": [160, 64]
+    },
+    {
+      "id": "cas-storage",
+      "type": "database",
+      "label": "Blob Storage",
+      "sublabel": "CAS Repository",
+      "tag": "SHA-256 Deduplication",
+      "pos": [700, 540],
+      "size": [150, 60]
+    },
+    {
+      "id": "security-engine",
+      "type": "security",
+      "label": "Security Engine",
+      "sublabel": "SPF/DKIM/Argon2id",
+      "tag": "Rspamd / TOTP",
+      "pos": [880, 540],
+      "size": [140, 64]
     }
   ],
   "boundaries": [
     {
       "kind": "region",
-      "label": "Debian Linux Host / Operating Environment",
-      "wraps": [
-        "ingress",
-        "auth",
-        "core",
-        "mailflow",
-        "antispam",
-        "rules",
-        "db",
-        "storage",
-        "mcp",
-        "licensing"
-      ]
+      "label": "Debian LXC Application Container (10.11.1.51)",
+      "wraps": ["edge-proxy", "core-api", "mail-transport", "mail-flow", "security-engine", "licensing", "cas-storage"]
     },
     {
       "kind": "security-group",
-      "label": "Miautrix Monolith Boundary",
-      "wraps": [
-        "core",
-        "mailflow",
-        "auth",
-        "rules",
-        "antispam"
-      ]
+      "label": "Database Cluster (10.11.1.52)",
+      "wraps": ["postgres-db"]
     }
   ],
   "connections": [
     {
-      "id": "clients-to-ingress",
-      "from": "clients",
-      "to": "ingress",
-      "label": "TLS / HTTPS",
-      "variant": "emphasis"
-    },
-    {
-      "id": "ingress-to-core",
-      "from": "ingress",
-      "to": "core",
-      "label": "Dispatches"
-    },
-    {
-      "id": "auth-to-core",
-      "from": "auth",
-      "to": "core",
-      "label": "Authorizes (404 on Cross-Tenant)",
-      "variant": "security",
-      "fromSide": "right",
-      "toSide": "top",
-      "labelDy": 14
-    },
-    {
-      "id": "core-to-mailflow",
-      "from": "core",
-      "to": "mailflow",
-      "label": "Enqueues",
+      "id": "webmail-to-edge",
+      "from": "webmail",
+      "to": "edge-proxy",
+      "label": "HTTPS",
+      "variant": "emphasis",
       "fromSide": "bottom",
       "toSide": "top",
-      "labelDy": 24
+      "labelDy": 35
     },
     {
-      "id": "mailflow-to-antispam",
-      "from": "mailflow",
-      "to": "antispam",
-      "label": "Filters / Scans",
-      "fromSide": "left",
-      "toSide": "right",
-      "labelDy": -28
+      "id": "admin-to-edge",
+      "from": "admin-gui",
+      "to": "edge-proxy",
+      "label": "/admin",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 35
     },
     {
-      "id": "core-to-rules",
-      "from": "core",
-      "to": "rules",
-      "label": "Evaluates",
-      "fromSide": "top",
-      "toSide": "bottom",
-      "labelDy": -24
+      "id": "cli-to-api",
+      "from": "cli-desktop",
+      "to": "core-api",
+      "label": "REST API",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 60
     },
     {
-      "id": "core-to-db",
-      "from": "core",
-      "to": "db",
-      "label": "EF Core"
-    },
-    {
-      "id": "mailflow-to-storage",
-      "from": "mailflow",
-      "to": "storage",
-      "label": "Writes MIME"
-    },
-    {
-      "id": "core-to-mcp",
-      "from": "core",
-      "to": "mcp",
-      "label": "Exposes API",
-      "fromSide": "top",
+      "id": "edge-to-api",
+      "from": "edge-proxy",
+      "to": "core-api",
+      "label": ":5000",
+      "variant": "emphasis",
+      "fromSide": "bottom",
       "toSide": "left"
     },
     {
-      "id": "db-to-licensing",
-      "from": "db",
+      "id": "mta-to-transport",
+      "from": "external-mta",
+      "to": "mail-transport",
+      "label": "SMTP :25/:587",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 40
+    },
+    {
+      "id": "transport-to-security",
+      "from": "mail-transport",
+      "to": "security-engine",
+      "label": "Filter & Auth",
+      "variant": "security",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 60
+    },
+    {
+      "id": "transport-to-flow",
+      "from": "mail-transport",
+      "to": "mail-flow",
+      "label": "Enqueue",
+      "fromSide": "left",
+      "toSide": "right"
+    },
+    {
+      "id": "api-to-flow",
+      "from": "core-api",
+      "to": "mail-flow",
+      "label": "Rules",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "api-to-licensing",
+      "from": "core-api",
       "to": "licensing",
-      "label": "License Usage Gate",
-      "variant": "dashed",
-      "labelDy": -28
+      "label": "Quota Guard",
+      "variant": "security",
+      "fromSide": "left",
+      "toSide": "top"
+    },
+    {
+      "id": "api-to-db",
+      "from": "core-api",
+      "to": "postgres-db",
+      "label": "EF Core",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 40
+    },
+    {
+      "id": "flow-to-db",
+      "from": "mail-flow",
+      "to": "postgres-db",
+      "label": "Persist",
+      "fromSide": "bottom",
+      "toSide": "right",
+      "labelAt": [650, 480]
+    },
+    {
+      "id": "flow-to-cas",
+      "from": "mail-flow",
+      "to": "cas-storage",
+      "label": "Raw MIME",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [820, 500]
     }
   ],
   "cards": [
     {
-      "dot": "emerald",
-      "title": "Clean Architecture & Modular Monolith",
+      "dot": "cyan",
+      "title": "Ingress & Edge",
       "items": [
-        "Single deployable process on Debian Linux with .NET 10 and PostgreSQL 17",
-        "Domain layer depends on nothing; Application depends only on Domain",
-        "One authorization helper: all cross-tenant access returns 404 to prevent ID enumeration"
+        "Cloudflare Tunnel routes mail.miautrix.tech to Debian LXC",
+        "NGINX serves Webmail at / and Admin Console at /admin",
+        "Kestrel .NET 10 backend listens on 127.0.0.1:5000"
       ]
     },
     {
-      "dot": "cyan",
-      "title": "Mail Transport, Policy & Seams",
+      "dot": "emerald",
+      "title": "Core Mail Processing",
       "items": [
-        "SMTP in/out with durable queue, exponential backoff retries, and DKIM signing",
-        "Pluggable provider seams: ISpamProvider, IMalwareProvider (ClamAV), IMailStorage",
-        "Full-text search indexed in PostgreSQL FTS; ManageSieve with syntax-checking gate"
+        "Multi-protocol listeners: SMTP, IMAP4rev2, and ManageSieve",
+        "Anti-Spam scoring, DKIM signing, and quarantine isolation",
+        "Mail-flow rule simulator and full-text search indexing"
       ]
     },
     {
       "dot": "rose",
-      "title": "Security, Operations & Licensing",
+      "title": "Data & Security",
       "items": [
-        "Self-hosted identity with Argon2id, TOTP, and WebAuthn (Fido2 4.0.1)",
-        "Fail-open licensing: mail keeps flowing if server is unreachable; over-limit blocks new mailboxes only",
-        "Zero-downtime blue/green deployments with EXPAND \u2192 MIGRATE \u2192 CONTRACT migrations"
+        "Multi-tenant PostgreSQL schema with Row-Level Security",
+        "Argon2id password hashing and TOTP multi-factor auth",
+        "Content-Addressable Storage (CAS) with SHA-256 deduplication"
       ]
     }
   ]

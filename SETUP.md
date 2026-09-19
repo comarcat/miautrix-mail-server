@@ -13,6 +13,8 @@ This guide provides step-by-step instructions for deploying the Miautrix Mail Se
 | **Reverse Proxy** | NGINX (Port 80 → Kestrel Backend & Static Frontends) |
 | **Backend Service** | .NET 10 Self-Contained Linux x64 executable (Port 5000) |
 | **Production Database** | `Host=10.11.1.52;Port=5432;Database=miautrix-mail-pro;Username=mmdb-user;Password=Mi@usito#2026!` |
+| **Default Admin Account** | `admin@miautrix.org` |
+| **Default Admin Password** | `CH@nGEm3!` *(Must be changed on 1st login)* |
 | **Service Manager** | systemd (`miautrix-mail.service`) |
 
 ---
@@ -76,16 +78,13 @@ server {
     # Maximum attachment/upload size (50MB)
     client_max_body_size 50M;
 
-    # Webmail Client (Root UI)
-    location / {
-        root /opt/miautrix-mail/webmail;
-        index index.html;
-        try_files $uri $uri/ /index.html;
+    # Web Admin Console (Subpath)
+    location = /admin {
+        return 301 /admin/;
     }
 
-    # Web Admin Console
-    location /admin {
-        alias /opt/miautrix-mail/admin;
+    location /admin/ {
+        alias /opt/miautrix-mail/admin/;
         index index.html;
         try_files $uri $uri/ /admin/index.html;
     }
@@ -108,6 +107,13 @@ server {
         proxy_pass http://127.0.0.1:5000;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    # Webmail Client (Root UI)
+    location / {
+        root /opt/miautrix-mail/webmail;
+        index index.html;
+        try_files $uri $uri/ /index.html;
     }
 }
 EOF
