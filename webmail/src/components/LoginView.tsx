@@ -1,18 +1,30 @@
 import React, { useState } from 'react';
+import { webmailClient } from './WebmailApiClient';
 
 interface LoginViewProps {
   onLoginSuccess: (email: string) => void;
 }
 
 export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
-  const [email, setEmail] = useState('alex.vance@miautrix.org');
-  const [password, setPassword] = useState('password123');
-  const [remember, setRemember] = useState(true);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (email && password) {
+    if (!email || !password) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      await webmailClient.login(email, password);
       onLoginSuccess(email);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Login failed');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -31,6 +43,12 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
           <p>Sign in to your mailbox</p>
         </div>
 
+        {error && (
+          <div className="alert alert-error" style={{ marginBottom: '16px' }} role="alert">
+            {error}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label htmlFor="email">Email address</label>
@@ -41,6 +59,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
               placeholder="user@yourdomain.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              disabled={loading}
               required
             />
           </div>
@@ -59,29 +78,18 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
               placeholder="••••••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              disabled={loading}
               required
             />
-          </div>
-
-          <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <input
-              type="checkbox"
-              id="remember"
-              checked={remember}
-              onChange={(e) => setRemember(e.target.checked)}
-              style={{ accentColor: 'var(--iris-violet)', width: '16px', height: '16px', borderRadius: '4px' }}
-            />
-            <label htmlFor="remember" style={{ margin: 0, fontSize: '14px', fontWeight: 400, color: 'var(--neutral-body)', cursor: 'pointer' }}>
-              Remember this device
-            </label>
           </div>
 
           <button
             className="btn btn-primary w-full"
             type="submit"
             style={{ padding: '12px', marginTop: '8px', fontSize: '16px' }}
+            disabled={loading}
           >
-            Sign In
+            {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
 

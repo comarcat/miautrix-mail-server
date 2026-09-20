@@ -31,6 +31,15 @@ public sealed class IdempotencyMiddleware
             return;
         }
 
+        // Exempt authentication endpoints from idempotency requirements
+        var path = context.Request.Path.Value ?? string.Empty;
+        if (path.StartsWith("/api/v1/auth", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith("/auth", StringComparison.OrdinalIgnoreCase))
+        {
+            await _next(context);
+            return;
+        }
+
         var idempotencyKey = context.Request.Headers["Idempotency-Key"].FirstOrDefault();
         if (string.IsNullOrWhiteSpace(idempotencyKey))
         {

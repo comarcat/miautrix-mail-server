@@ -1332,6 +1332,14 @@
           }
         }
       },
+      "DnsClient/1.8.0": {
+        "runtime": {
+          "lib/net8.0/DnsClient.dll": {
+            "assemblyVersion": "1.8.0.0",
+            "fileVersion": "1.8.0.0"
+          }
+        }
+      },
       "Konscious.Security.Cryptography.Argon2/1.3.1": {
         "dependencies": {
           "Konscious.Security.Cryptography.Blake2": "1.1.1"
@@ -1431,7 +1439,10 @@
       },
       "Miautrix.Mail.Application/1.0.0": {
         "dependencies": {
+          "DnsClient": "1.8.0",
           "Miautrix.Mail.Domain": "1.0.0",
+          "Miautrix.Mail.Identity": "1.0.0",
+          "Miautrix.Mail.Infrastructure": "1.0.0",
           "Miautrix.Mail.Persistence": "1.0.0",
           "Miautrix.Mail.Security": "1.0.0"
         },
@@ -1458,6 +1469,19 @@
         },
         "runtime": {
           "Miautrix.Mail.Identity.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      },
+      "Miautrix.Mail.Infrastructure/1.0.0": {
+        "dependencies": {
+          "Miautrix.Mail.Domain": "1.0.0",
+          "Miautrix.Mail.Persistence": "1.0.0",
+          "Microsoft.EntityFrameworkCore": "10.0.4"
+        },
+        "runtime": {
+          "Miautrix.Mail.Infrastructure.dll": {
             "assemblyVersion": "1.0.0.0",
             "fileVersion": "1.0.0.0"
           }
@@ -1530,6 +1554,13 @@
       "type": "runtimepack",
       "serviceable": false,
       "sha512": ""
+    },
+    "DnsClient/1.8.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-RRwtaCXkXWsx0mmsReGDqCbRLtItfUbkRJlet1FpdciVhyMGKcPd57T1+8Jki9ojHlq9fntVhXQroOOgRak8DQ==",
+      "path": "dnsclient/1.8.0",
+      "hashPath": "dnsclient.1.8.0.nupkg.sha512"
     },
     "Konscious.Security.Cryptography.Argon2/1.3.1": {
       "type": "package",
@@ -1612,6 +1643,11 @@
       "sha512": ""
     },
     "Miautrix.Mail.Identity/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "Miautrix.Mail.Infrastructure/1.0.0": {
       "type": "project",
       "serviceable": false,
       "sha512": ""

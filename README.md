@@ -29,7 +29,20 @@ Tasks completed and verified (T1–T13):
 | **T11** | ManageSieve | ✅ Done | `dotnet test --filter Category=Sieve` |
 | **T12** | Full-text search indexing | ✅ Done | `dotnet test --filter Category=Search` |
 | **T13** | Mail-flow rule engine & simulator | ✅ Done | `dotnet test --filter Category=Rules` |
-| **T14–T21** | API, Admin GUI, Webmail, CLI, Desktop, Operations | ⏳ In Queue | Surface & operational buildout |
+| **T14** | API contract and OpenAPI | ✅ Done | `dotnet test --filter Category=Api` |
+| **T15** | Web Admin GUI | ✅ Done | `pnpm --filter admin build && pnpm test` |
+| **T16** | Webmail Client | ✅ Done | `pnpm --filter webmail build && pnpm test` |
+| **T17–T21** | CLI, Desktop, Backup, Operations | ⏳ In Queue | Surface & operational buildout |
+
+## 🛠️ Deploying & Updating
+
+We now provide automated PowerShell / Bash scripts to quickly update the database and push new web artifacts (Admin Console and Webmail frontend) to the LXC target server:
+
+- **Database from scratch:** `./scripts/init-database-scratch.ps1` -- provisions the DB, applies EF schemas and seeds the `admin@miautrix.org` user.
+- **Update Database:** `./scripts/update-database.ps1` -- runs `dotnet ef database update` and the seeder safely.
+- **Upload Websites:** `./scripts/deploy-websites.ps1` -- builds React frontends and uploads via SCP to `/opt/miautrix-mail/`.
+
+See the scripts directory for the raw files or execute them from the repository root.
 
 ## 🛠️ Tech Stack & Prerequisites
 

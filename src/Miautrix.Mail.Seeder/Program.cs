@@ -23,17 +23,24 @@ public static class Program
         "domain.add",
         "domain.delete",
         "domain.verify",
+        "domain.view",
+        "domain.manage",
         "user.invite",
         "user.manage",
+        "user.view",
         "audit.read",
+        "audit.view",
         "licence.manage",
         "rule.manage",
+        "rule.view",
         "sieve.edit",
         "antispam.manage",
         "backup.create",
         "backup.restore",
         "system.view",
-        "system.configure"
+        "system.configure",
+        "quarantine.view",
+        "quarantine.manage"
     ];
 
     private static readonly string[] SystemRoles =
@@ -368,21 +375,6 @@ public static class Program
 
         return 0;
     }
-
-    private static Guid DeterministicGuid(Guid namespaceId, string value)
-    {
-        var input = $"{namespaceId}:{value}";
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(input));
-        var guidBytes = new byte[16];
-        Array.Copy(hash, guidBytes, 16);
-
-        // Set version to 5 (or 4) and RFC 4122 variant
-        guidBytes[6] = (byte)((guidBytes[6] & 0x0F) | 0x50);
-        guidBytes[8] = (byte)((guidBytes[8] & 0x3F) | 0x80);
-
-        return new Guid(guidBytes);
-    }
-}
 
     private static Guid DeterministicGuid(Guid namespaceId, string value)
     {

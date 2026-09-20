@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
+import { apiClient } from '../api/client';
 
 interface DashboardStats {
   activeQueued: number;
@@ -31,10 +32,20 @@ export const DashboardScreen: React.FC = () => {
     const fetchDashboard = async () => {
       setLoading(true);
       try {
-        const res = await fetch('/api/v1/system/dashboard-summary');
-        if (res.ok) {
-          const data = await res.json();
-          setStats(data);
+        const res = await apiClient.getDashboardSummary();
+        if (res && res.data) {
+          const d = res.data;
+          setStats({
+            activeQueued: d.active_queued ?? 0,
+            retrying: d.retrying ?? 0,
+            deadLetters: d.dead_letters ?? 0,
+            delivered24h: d.delivered24h ?? 0,
+            quarantined24h: d.quarantined24h ?? 0,
+            spamBlocked24h: d.spam_blocked24h ?? 0,
+            systemHealth: d.system_health ?? 'Healthy',
+            uptimeSeconds: d.uptime_seconds ?? 0,
+            tenantCount: d.tenant_count ?? 1,
+          });
         }
       } catch {
         // use default state gracefully

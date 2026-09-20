@@ -356,6 +356,15 @@ public class AppDbContext : DbContext
         });
         ConfigureTenantScoped<SystemEvent>(modelBuilder, "system_events");
         ConfigureTenantScoped<BackupJob>(modelBuilder, "backup_jobs");
+        modelBuilder.Entity<BackupJob>(entity =>
+        {
+            entity.Property(e => e.Name).HasColumnName("name").IsRequired();
+            entity.Property(e => e.Status).HasColumnName("status").IsRequired();
+            entity.Property(e => e.ArchivePath).HasColumnName("archive_path");
+            entity.Property(e => e.SizeBytes).HasColumnName("size_bytes");
+            entity.Property(e => e.CompletedAt).HasColumnName("completed_at");
+            entity.Property(e => e.ErrorMessage).HasColumnName("error_message");
+        });
         ConfigureTenantScoped<BackupHistory>(modelBuilder, "backup_history");
         ConfigureTenantScoped<Setting>(modelBuilder, "settings");
         ConfigureTenantScoped<Job>(modelBuilder, "jobs");

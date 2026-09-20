@@ -1,15 +1,18 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { QueueItem, ApiResponse, QueueQueryParams } from '../types';
 import { AdminApiClient, apiClient as defaultClient } from '../api/client';
+import { matchesDomain } from '../utils/domainFilter';
 
 interface QueueScreenProps {
   client?: AdminApiClient;
   pageSize?: number;
+  domainFilter?: string;
 }
 
 export const QueueScreen: React.FC<QueueScreenProps> = ({
   client = defaultClient,
   pageSize = 20,
+  domainFilter,
 }) => {
   const [items, setItems] = useState<QueueItem[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -126,6 +129,8 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({
     }
   };
 
+  const visibleItems = items.filter((i) => matchesDomain(domainFilter, i.recipient, i.sender));
+
   return (
     <div className="screen-container queue-screen" data-testid="queue-screen">
       <div className="screen-header">
@@ -202,7 +207,7 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({
             <div className="spinner" />
             <p>Loading queue messages...</p>
           </div>
-        ) : items.length === 0 ? (
+        ) : visibleItems.length === 0 ? (
           <div className="empty-state" data-testid="queue-empty">
             <p>No messages found in queue matching criteria.</p>
           </div>
@@ -222,7 +227,7 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {items.map((item) => (
+                {visibleItems.map((item) => (
                   <tr key={item.id} className="table-row">
                     <td>
                       <span className={`badge ${getStatusBadgeClass(item.status)}`}>
@@ -276,7 +281,7 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({
         <div className="pagination-bar" data-testid="pagination-bar">
           <div className="pagination-info">
             <span>
-              Showing {items.length} items {currentCursor ? '(cursor paged)' : '(page 1)'}
+              Showing {visibleItems.length} items {currentCursor ? '(cursor paged)' : '(page 1)'}
             </span>
           </div>
           <div className="pagination-controls">

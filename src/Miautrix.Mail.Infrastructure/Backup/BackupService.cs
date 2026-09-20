@@ -7,6 +7,8 @@ using DomainEntity = Miautrix.Mail.Domain.Domain;
 
 namespace Miautrix.Mail.Infrastructure.Backup;
 
+public sealed record BackupOptions(string Directory);
+
 public sealed record BackupManifest(
     string Version,
     DateTimeOffset CreatedAt,

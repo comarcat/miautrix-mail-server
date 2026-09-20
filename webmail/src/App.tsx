@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { Mailbox, EmailMessage, Contact, CalendarEvent, SieveFilterRule } from './types';
 import { InboxView } from './components/InboxView';
 import { ComposerView } from './components/ComposerView';
@@ -6,6 +6,7 @@ import { ContactsView } from './components/ContactsView';
 import { CalendarView } from './components/CalendarView';
 import { SieveRulesView } from './components/SieveRulesView';
 import { LoginView } from './components/LoginView';
+import { webmailClient } from './components/WebmailApiClient';
 import './webmail.css';
 
 const INITIAL_MAILBOXES: Mailbox[] = [
@@ -163,14 +164,55 @@ const INITIAL_RULES: SieveFilterRule[] = [
 
 export const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isInitializing, setIsInitializing] = useState<boolean>(true);
+  const [currentUserEmail, setCurrentUserEmail] = useState<string>('alex.vance@miautrix.org');
+
   const [activeTab, setActiveTab] = useState<'inbox' | 'compose' | 'contacts' | 'calendar' | 'rules'>('inbox');
   const [messages, setMessages] = useState<EmailMessage[]>(INITIAL_MESSAGES);
+
+  useEffect(() => {
+    const initAuth = async () => {
+      const token = webmailClient.getToken();
+      if (!token) {
+        setIsAuthenticated(false);
+        setIsInitializing(false);
+        return;
+      }
+
+      try {
+        const res = await webmailClient.me();
+        setCurrentUserEmail(res.data.email || 'alex.vance@miautrix.org');
+        setIsAuthenticated(true);
+      } catch {
+        setIsAuthenticated(false);
+      } finally {
+        setIsInitializing(false);
+      }
+    };
+
+    initAuth();
+
+    const handleAuthExpired = () => {
+      setIsAuthenticated(false);
+    };
+
+    window.addEventListener('miautrix:auth:expired', handleAuthExpired);
+    return () => {
+      window.removeEventListener('miautrix:auth:expired', handleAuthExpired);
+    };
+  }, []);
+
+  const handleSignOut = () => {
+    webmailClient.logout().then(() => {
+      setIsAuthenticated(false);
+    });
+  };
 
   const handleSendEmail = (msgData: { to: string; subject: string; body: string }) => {
     const newMessage: EmailMessage = {
       id: `msg-${Date.now()}`,
       mailboxId: 'sent',
-      from: { name: 'Alex Vance', email: 'alex.vance@miautrix.org' },
+      from: { name: 'Alex Vance', email: currentUserEmail },
       to: [{ name: msgData.to, email: msgData.to }],
       subject: msgData.subject || '(No Subject)',
       snippet: msgData.body.substring(0, 80),
@@ -189,8 +231,23 @@ export const App: React.FC = () => {
     setActiveTab('inbox');
   };
 
+  if (isInitializing) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--surface-canvas)', color: 'var(--deep-navy)' }}>
+        Loading Webmail...
+      </div>
+    );
+  }
+
   if (!isAuthenticated) {
-    return <LoginView onLoginSuccess={() => setIsAuthenticated(true)} />;
+    return (
+      <LoginView
+        onLoginSuccess={(email) => {
+          setCurrentUserEmail(email);
+          setIsAuthenticated(true);
+        }}
+      />
+    );
   }
 
   return (
@@ -240,12 +297,12 @@ export const App: React.FC = () => {
           </div>
 
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ fontSize: '13px', color: 'var(--neutral-body)' }}>alex.vance@miautrix.org</span>
+            <span style={{ fontSize: '13px', color: 'var(--neutral-body)' }}>{currentUserEmail}</span>
             <button
               type="button"
               className="btn btn-ghost"
               style={{ fontSize: '12px', padding: '4px 8px' }}
-              onClick={() => setIsAuthenticated(false)}
+              onClick={handleSignOut}
             >
               Sign Out
             </button>

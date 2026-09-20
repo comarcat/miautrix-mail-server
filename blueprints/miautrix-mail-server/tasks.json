@@ -1,439 +1,140 @@
-[
-  {
-    "id": "T1",
-    "title": "Solution scaffold and CI",
-    "epic": "01-core-platform",
-    "dependencies": [],
-    "priority": "p0",
-    "acceptance": [
-      "WHEN `dotnet build Miautrix.Mail.sln -warnaserror` runs on a clean checkout THE SYSTEM SHALL compile every project with zero warnings and exit 0."
-    ],
-    "verify": [
-      "dotnet build Miautrix.Mail.sln -warnaserror"
-    ],
-    "checkpoint": "step-01-scaffold",
-    "files": [
-      "Miautrix.Mail.sln",
-      "Directory.Build.props"
-    ],
-    "status": "done"
-  },
-  {
-    "id": "T2",
-    "title": "Domain model and EF Core schema",
-    "epic": "01-core-platform",
-    "dependencies": [
-      "T1"
-    ],
-    "priority": "p0",
-    "acceptance": [
-      "WHEN `dotnet ef database update` runs against an empty PostgreSQL database THE SYSTEM SHALL create every table in Section 5.2 with `tenant_id` and its index on every tenant-scoped table."
-    ],
-    "verify": [
-      "dotnet ef database update"
-    ],
-    "checkpoint": "step-02-schema",
-    "files": [
-      "src/Miautrix.Mail.Domain/**/*",
-      "src/Miautrix.Mail.Persistence/**/*",
-      "migrations/**/*"
-    ],
-    "status": "done"
-  },
-  {
-    "id": "T3",
-    "title": "Seed data and indexes",
-    "epic": "01-core-platform",
-    "dependencies": [
-      "T2"
-    ],
-    "priority": "p1",
-    "acceptance": [
-      "WHEN the seed runs against a freshly migrated database THE SYSTEM SHALL create the permission catalogue, and running it twice SHALL NOT duplicate rows."
-    ],
-    "verify": [
-      "dotnet run --project src/Miautrix.Mail.Seeder"
-    ],
-    "checkpoint": "step-03-seed",
-    "files": [
-      "src/**/*"
-    ],
-    "status": "done"
-  },
-  {
-    "id": "T4",
-    "title": "Identity: credentials, MFA, sessions",
-    "epic": "01-core-platform",
-    "dependencies": [
-      "T3"
-    ],
-    "priority": "p1",
-    "acceptance": [
-      "WHEN a user with TOTP enabled submits a correct password but no second factor THE SYSTEM SHALL refuse the login and SHALL write exactly one AUTH-4020 event."
-    ],
-    "verify": [
-      "dotnet test --filter Category=Identity"
-    ],
-    "checkpoint": "step-04-identity",
-    "files": [
-      "src/**/*"
-    ],
-    "status": "done"
-  },
-  {
-    "id": "T5",
-    "title": "Authorization, roles, and tenant isolation",
-    "epic": "01-core-platform",
-    "dependencies": [
-      "T4"
-    ],
-    "priority": "p1",
-    "acceptance": [
-      "WHEN a user in tenant A requests a mailbox belonging to tenant B THE SYSTEM SHALL return 404 and SHALL NOT leak the resource's existence."
-    ],
-    "verify": [
-      "dotnet test --filter Category=Isolation"
-    ],
-    "checkpoint": "step-05-authz",
-    "files": [
-      "src/**/*"
-    ],
-    "status": "done"
-  },
-  {
-    "id": "T6",
-    "title": "Audit trail",
-    "epic": "01-core-platform",
-    "dependencies": [
-      "T5"
-    ],
-    "priority": "p1",
-    "acceptance": [
-      "WHEN an audited change is rolled back THE SYSTEM SHALL NOT persist its audit row."
-    ],
-    "verify": [
-      "dotnet test --filter Category=Audit"
-    ],
-    "checkpoint": "step-06-audit",
-    "files": [
-      "src/**/*"
-    ],
-    "status": "done"
-  },
-  {
-    "id": "T7",
-    "title": "SMTP listener and queue",
-    "epic": "02-mail-transport",
-    "dependencies": [
-      "T6"
-    ],
-    "priority": "p1",
-    "acceptance": [
-      "WHEN a message is accepted for a local recipient THE SYSTEM SHALL enqueue exactly one row in `smtp_queue`, and WHEN delivery fails THE SYSTEM SHALL schedule a retry with a delay strictly greater than the previous one."
-    ],
-    "verify": [
-      "dotnet test --filter Category=Smtp"
-    ],
-    "checkpoint": "step-07-smtp",
-    "files": [
-      "src/**/*"
-    ],
-    "status": "done"
-  },
-  {
-    "id": "T8",
-    "title": "SPF, DKIM, DMARC",
-    "epic": "02-mail-transport",
-    "dependencies": [
-      "T7"
-    ],
-    "priority": "p1",
-    "acceptance": [
-      "WHEN an outbound message leaves a domain with a DKIM key configured THE SYSTEM SHALL attach a DKIM-Signature header that verifies against the published public key."
-    ],
-    "verify": [
-      "dotnet test --filter Category=Dkim"
-    ],
-    "checkpoint": "step-08-dns-auth",
-    "files": [
-      "src/**/*"
-    ],
-    "status": "done"
-  },
-  {
-    "id": "T9",
-    "title": "Anti-spam baseline and quarantine",
-    "epic": "02-mail-transport",
-    "dependencies": [
-      "T8"
-    ],
-    "priority": "p1",
-    "acceptance": [
-      "WHEN a message exceeds the configured spam threshold THE SYSTEM SHALL store it in quarantine and SHALL NOT deliver it to the mailbox."
-    ],
-    "verify": [
-      "dotnet test --filter Category=AntiSpam"
-    ],
-    "checkpoint": "step-09-antispam",
-    "files": [
-      "src/**/*"
-    ],
-    "status": "done"
-  },
-  {
-    "id": "T10",
-    "title": "IMAP, storage abstraction, and attachments",
-    "epic": "02-mail-transport",
-    "dependencies": [
-      "T9"
-    ],
-    "priority": "p0",
-    "acceptance": [
-      "WHEN a client APPENDs a message and reconnects THE SYSTEM SHALL return the message with identical bytes and flags."
-    ],
-    "verify": [
-      "dotnet test --filter Category=Imap"
-    ],
-    "checkpoint": "step-10-imap",
-    "files": [
-      "Miautrix.Mail.sln",
-      "Directory.Build.props"
-    ],
-    "status": "done"
-  },
-  {
-    "id": "T11",
-    "title": "ManageSieve",
-    "epic": "02-mail-transport",
-    "dependencies": [
-      "T10"
-    ],
-    "priority": "p0",
-    "acceptance": [
-      "WHEN a script containing a syntax error is uploaded THE SYSTEM SHALL reject it with the line number and SHALL leave the previously active script unchanged."
-    ],
-    "verify": [
-      "dotnet test --filter Category=Sieve"
-    ],
-    "checkpoint": "step-11-sieve",
-    "files": [
-      "Miautrix.Mail.sln",
-      "Directory.Build.props"
-    ],
-    "status": "done"
-  },
-  {
-    "id": "T12",
-    "title": "Full-text search indexing",
-    "epic": "02-mail-transport",
-    "dependencies": [
-      "T11"
-    ],
-    "priority": "p0",
-    "acceptance": [
-      "WHEN a message is delivered THE SYSTEM SHALL make it findable by a full-text query within one second."
-    ],
-    "verify": [
-      "dotnet test --filter Category=Search"
-    ],
-    "checkpoint": "step-12-fts",
-    "files": [
-      "Miautrix.Mail.sln",
-      "Directory.Build.props"
-    ],
-    "status": "done"
-  },
-  {
-    "id": "T13",
-    "title": "Mail-flow rule engine, simulator, explorer",
-    "epic": "02-mail-transport",
-    "dependencies": [
-      "T12"
-    ],
-    "priority": "p0",
-    "acceptance": [
-      "WHEN a rule is simulated against a sample message THE SYSTEM SHALL report every rule that matched and every action that would have fired, and SHALL NOT mutate any message."
-    ],
-    "verify": [
-      "dotnet test --filter Category=Rules"
-    ],
-    "checkpoint": "step-13-rules",
-    "files": [
-      "Miautrix.Mail.sln",
-      "Directory.Build.props"
-    ],
-    "status": "done"
-  },
-  {
-    "id": "T14",
-    "title": "API contract and OpenAPI",
-    "epic": "03-surfaces",
-    "dependencies": [
-      "T13"
-    ],
-    "priority": "p0",
-    "acceptance": [
-      "WHEN a request omits a required field THE SYSTEM SHALL return 422 with field-level details and SHALL NOT return 200 with a success-false body."
-    ],
-    "verify": [
-      "dotnet test --filter Category=Api"
-    ],
-    "checkpoint": "step-14-api",
-    "files": [
-      "Miautrix.Mail.sln",
-      "Directory.Build.props"
-    ],
-    "status": "done"
-  },
-  {
-    "id": "T15",
-    "title": "Web admin GUI",
-    "epic": "03-surfaces",
-    "dependencies": [
-      "T14"
-    ],
-    "priority": "p0",
-    "acceptance": [
-      "WHEN an administrator loads the queue screen THE SYSTEM SHALL render the queue with cursor pagination and SHALL issue no more than one request per screen."
-    ],
-    "verify": [
-      "pnpm --filter admin test && pnpm --filter admin build"
-    ],
-    "checkpoint": "step-15-web-admin",
-    "files": [
-      "Miautrix.Mail.sln",
-      "Directory.Build.props"
-    ],
-    "status": "done"
-  },
-  {
-    "id": "T16",
-    "title": "Webmail",
-    "epic": "03-surfaces",
-    "dependencies": [
-      "T15"
-    ],
-    "priority": "p0",
-    "acceptance": [
-      "WHEN a message body containing a script tag is rendered THE SYSTEM SHALL sanitise it with DOMPurify and SHALL NOT execute the script."
-    ],
-    "verify": [
-      "pnpm --filter webmail test"
-    ],
-    "checkpoint": "step-16-webmail",
-    "files": [
-      "Miautrix.Mail.sln",
-      "Directory.Build.props"
-    ],
-    "status": "done"
-  },
-  {
-    "id": "T17",
-    "title": "CLI",
-    "epic": "03-surfaces",
-    "dependencies": [
-      "T16"
-    ],
-    "priority": "p0",
-    "acceptance": [
-      "WHEN `miautrix-mail mailbox list --tenant <slug>` runs as an authorized operator THE SYSTEM SHALL print the tenant's mailboxes and exit 0."
-    ],
-    "verify": [
-      "dotnet run --project src/Miautrix.Mail.Cli -- mailbox list --help"
-    ],
-    "checkpoint": "step-17-cli",
-    "files": [
-      "src/Miautrix.Mail.Cli/**/*",
-      "Miautrix.Mail.sln"
-    ],
-    "status": "done"
-  },
-  {
-    "id": "T18",
-    "title": "Desktop admin application",
-    "epic": "04-operations",
-    "dependencies": [
-      "T17"
-    ],
-    "priority": "p0",
-    "acceptance": [
-      "WHEN the packaged desktop app launches on a machine with no network THE SYSTEM SHALL render its bundled UI and SHALL NOT attempt to load remote content into the webview."
-    ],
-    "verify": [
-      "pnpm --filter desktop test && pnpm --filter desktop build"
-    ],
-    "checkpoint": "step-18-desktop",
-    "files": [
-      "desktop/**/*",
-      "pnpm-workspace.yaml",
-      "Miautrix.Mail.sln",
-      "Directory.Build.props"
-    ],
-    "status": "done"
-  },
-  {
-    "id": "T19",
-    "title": "Backup and restore",
-    "epic": "04-operations",
-    "dependencies": [
-      "T18"
-    ],
-    "priority": "p0",
-    "acceptance": [
-      "WHEN `miautrix-mail backup` runs and the resulting archive is restored into a scratch database THE SYSTEM SHALL produce matching row counts for every table."
-    ],
-    "verify": [
-      "dotnet test --filter Category=Backup"
-    ],
-    "checkpoint": "step-19-backup",
-    "files": [
-      "Miautrix.Mail.sln",
-      "Directory.Build.props"
-    ],
-    "status": "done"
-  },
-  {
-    "id": "T20",
-    "title": "Blue/green update and migrations ladder",
-    "epic": "04-operations",
-    "dependencies": [
-      "T19"
-    ],
-    "priority": "p0",
-    "acceptance": [
-      "WHEN a new release is staged and the health gate fails THE SYSTEM SHALL leave the previous release serving traffic and SHALL NOT flip the symlink."
-    ],
-    "verify": [
-      "dotnet test --filter Category=BlueGreen"
-    ],
-    "checkpoint": "step-20-bluegreen",
-    "files": [
-      "src/Miautrix.Mail.Domain/**/*",
-      "src/Miautrix.Mail.Persistence/**/*",
-      "migrations/**/*"
-    ],
-    "status": "done"
-  },
-  {
-    "id": "T21",
-    "title": "Security hardening and licence gating",
-    "epic": "04-operations",
-    "dependencies": [
-      "T20"
-    ],
-    "priority": "p0",
-    "acceptance": [
-      "WHEN a tenant is over its mailbox allowance THE SYSTEM SHALL block new mailbox creation, SHALL keep delivering mail for existing mailboxes, and SHALL NOT destroy any data."
-    ],
-    "verify": [
-      "dotnet test --filter Category=Licensing"
-    ],
-    "checkpoint": "step-21-hardening",
-    "files": [
-      "src/Miautrix.Mail.Domain/**/*",
-      "src/Miautrix.Mail.Persistence/**/*",
-      "migrations/**/*"
-    ],
-    "status": "done"
-  }
-]
+{
+  "tasks": [
+    {
+      "id": "1",
+      "title": "Solution scaffold and CI",
+      "status": "pending",
+      "dependencies": [],
+      "verify": ["dotnet build Miautrix.Mail.sln -warnaserror"],
+      "files": ["Miautrix.Mail.sln"]
+    },
+    {
+      "id": "2",
+      "title": "Domain model and EF Core schema",
+      "status": "pending",
+      "dependencies": ["1"],
+      "verify": ["dotnet ef database update"],
+      "files": ["src/Miautrix.Mail.Domain/Entities.cs", "src/Miautrix.Mail.Persistence/AppDbContext.cs"]
+    },
+    {
+      "id": "3",
+      "title": "Seed data and indexes",
+      "status": "pending",
+      "dependencies": ["2"],
+      "verify": ["dotnet run --project src/Miautrix.Mail.Seeder"],
+      "files": ["src/Miautrix.Mail.Seeder/Program.cs"]
+    },
+    {
+      "id": "4",
+      "title": "Identity",
+      "status": "pending",
+      "dependencies": ["3"],
+      "verify": ["dotnet test --filter Category=Identity"],
+      "files": ["src/Miautrix.Mail.Identity/AuthenticationService.cs"]
+    },
+    {
+      "id": "5",
+      "title": "Authorization and tenant isolation",
+      "status": "pending",
+      "dependencies": ["4"],
+      "verify": ["dotnet test --filter Category=Isolation"],
+      "files": ["src/Miautrix.Mail.Security/TenantAuthorizationHelper.cs"]
+    },
+    {
+      "id": "6",
+      "title": "Audit trail",
+      "status": "pending",
+      "dependencies": ["5"],
+      "verify": ["dotnet test --filter Category=Audit"],
+      "files": ["src/Miautrix.Mail.Domain/Entities.cs"]
+    },
+    {
+      "id": "7",
+      "title": "SMTP listener and queue",
+      "status": "pending",
+      "dependencies": ["6"],
+      "verify": ["dotnet test --filter Category=Smtp"],
+      "files": ["src/Miautrix.Mail.Protocols.Smtp/"]
+    },
+    {
+      "id": "8",
+      "title": "SPF, DKIM, DMARC",
+      "status": "pending",
+      "dependencies": ["7"],
+      "verify": ["dotnet test --filter Category=Dkim"],
+      "files": ["src/Miautrix.Mail.MailFlow/DkimSigner.cs"]
+    },
+    {
+      "id": "9",
+      "title": "Anti-spam baseline and quarantine",
+      "status": "pending",
+      "dependencies": ["8"],
+      "verify": ["dotnet test --filter Category=AntiSpam"],
+      "files": ["src/Miautrix.Mail.AntiSpam/SpamFilter.cs"]
+    },
+    {
+      "id": "10",
+      "title": "IMAP, storage, attachments",
+      "status": "pending",
+      "dependencies": ["9"],
+      "verify": ["dotnet test --filter Category=Imap"],
+      "files": ["src/Miautrix.Mail.Protocols.Imap/"]
+    },
+    {
+      "id": "11",
+      "title": "ManageSieve",
+      "status": "pending",
+      "dependencies": ["10"],
+      "verify": ["dotnet test --filter Category=Sieve"],
+      "files": ["src/Miautrix.Mail.Protocols.Sieve/"]
+    },
+    {
+      "id": "12",
+      "title": "Search",
+      "status": "pending",
+      "dependencies": ["11"],
+      "verify": ["dotnet test -l \"console;verbosity=detailed\""],
+      "files": ["src/Miautrix.Mail.Search/"]
+    },
+    {
+      "id": "13",
+      "title": "Rule engine, simulator, explorer",
+      "status": "pending",
+      "dependencies": ["12"],
+      "verify": ["dotnet test --filter Category=Rules"],
+      "files": ["src/Miautrix.Mail.MailFlow/RuleEngine.cs"]
+    },
+    {
+      "id": "14",
+      "title": "API contract and OpenAPI",
+      "status": "done",
+      "dependencies": ["13"],
+      "verify": ["dotnet test --filter Category=Api"],
+      "files": ["src/Miautrix.Mail.Web/Controllers/"]
+    },
+    {
+      "id": "15",
+      "title": "Web admin GUI",
+      "status": "done",
+      "dependencies": ["14"],
+      "verify": ["pnpm --filter admin test && pnpm --filter admin build"],
+      "files": ["src/Miautrix.Mail.Admin/"]
+    },
+    {
+      "id": "16",
+      "title": "Webmail",
+      "status": "done",
+      "dependencies": ["14"],
+      "verify": ["pnpm --filter webmail test"],
+      "files": ["src/Miautrix.Mail.Webmail/"]
+    },
+    {
+      "id": "17",
+      "title": "CLI",
+      "status": "done",
+      "dependencies": ["16"],
+      "verify": ["dotnet run --project src/Miautrix.Mail.Cli -- mailbox list --help"],
+      "files": ["src/Miautrix.Mail.Cli/"]
+    }
+  ]
+}

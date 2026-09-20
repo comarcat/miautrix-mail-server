@@ -1,7 +1,10 @@
 using System.Text.Json;
+using Miautrix.Mail.Application.Admin;
 using Miautrix.Mail.Application.Auth;
+using Miautrix.Mail.Application.Mail;
 using Miautrix.Mail.Application.Queue;
 using Miautrix.Mail.Identity;
+using Miautrix.Mail.Infrastructure.Backup;
 using Miautrix.Mail.Persistence;
 using Miautrix.Mail.Security;
 using Miautrix.Mail.Web.Contracts;
@@ -31,14 +34,26 @@ public class Program
 
         builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
 
+        var backupDirectory = Environment.GetEnvironmentVariable("MIAUTRIX_BACKUP_DIR");
+        if (string.IsNullOrWhiteSpace(backupDirectory))
+        {
+            backupDirectory = "/opt/miautrix-mail/backups";
+        }
+
         builder.Services.AddSingleton<ISecurityEventSink, InMemorySecurityEventSink>();
+        builder.Services.AddSingleton<IBackupService, BackupService>();
+        builder.Services.AddSingleton(new BackupOptions(backupDirectory));
+
         builder.Services.AddSingleton<IPasswordHasher, Argon2idPasswordHasher>();
         builder.Services.AddSingleton<ITotpService, TotpService>();
         builder.Services.AddSingleton<ISessionManager, SessionManager>();
         builder.Services.AddScoped<IPermissionRepository, EfPermissionRepository>();
         builder.Services.AddScoped<ITenantAuthorizationHelper, TenantAuthorizationHelper>();
         builder.Services.AddScoped<IMailQueueService, MailQueueService>();
+        builder.Services.AddScoped<IMailboxService, MailboxService>();
+        builder.Services.AddScoped<IMessageService, MessageService>();
         builder.Services.AddScoped<IAuthService, AuthService>();
+        builder.Services.AddScoped<IAdminService, AdminService>();
 
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddSingleton<IRequestContextAccessor, HeaderRequestContextAccessor>();

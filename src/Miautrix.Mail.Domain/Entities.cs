@@ -256,7 +256,15 @@ public class AuditLog : TenantScopedEntityBase
     public string? IpAddress { get; set; }
 }
 public class SystemEvent : TenantScopedEntityBase { }
-public class BackupJob : TenantScopedEntityBase { }
+public class BackupJob : TenantScopedEntityBase
+{
+    public string Name { get; set; } = string.Empty;
+    public string Status { get; set; } = "Pending";
+    public string? ArchivePath { get; set; }
+    public long SizeBytes { get; set; }
+    public DateTimeOffset? CompletedAt { get; set; }
+    public string? ErrorMessage { get; set; }
+}
 public class BackupHistory : TenantScopedEntityBase { }
 public class Setting : TenantScopedEntityBase { }
 public class Job : TenantScopedEntityBase { }

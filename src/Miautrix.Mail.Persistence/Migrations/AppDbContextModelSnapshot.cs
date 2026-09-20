@@ -186,6 +186,32 @@ namespace Miautrix.Mail.Persistence.Migrations
                 {
                     b.HasBaseType("Miautrix.Mail.Domain.TenantScopedEntityBase");
 
+                    b.Property<string>("ArchivePath")
+                        .HasColumnType("text")
+                        .HasColumnName("archive_path");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("text")
+                        .HasColumnName("error_message");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("size_bytes");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("status");
+
                     b.ToTable("backup_jobs", (string)null);
                 });
 

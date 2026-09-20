@@ -11,6 +11,11 @@
     <ProjectReference Include="..\Miautrix.Mail.Persistence\Miautrix.Mail.Persistence.csproj" />
     <ProjectReference Include="..\Miautrix.Mail.Security\Miautrix.Mail.Security.csproj" />
     <ProjectReference Include="..\Miautrix.Mail.Identity\Miautrix.Mail.Identity.csproj" />
+    <ProjectReference Include="..\Miautrix.Mail.Infrastructure\Miautrix.Mail.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="DnsClient" Version="1.8.0" />
   </ItemGroup>
 
 </Project>

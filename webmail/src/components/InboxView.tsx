@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+
 import type { Mailbox, EmailMessage } from '../types';
 import { SanitizedMessageBody } from './SanitizedMessageBody';
 

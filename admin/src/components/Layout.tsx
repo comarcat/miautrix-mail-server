@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { ALL_DOMAINS } from '../utils/domainFilter';
 
 export type ScreenId =
   | 'dashboard'
@@ -85,11 +86,23 @@ interface LayoutProps {
   activeScreen: ScreenId;
   onNavigate: (screen: ScreenId) => void;
   children: React.ReactNode;
+  userEmail?: string;
+  onLogout?: () => void;
+  domains?: string[];
+  selectedDomain?: string;
+  onDomainChange?: (domain: string) => void;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ activeScreen, onNavigate, children }) => {
-  const [tenant, setTenant] = useState<string>('internal.domain');
-
+export const Layout: React.FC<LayoutProps> = ({
+  activeScreen,
+  onNavigate,
+  children,
+  userEmail = 'admin@internal.domain',
+  onLogout,
+  domains = [],
+  selectedDomain = ALL_DOMAINS,
+  onDomainChange,
+}) => {
   const groups = Array.from(new Set(MENU_ITEMS.map((i) => i.group)));
 
   return (
@@ -136,20 +149,32 @@ export const Layout: React.FC<LayoutProps> = ({ activeScreen, onNavigate, childr
           </div>
           <div className="topbar-right">
             <label className="tenant-picker">
-              <span className="tenant-picker-label">Tenant</span>
+              <span className="tenant-picker-label">Domain</span>
               <select
                 className="input-select input-select-sm"
-                value={tenant}
-                onChange={(e) => setTenant(e.target.value)}
-                aria-label="Active tenant"
+                value={selectedDomain}
+                onChange={(e) => onDomainChange?.(e.target.value)}
+                aria-label="Active domain filter"
+                data-testid="domain-filter"
               >
-                <option value="internal.domain">internal.domain</option>
-                <option value="acme-corp.com">acme-corp.com</option>
-                <option value="globex.io">globex.io</option>
+                <option value={ALL_DOMAINS}>All Domains</option>
+                {domains.map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
               </select>
             </label>
             <span className="status-dot status-dot-ok" title="Mail engine healthy" />
-            <span className="topbar-user">admin@internal.domain</span>
+            <span className="topbar-user">{userEmail}</span>
+            {onLogout && (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ padding: '4px 10px', fontSize: '12px' }}
+                onClick={onLogout}
+              >
+                Sign Out
+              </button>
+            )}
           </div>
         </header>
 
