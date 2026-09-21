@@ -27,6 +27,8 @@
     <ProjectReference Include="..\..\src\Miautrix.Mail.Domain\Miautrix.Mail.Domain.csproj" />
     <ProjectReference Include="..\..\src\Miautrix.Mail.Queue\Miautrix.Mail.Queue.csproj" />
     <ProjectReference Include="..\..\src\Miautrix.Mail.Protocols.Sieve\Miautrix.Mail.Protocols.Sieve.csproj" />
+    <ProjectReference Include="..\..\src\Miautrix.Mail.Identity\Miautrix.Mail.Identity.csproj" />
+    <ProjectReference Include="..\..\src\Miautrix.Mail.Worker\Miautrix.Mail.Worker.csproj" />
   </ItemGroup>
 
 </Project>

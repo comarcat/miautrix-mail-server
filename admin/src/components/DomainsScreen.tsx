@@ -22,6 +22,9 @@ export const DomainsScreen: React.FC<DomainsScreenProps> = ({ client = defaultCl
   // Form
   const [formName, setFormName] = useState<string>('');
   const [formIsPrimary, setFormIsPrimary] = useState<boolean>(false);
+  const [formTransportMode, setFormTransportMode] = useState<string>('local');
+  const [formCloudflareZoneId, setFormCloudflareZoneId] = useState<string>('');
+  const [formCloudflareWorkerUrl, setFormCloudflareWorkerUrl] = useState<string>('');
 
   // Edit modal state
   const [isEditOpen, setIsEditOpen] = useState<boolean>(false);
@@ -59,12 +62,22 @@ export const DomainsScreen: React.FC<DomainsScreenProps> = ({ client = defaultCl
       const payload: CreateDomainRequest = {
         name: formName.trim().toLowerCase(),
         is_primary: formIsPrimary,
+        transport_mode: formTransportMode,
+        cloudflare_zone_id: formTransportMode === 'cloudflare' ? formCloudflareZoneId.trim() || undefined : undefined,
+        cloudflare_worker_url: formTransportMode === 'cloudflare' ? formCloudflareWorkerUrl.trim() || undefined : undefined,
       };
       await client.createDomain(payload);
       setIsAddOpen(false);
       setFormName('');
       setFormIsPrimary(false);
-      setActionMessage(`Domain ${payload.name} added successfully. Please configure DNS records.`);
+      setFormTransportMode('local');
+      setFormCloudflareZoneId('');
+      setFormCloudflareWorkerUrl('');
+      setActionMessage(
+        formTransportMode === 'cloudflare'
+          ? `Domain ${payload.name} added. Verify it once the Cloudflare Worker is deployed.`
+          : `Domain ${payload.name} added successfully. Please configure DNS records.`
+      );
       fetchDomains();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to add domain');
@@ -78,6 +91,9 @@ export const DomainsScreen: React.FC<DomainsScreenProps> = ({ client = defaultCl
     setFormDkimSelector(domain.dkim_selector || '');
     setFormSpfRecord(domain.spf_record || '');
     setFormDmarcRecord(domain.dmarc_record || '');
+    setFormTransportMode(domain.transport_mode || 'local');
+    setFormCloudflareZoneId(domain.cloudflare_zone_id || '');
+    setFormCloudflareWorkerUrl(domain.cloudflare_worker_url || '');
     setIsEditOpen(true);
   };
 
@@ -92,6 +108,9 @@ export const DomainsScreen: React.FC<DomainsScreenProps> = ({ client = defaultCl
         dkim_selector: formDkimSelector.trim() || undefined,
         spf_record: formSpfRecord.trim() || undefined,
         dmarc_record: formDmarcRecord.trim() || undefined,
+        transport_mode: formTransportMode,
+        cloudflare_zone_id: formTransportMode === 'cloudflare' ? formCloudflareZoneId.trim() || undefined : undefined,
+        cloudflare_worker_url: formTransportMode === 'cloudflare' ? formCloudflareWorkerUrl.trim() || undefined : undefined,
       };
       await client.updateDomain(editingDomain.id, payload);
       setIsEditOpen(false);
@@ -212,6 +231,7 @@ export const DomainsScreen: React.FC<DomainsScreenProps> = ({ client = defaultCl
                 <tr>
                   <th>Status</th>
                   <th>Domain Name</th>
+                  <th>Transport</th>
                   <th>DKIM Selector</th>
                   <th>SPF Status</th>
                   <th>DMARC Status</th>
@@ -224,20 +244,43 @@ export const DomainsScreen: React.FC<DomainsScreenProps> = ({ client = defaultCl
                   <tr key={d.id}>
                     <td>
                       <span className={`badge ${d.is_verified ? 'badge-success' : 'badge-warning'}`}>
-                        {d.is_verified ? 'Verified' : 'Pending DNS'}
+                        {d.is_verified
+                          ? 'Verified'
+                          : d.transport_mode === 'cloudflare' ? 'Pending Worker' : 'Pending DNS'}
                       </span>
                     </td>
                     <td>
                       <span className="cell-emphasis cell-mono">{d.name}</span>
                     </td>
                     <td>
-                      <span className="cell-mono cell-dim">{d.dkim_selector || 'miautrix'}</span>
+                      {d.transport_mode === 'cloudflare' ? (
+                        <span className="badge badge-info" title={d.cloudflare_worker_url || 'No Worker URL set'}>
+                          Cloudflare
+                        </span>
+                      ) : (
+                        <span className="badge" title="MX points at this server">Local</span>
+                      )}
                     </td>
                     <td>
-                      <span className="badge badge-info">{d.spf_record ? 'Configured' : 'Recommended'}</span>
+                      {d.transport_mode === 'cloudflare' ? (
+                        <span className="cell-dim">—</span>
+                      ) : (
+                        <span className="cell-mono cell-dim">{d.dkim_selector || 'miautrix'}</span>
+                      )}
                     </td>
                     <td>
-                      <span className="badge badge-info">{d.dmarc_record ? 'Configured' : 'Recommended'}</span>
+                      {d.transport_mode === 'cloudflare' ? (
+                        <span className="cell-dim">Cloudflare-managed</span>
+                      ) : (
+                        <span className="badge badge-info">{d.spf_record ? 'Configured' : 'Recommended'}</span>
+                      )}
+                    </td>
+                    <td>
+                      {d.transport_mode === 'cloudflare' ? (
+                        <span className="cell-dim">Cloudflare-managed</span>
+                      ) : (
+                        <span className="badge badge-info">{d.dmarc_record ? 'Configured' : 'Recommended'}</span>
+                      )}
                     </td>
                     <td>
                       {d.is_primary ? (
@@ -260,7 +303,9 @@ export const DomainsScreen: React.FC<DomainsScreenProps> = ({ client = defaultCl
                           onClick={() => handleVerify(d)}
                           disabled={verifyingDomain === d.id}
                         >
-                          {verifyingDomain === d.id ? 'Checking...' : 'Verify DNS'}
+                          {verifyingDomain === d.id
+                            ? 'Checking...'
+                            : d.transport_mode === 'cloudflare' ? 'Test Worker' : 'Verify DNS'}
                         </button>
                         <button
                           className="btn-link"
@@ -311,6 +356,54 @@ export const DomainsScreen: React.FC<DomainsScreenProps> = ({ client = defaultCl
                     Must be a valid Fully Qualified Domain Name configured with MX records pointing to this mail server.
                   </p>
                 </div>
+
+                <div className="form-group">
+                  <label className="form-label">Mail Transport</label>
+                  <select
+                    className="input-text w-full"
+                    value={formTransportMode}
+                    onChange={(e) => setFormTransportMode(e.target.value)}
+                    data-testid="add-domain-transport"
+                  >
+                    <option value="local">Local — MX points at this server (ports 25/465/587/993)</option>
+                    <option value="cloudflare">Cloudflare — routing and DNS handled by a Cloudflare Worker</option>
+                  </select>
+                  <p className="cell-dim" style={{ fontSize: '11px', marginTop: '4px' }}>
+                    This is an additional option, not a replacement: IMAP on 993 stays local either way.
+                    {formTransportMode === 'cloudflare' && ' Cloudflare covers SMTP only.'}
+                  </p>
+                </div>
+
+                {formTransportMode === 'cloudflare' && (
+                  <>
+                    <div className="form-group">
+                      <label className="form-label">Cloudflare Zone ID</label>
+                      <input
+                        type="text"
+                        className="input-text w-full cell-mono"
+                        placeholder="023e105f4ecef8ad9ca31a8372d0c353"
+                        value={formCloudflareZoneId}
+                        onChange={(e) => setFormCloudflareZoneId(e.target.value)}
+                        data-testid="add-domain-zone-id"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Worker URL</label>
+                      <input
+                        type="text"
+                        className="input-text w-full cell-mono"
+                        placeholder="https://miautrix-email-worker.example.workers.dev"
+                        value={formCloudflareWorkerUrl}
+                        onChange={(e) => setFormCloudflareWorkerUrl(e.target.value)}
+                        data-testid="add-domain-worker-url"
+                      />
+                      <p className="cell-dim" style={{ fontSize: '11px', marginTop: '4px' }}>
+                        Verification tests this Worker instead of looking up DKIM, SPF and DMARC records.
+                      </p>
+                    </div>
+                  </>
+                )}
+
                 <div className="form-group" style={{ flexDirection: 'row', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
                   <input
                     type="checkbox"
@@ -360,36 +453,84 @@ export const DomainsScreen: React.FC<DomainsScreenProps> = ({ client = defaultCl
                     Changing DNS-relevant fields marks the domain unverified until re-verified.
                   </p>
                 </div>
+
                 <div className="form-group">
-                  <label className="form-label">DKIM Selector</label>
-                  <input
-                    type="text"
-                    className="input-text w-full cell-mono"
-                    placeholder="m1"
-                    value={formDkimSelector}
-                    onChange={(e) => setFormDkimSelector(e.target.value)}
-                  />
+                  <label className="form-label">Mail Transport</label>
+                  <select
+                    className="input-text w-full"
+                    value={formTransportMode}
+                    onChange={(e) => setFormTransportMode(e.target.value)}
+                    data-testid="edit-domain-transport"
+                  >
+                    <option value="local">Local — MX points at this server (ports 25/465/587/993)</option>
+                    <option value="cloudflare">Cloudflare — routing and DNS handled by a Cloudflare Worker</option>
+                  </select>
+                  {formTransportMode !== (editingDomain.transport_mode || 'local') && (
+                    <p className="cell-dim" style={{ fontSize: '11px', marginTop: '4px' }}>
+                      Switching transport marks the domain unverified until re-verified.
+                    </p>
+                  )}
                 </div>
-                <div className="form-group">
-                  <label className="form-label">SPF Record</label>
-                  <input
-                    type="text"
-                    className="input-text w-full cell-mono"
-                    placeholder="v=spf1 mx -all"
-                    value={formSpfRecord}
-                    onChange={(e) => setFormSpfRecord(e.target.value)}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">DMARC Record</label>
-                  <input
-                    type="text"
-                    className="input-text w-full cell-mono"
-                    placeholder="v=DMARC1; p=reject; ..."
-                    value={formDmarcRecord}
-                    onChange={(e) => setFormDmarcRecord(e.target.value)}
-                  />
-                </div>
+
+                {formTransportMode === 'cloudflare' ? (
+                  <>
+                    <div className="form-group">
+                      <label className="form-label">Cloudflare Zone ID</label>
+                      <input
+                        type="text"
+                        className="input-text w-full cell-mono"
+                        placeholder="023e105f4ecef8ad9ca31a8372d0c353"
+                        value={formCloudflareZoneId}
+                        onChange={(e) => setFormCloudflareZoneId(e.target.value)}
+                        data-testid="edit-domain-zone-id"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Worker URL</label>
+                      <input
+                        type="text"
+                        className="input-text w-full cell-mono"
+                        placeholder="https://miautrix-email-worker.example.workers.dev"
+                        value={formCloudflareWorkerUrl}
+                        onChange={(e) => setFormCloudflareWorkerUrl(e.target.value)}
+                        data-testid="edit-domain-worker-url"
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="form-group">
+                      <label className="form-label">DKIM Selector</label>
+                      <input
+                        type="text"
+                        className="input-text w-full cell-mono"
+                        placeholder="m1"
+                        value={formDkimSelector}
+                        onChange={(e) => setFormDkimSelector(e.target.value)}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">SPF Record</label>
+                      <input
+                        type="text"
+                        className="input-text w-full cell-mono"
+                        placeholder="v=spf1 mx -all"
+                        value={formSpfRecord}
+                        onChange={(e) => setFormSpfRecord(e.target.value)}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">DMARC Record</label>
+                      <input
+                        type="text"
+                        className="input-text w-full cell-mono"
+                        placeholder="v=DMARC1; p=reject; ..."
+                        value={formDmarcRecord}
+                        onChange={(e) => setFormDmarcRecord(e.target.value)}
+                      />
+                    </div>
+                  </>
+                )}
                 <div className="form-group" style={{ flexDirection: 'row', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
                   <input
                     type="checkbox"
@@ -420,37 +561,70 @@ export const DomainsScreen: React.FC<DomainsScreenProps> = ({ client = defaultCl
         <div className="modal-backdrop" data-testid="dns-inspect-modal">
           <div className="modal-card" style={{ maxWidth: '640px' }}>
             <div className="modal-header">
-              <h2 className="modal-title">DNS Records for {inspectingDomain.name}</h2>
+              <h2 className="modal-title">
+                {inspectingDomain.transport_mode === 'cloudflare'
+                  ? `Cloudflare Worker for ${inspectingDomain.name}`
+                  : `DNS Records for ${inspectingDomain.name}`}
+              </h2>
               <button className="btn-close" onClick={() => setInspectingDomain(null)}>✕</button>
             </div>
             <div className="modal-body">
-              <div className="detail-row-block">
-                <div className="detail-label">1. MX Record (Inbound Delivery)</div>
-                <pre className="detail-pre" style={{ color: 'var(--text)' }}>
+              {inspectingDomain.transport_mode === 'cloudflare' ? (
+                <>
+                  <div className="detail-row-block">
+                    <div className="detail-label">Transport Mode</div>
+                    <pre className="detail-pre" style={{ color: 'var(--text)' }}>Cloudflare Worker</pre>
+                  </div>
+                  <div className="detail-row-block">
+                    <div className="detail-label">Cloudflare Zone ID</div>
+                    <pre className="detail-pre" style={{ color: 'var(--text)' }}>
+{inspectingDomain.cloudflare_zone_id || '(not set)'}
+                    </pre>
+                  </div>
+                  <div className="detail-row-block">
+                    <div className="detail-label">Worker URL</div>
+                    <pre className="detail-pre" style={{ color: 'var(--text)' }}>
+{inspectingDomain.cloudflare_worker_url || '(not set)'}
+                    </pre>
+                  </div>
+                  <div className="detail-row-block">
+                    <div className="detail-label">DNS is managed by Cloudflare</div>
+                    <pre className="detail-pre" style={{ color: 'var(--text)' }}>
+{`Cloudflare configures the MX, SPF, DKIM and DMARC records for ${inspectingDomain.name} to route both inbound and outbound mail through the Worker.`}
+                    </pre>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="detail-row-block">
+                    <div className="detail-label">1. MX Record (Inbound Delivery)</div>
+                    <pre className="detail-pre" style={{ color: 'var(--text)' }}>
 {`${inspectingDomain.name}.  300  IN  MX  10  mail.${inspectingDomain.name}.`}
-                </pre>
-              </div>
+                    </pre>
+                  </div>
 
-              <div className="detail-row-block">
-                <div className="detail-label">2. SPF TXT Record (Sender Policy Framework)</div>
-                <pre className="detail-pre" style={{ color: 'var(--text)' }}>
+                  <div className="detail-row-block">
+                    <div className="detail-label">2. SPF TXT Record (Sender Policy Framework)</div>
+                    <pre className="detail-pre" style={{ color: 'var(--text)' }}>
 {inspectingDomain.spf_record || `v=spf1 mx a:mail.${inspectingDomain.name} -all`}
-                </pre>
-              </div>
+                    </pre>
+                  </div>
 
-              <div className="detail-row-block">
-                <div className="detail-label">3. DKIM TXT Record (Selector: {inspectingDomain.dkim_selector || 'miautrix'})</div>
-                <pre className="detail-pre" style={{ color: 'var(--text)' }}>
+                  <div className="detail-row-block">
+                    <div className="detail-label">3. DKIM TXT Record (Selector: {inspectingDomain.dkim_selector || 'miautrix'})</div>
+                    <pre className="detail-pre" style={{ color: 'var(--text)' }}>
 {`${inspectingDomain.dkim_selector || 'miautrix'}._domainkey.${inspectingDomain.name}.  TXT  "v=DKIM1; k=rsa; p=${inspectingDomain.dkim_public_key || 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAy0k8p7+v41...KEY'}"`}
-                </pre>
-              </div>
+                    </pre>
+                  </div>
 
-              <div className="detail-row-block">
-                <div className="detail-label">4. DMARC TXT Record (Enforcement Policy)</div>
-                <pre className="detail-pre" style={{ color: 'var(--text)' }}>
+                  <div className="detail-row-block">
+                    <div className="detail-label">4. DMARC TXT Record (Enforcement Policy)</div>
+                    <pre className="detail-pre" style={{ color: 'var(--text)' }}>
 {inspectingDomain.dmarc_record || `_dmarc.${inspectingDomain.name}.  TXT  "v=DMARC1; p=reject; rua=mailto:dmarc-reports@${inspectingDomain.name}; pct=100"`}
-                </pre>
-              </div>
+                    </pre>
+                  </div>
+                </>
+              )}
             </div>
             <div className="modal-footer">
               <button type="button" className="btn btn-secondary" onClick={() => setInspectingDomain(null)}>
@@ -464,7 +638,7 @@ export const DomainsScreen: React.FC<DomainsScreenProps> = ({ client = defaultCl
                   setInspectingDomain(null);
                 }}
               >
-                Verify Records Now
+                {inspectingDomain.transport_mode === 'cloudflare' ? 'Test Worker' : 'Verify Records Now'}
               </button>
             </div>
           </div>
@@ -476,25 +650,44 @@ export const DomainsScreen: React.FC<DomainsScreenProps> = ({ client = defaultCl
         <div className="modal-backdrop" data-testid="verify-result-modal">
           <div className="modal-card">
             <div className="modal-header">
-              <h2 className="modal-title">DNS Verification: {verifyResult.domain}</h2>
+              <h2 className="modal-title">
+                {verifyResult.result.transport_mode === 'cloudflare'
+                  ? `Worker Verification: ${verifyResult.domain}`
+                  : `DNS Verification: ${verifyResult.domain}`}
+              </h2>
               <button className="btn-close" onClick={() => setVerifyResult(null)}>✕</button>
             </div>
             <div className="modal-body">
               <div className={`alert ${verifyResult.result.is_verified ? 'alert-info' : 'alert-error'}`}>
                 <span>{verifyResult.result.message}</span>
               </div>
-              <div className="detail-row">
-                <span className="detail-label">DKIM Status</span>
-                <span className="badge badge-success">{verifyResult.result.dkim_status}</span>
-              </div>
-              <div className="detail-row">
-                <span className="detail-label">SPF Status</span>
-                <span className="badge badge-success">{verifyResult.result.spf_status}</span>
-              </div>
-              <div className="detail-row">
-                <span className="detail-label">DMARC Status</span>
-                <span className="badge badge-success">{verifyResult.result.dmarc_status}</span>
-              </div>
+              {verifyResult.result.transport_mode === 'cloudflare' ? (
+                <>
+                  <div className="detail-row">
+                    <span className="detail-label">Transport Mode</span>
+                    <span className="badge badge-info">Cloudflare Worker</span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-label">Worker Status</span>
+                    <span className="badge badge-success">{verifyResult.result.worker_status}</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="detail-row">
+                    <span className="detail-label">DKIM Status</span>
+                    <span className="badge badge-success">{verifyResult.result.dkim_status}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-label">SPF Status</span>
+                    <span className="badge badge-success">{verifyResult.result.spf_status}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-label">DMARC Status</span>
+                    <span className="badge badge-success">{verifyResult.result.dmarc_status}</span>
+                  </div>
+                </>
+              )}
             </div>
             <div className="modal-footer">
               <button type="button" className="btn btn-primary" onClick={() => setVerifyResult(null)}>

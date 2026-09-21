@@ -26,14 +26,26 @@ public sealed class MailboxService : IMailboxService
         Guid userId,
         CancellationToken cancellationToken = default)
     {
-        _auth.AssertPermission(tenantId, userId, "mailbox.view");
-
         var mailboxes = await _db.Mailboxes
             .Where(m => m.TenantId == tenantId)
             .OrderBy(m => m.Address)
             .ToListAsync(cancellationToken);
 
-        return mailboxes.Select(ToDto).ToList();
+        var authorized = new List<MailboxDto>();
+        foreach (var mailbox in mailboxes)
+        {
+            try
+            {
+                _auth.AssertMailboxAccess(tenantId, userId, mailbox, requireWrite: false);
+                authorized.Add(ToDto(mailbox));
+            }
+            catch (ResourceNotFoundException)
+            {
+                // List endpoints omit resources the caller cannot see.
+            }
+        }
+
+        return authorized;
     }
 
     public async Task<MailboxDto?> GetMailboxAsync(
@@ -42,8 +54,6 @@ public sealed class MailboxService : IMailboxService
         Guid mailboxId,
         CancellationToken cancellationToken = default)
     {
-        _auth.AssertPermission(tenantId, userId, "mailbox.view");
-
         var mailbox = await _db.Mailboxes
             .FirstOrDefaultAsync(m => m.TenantId == tenantId && m.Id == mailboxId, cancellationToken);
 
@@ -52,7 +62,7 @@ public sealed class MailboxService : IMailboxService
             return null;
         }
 
-        _auth.AuthorizeAccess(tenantId, userId, mailbox, "mailbox.view");
+        _auth.AssertMailboxAccess(tenantId, userId, mailbox, requireWrite: false);
         return ToDto(mailbox);
     }
 
@@ -74,11 +84,11 @@ public sealed class MailboxService : IMailboxService
 
         if (mailbox is null)
         {
-            mailbox = await _db.Mailboxes
-                .FirstOrDefaultAsync(m => m.TenantId == tenantId, cancellationToken);
+            return null;
         }
 
-        return mailbox is null ? null : ToDto(mailbox);
+        _auth.AssertMailboxAccess(tenantId, userId, mailbox, requireWrite: false);
+        return ToDto(mailbox);
     }
 
     public async Task<IReadOnlyList<FolderDto>> GetFoldersAsync(
@@ -95,17 +105,15 @@ public sealed class MailboxService : IMailboxService
             return Array.Empty<FolderDto>();
         }
 
+        _auth.AssertMailboxAccess(tenantId, userId, mailbox, requireWrite: false);
+
+        // A mailbox always has its default folders; provision them on first read so a
+        // freshly created mailbox is usable without a separate provisioning call.
+        await ProvisionDefaultFoldersAsync(tenantId, mailboxId, cancellationToken);
+
         var folders = await _db.Folders
             .Where(f => f.TenantId == tenantId && f.MailboxId == mailboxId)
             .ToListAsync(cancellationToken);
-
-        if (!folders.Any())
-        {
-            await EnsureDefaultFoldersAsync(tenantId, mailboxId, cancellationToken);
-            folders = await _db.Folders
-                .Where(f => f.TenantId == tenantId && f.MailboxId == mailboxId)
-                .ToListAsync(cancellationToken);
-        }
 
         var result = new List<FolderDto>();
         foreach (var folder in folders)
@@ -130,39 +138,60 @@ public sealed class MailboxService : IMailboxService
 
     public async Task<FolderDto> EnsureDefaultFoldersAsync(
         Guid tenantId,
+        Guid userId,
         Guid mailboxId,
         CancellationToken cancellationToken = default)
     {
-        var existing = await _db.Folders
-            .Where(f => f.TenantId == tenantId && f.MailboxId == mailboxId)
-            .ToListAsync(cancellationToken);
+        var mailbox = await _db.Mailboxes
+            .FirstOrDefaultAsync(m => m.TenantId == tenantId && m.Id == mailboxId, cancellationToken);
+        _auth.AssertMailboxAccess(tenantId, userId, mailbox, requireWrite: true);
 
-        var defaultRoles = new[] { ("Inbox", "inbox"), ("Sent", "sent"), ("Drafts", "drafts"), ("Trash", "trash"), ("Junk", "junk"), ("Archive", "archive") };
-
-        foreach (var (name, role) in defaultRoles)
-        {
-            if (!existing.Any(e => string.Equals(e.Role, role, StringComparison.OrdinalIgnoreCase)))
-            {
-                var folder = new Folder
-                {
-                    Id = Guid.NewGuid(),
-                    TenantId = tenantId,
-                    MailboxId = mailboxId,
-                    Name = name,
-                    Role = role,
-                    CreatedAt = DateTimeOffset.UtcNow,
-                    UpdatedAt = DateTimeOffset.UtcNow
-                };
-                _db.Folders.Add(folder);
-            }
-        }
-
-        await _db.SaveChangesAsync(cancellationToken);
+        await ProvisionDefaultFoldersAsync(tenantId, mailboxId, cancellationToken);
 
         var inbox = await _db.Folders
             .FirstAsync(f => f.TenantId == tenantId && f.MailboxId == mailboxId && f.Role == "inbox", cancellationToken);
 
         return new FolderDto(inbox.Id, inbox.MailboxId, inbox.Name, inbox.Role, 0, 0);
+    }
+
+    /// <summary>
+    /// Creates any missing default folder. Idempotent; the caller is responsible for the
+    /// authorization check.
+    /// </summary>
+    private async Task ProvisionDefaultFoldersAsync(Guid tenantId, Guid mailboxId, CancellationToken cancellationToken)
+    {
+        var existingRoles = await _db.Folders
+            .Where(f => f.TenantId == tenantId && f.MailboxId == mailboxId)
+            .Select(f => f.Role)
+            .ToListAsync(cancellationToken);
+
+        var defaultRoles = new[] { ("Inbox", "inbox"), ("Sent", "sent"), ("Drafts", "drafts"), ("Trash", "trash"), ("Junk", "junk"), ("Archive", "archive") };
+        var added = false;
+
+        foreach (var (name, role) in defaultRoles)
+        {
+            if (existingRoles.Any(r => string.Equals(r, role, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            _db.Folders.Add(new Folder
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                MailboxId = mailboxId,
+                Name = name,
+                Role = role,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow
+            });
+            added = true;
+        }
+
+        if (added)
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+        }
     }
 
     private static MailboxDto ToDto(Mailbox m) => new(

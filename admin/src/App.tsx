@@ -17,6 +17,7 @@ import { BackupScreen } from './components/BackupScreen';
 import { SystemScreen } from './components/SystemScreen';
 import { LicensingScreen } from './components/LicensingScreen';
 import { LoginScreen } from './components/LoginScreen';
+import { ChangePasswordView } from './components/ChangePasswordView';
 import { apiClient } from './api/client';
 import { ALL_DOMAINS } from './utils/domainFilter';
 
@@ -25,6 +26,7 @@ export const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isInitializing, setIsInitializing] = useState<boolean>(true);
   const [currentUserEmail, setCurrentUserEmail] = useState<string>('admin@internal.domain');
+  const [mustChangePassword, setMustChangePassword] = useState<boolean>(false);
   const [domains, setDomains] = useState<string[]>([]);
   const [selectedDomain, setSelectedDomain] = useState<string>(ALL_DOMAINS);
 
@@ -38,10 +40,13 @@ export const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    const readMustChangePassword = (data: any) => !!(data?.must_change_password ?? data?.mustChangePassword);
+
     const initAuth = async () => {
       const token = apiClient.getToken();
       if (!token) {
         setIsAuthenticated(false);
+        setMustChangePassword(false);
         setIsInitializing(false);
         return;
       }
@@ -51,11 +56,13 @@ export const App: React.FC = () => {
         if (res.data?.email) {
           setCurrentUserEmail(res.data.email);
         }
+        setMustChangePassword(readMustChangePassword(res.data));
         setIsAuthenticated(true);
         loadDomains();
       } catch (err) {
         // me() throws on 401, which also clears the token in apiClient
         setIsAuthenticated(false);
+        setMustChangePassword(false);
       } finally {
         setIsInitializing(false);
       }
@@ -65,6 +72,7 @@ export const App: React.FC = () => {
 
     const handleAuthExpired = () => {
       setIsAuthenticated(false);
+      setMustChangePassword(false);
     };
 
     window.addEventListener('miautrix:auth:expired', handleAuthExpired);
@@ -76,6 +84,7 @@ export const App: React.FC = () => {
   const handleLogout = async () => {
     await apiClient.logout();
     setIsAuthenticated(false);
+    setMustChangePassword(false);
   };
 
   const renderScreen = () => {
@@ -128,10 +137,32 @@ export const App: React.FC = () => {
   if (!isAuthenticated) {
     return (
       <LoginScreen
-        onLoginSuccess={(email) => {
+        onLoginSuccess={async (email) => {
           if (email) setCurrentUserEmail(email);
-          setIsAuthenticated(true);
-          loadDomains();
+          try {
+            const res = await apiClient.me();
+            setMustChangePassword(!!((res.data as any)?.must_change_password ?? (res.data as any)?.mustChangePassword));
+            setIsAuthenticated(true);
+            loadDomains();
+          } catch {
+            setIsAuthenticated(false);
+            setMustChangePassword(false);
+          }
+        }}
+      />
+    );
+  }
+
+  if (mustChangePassword) {
+    return (
+      <ChangePasswordView
+        onChanged={async () => {
+          try {
+            const res = await apiClient.me();
+            setMustChangePassword(!!((res.data as any)?.must_change_password ?? (res.data as any)?.mustChangePassword));
+          } catch {
+            setMustChangePassword(false);
+          }
         }}
       />
     );

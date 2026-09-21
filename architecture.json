@@ -9,55 +9,394 @@
       {
         "id": "admin-flow",
         "label": "Administration & Identity",
-        "focus": ["admin_user", "web_admin", "desktop_admin", "cli", "api_core", "auth_security", "postgres"],
-        "note": "Tenant administrators manage domains, mailboxes, and policies via REST API and local identity."
+        "focus": [
+          "admin_user",
+          "web_admin",
+          "desktop_admin",
+          "cli",
+          "api_core",
+          "auth_security",
+          "postgres"
+        ],
+        "note": "Tenant admins manage domains, user mailboxes, and passwordless shared mailboxes with same-domain read/write delegates."
       },
       {
         "id": "mail-flow",
         "label": "Mail Ingestion & Delivery",
-        "focus": ["mail_user", "webmail", "mail_flow", "antispam", "postgres", "mail_storage"],
-        "note": "Mail transmission pipeline processing SMTP/IMAP protocols, spam filtering, and storage."
+        "focus": [
+          "mail_user",
+          "webmail",
+          "mail_flow",
+          "antispam",
+          "postgres",
+          "mail_storage",
+          "worker",
+          "cloudflare_worker"
+        ],
+        "note": "Mail transmission pipeline with local protocol listeners, queue dispatch, and optional Cloudflare Worker relay for per-domain outbound transport."
       },
       {
         "id": "storage-state",
         "label": "Data & Persistence",
-        "focus": ["api_core", "mail_flow", "postgres", "mail_storage"],
+        "focus": [
+          "api_core",
+          "mail_flow",
+          "postgres",
+          "mail_storage"
+        ],
         "note": "Multi-tenant relational database and MIME body storage separation."
       }
     ]
   },
   "components": [
-    { "id": "admin_user", "type": "external", "label": "Tenant Admin", "sublabel": "Browser / Terminal", "pos": [40, 160], "size": [130, 60] },
-    { "id": "mail_user", "type": "external", "label": "Tenant User", "sublabel": "Web / IMAP / JMAP", "pos": [40, 440], "size": [130, 60] },
-    { "id": "web_admin", "type": "frontend", "label": "Web Admin", "sublabel": "React 19 / Vite", "pos": [240, 90], "size": [130, 60] },
-    { "id": "desktop_admin", "type": "frontend", "label": "Desktop Admin", "sublabel": "Electron Shell", "pos": [240, 200], "size": [130, 60] },
-    { "id": "cli", "type": "external", "label": "Miautrix CLI", "sublabel": "Spectre.Console", "pos": [240, 310], "size": [130, 60] },
-    { "id": "webmail", "type": "frontend", "label": "Webmail", "sublabel": "Iris Pay UI", "pos": [240, 440], "size": [130, 60] },
-    { "id": "auth_security", "type": "security", "label": "Identity & Auth", "sublabel": "Argon2id + TOTP + FIDO2", "pos": [490, 90], "size": [150, 64], "tag": "Multi-Tenant" },
-    { "id": "api_core", "type": "backend", "label": "Miautrix Web API", "sublabel": "ASP.NET Core 10", "pos": [490, 240], "size": [150, 64], "tag": "Modular Monolith" },
-    { "id": "mail_flow", "type": "backend", "label": "Mail Engine & Queue", "sublabel": "SMTP / IMAP / Sieve", "pos": [490, 400], "size": [150, 64], "tag": "Pipeline" },
-    { "id": "antispam", "type": "security", "label": "Spam & Malware", "sublabel": "Rules + ClamAV Seam", "pos": [490, 550], "size": [150, 64], "tag": "Quarantine" },
-    { "id": "postgres", "type": "database", "label": "PostgreSQL 17", "sublabel": "Metadata + FTS", "brand": "postgresql", "pos": [760, 240], "size": [140, 64] },
-    { "id": "mail_storage", "type": "cloud", "label": "Mail Storage", "sublabel": "MIME Body Store", "pos": [760, 400], "size": [140, 64] }
+    {
+      "id": "admin_user",
+      "type": "external",
+      "label": "Tenant Admin",
+      "sublabel": "Browser / Terminal",
+      "pos": [
+        40,
+        160
+      ],
+      "size": [
+        130,
+        60
+      ]
+    },
+    {
+      "id": "mail_user",
+      "type": "external",
+      "label": "Tenant User",
+      "sublabel": "Web / IMAP / JMAP",
+      "pos": [
+        40,
+        440
+      ],
+      "size": [
+        130,
+        60
+      ]
+    },
+    {
+      "id": "web_admin",
+      "type": "frontend",
+      "label": "Web Admin",
+      "sublabel": "React 19 / Vite",
+      "pos": [
+        240,
+        90
+      ],
+      "size": [
+        130,
+        60
+      ]
+    },
+    {
+      "id": "desktop_admin",
+      "type": "frontend",
+      "label": "Desktop Admin",
+      "sublabel": "Electron Shell",
+      "pos": [
+        240,
+        200
+      ],
+      "size": [
+        130,
+        60
+      ]
+    },
+    {
+      "id": "cli",
+      "type": "external",
+      "label": "Miautrix CLI",
+      "sublabel": "Spectre.Console",
+      "pos": [
+        240,
+        310
+      ],
+      "size": [
+        130,
+        60
+      ]
+    },
+    {
+      "id": "webmail",
+      "type": "frontend",
+      "label": "Webmail",
+      "sublabel": "Iris Pay UI",
+      "pos": [
+        240,
+        440
+      ],
+      "size": [
+        130,
+        60
+      ]
+    },
+    {
+      "id": "auth_security",
+      "type": "security",
+      "label": "Identity & Auth",
+      "sublabel": "Argon2id + TOTP + FIDO2 + Delegates",
+      "pos": [
+        490,
+        90
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "tag": "Tenant Authorization"
+    },
+    {
+      "id": "api_core",
+      "type": "backend",
+      "label": "Miautrix Web API",
+      "sublabel": "ASP.NET Core 10",
+      "pos": [
+        490,
+        240
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "tag": "Modular Monolith"
+    },
+    {
+      "id": "mail_flow",
+      "type": "backend",
+      "label": "Mail Engine & Queue",
+      "sublabel": "SMTP / IMAP / Sieve / Queue",
+      "pos": [
+        490,
+        400
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "tag": "Pipeline"
+    },
+    {
+      "id": "antispam",
+      "type": "security",
+      "label": "Spam & Malware",
+      "sublabel": "Rules + ClamAV Seam",
+      "pos": [
+        490,
+        550
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "tag": "Quarantine"
+    },
+    {
+      "id": "postgres",
+      "type": "database",
+      "label": "PostgreSQL 17",
+      "sublabel": "Metadata + FTS",
+      "brand": "postgresql",
+      "pos": [
+        760,
+        240
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "mail_storage",
+      "type": "cloud",
+      "label": "Mail Storage",
+      "sublabel": "MIME Body Store",
+      "pos": [
+        760,
+        400
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "worker",
+      "type": "backend",
+      "label": "Miautrix Worker",
+      "sublabel": "SMTP / IMAP / Queue Dispatcher",
+      "pos": [
+        490,
+        470
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "tag": "Worker Service"
+    },
+    {
+      "id": "cloudflare_worker",
+      "type": "cloud",
+      "label": "Cloudflare Worker",
+      "sublabel": "Per-domain relay / POST /send",
+      "pos": [
+        760,
+        550
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "tag": "Optional Transport"
+    }
   ],
   "boundaries": [
-    { "kind": "region", "label": ".NET 10 Modular Core & Engine", "wraps": ["auth_security", "api_core", "mail_flow", "antispam"], "pad": 20 },
-    { "kind": "security-group", "label": "Persistence Tier", "wraps": ["postgres", "mail_storage"], "pad": 16 }
+    {
+      "kind": "region",
+      "label": ".NET 10 Modular Core & Engine",
+      "wraps": [
+        "auth_security",
+        "api_core",
+        "mail_flow",
+        "antispam",
+        "worker"
+      ],
+      "pad": 20
+    },
+    {
+      "kind": "security-group",
+      "label": "Persistence Tier",
+      "wraps": [
+        "postgres",
+        "mail_storage"
+      ],
+      "pad": 16
+    },
+    {
+      "kind": "region",
+      "label": "External Transport",
+      "wraps": [
+        "cloudflare_worker"
+      ],
+      "pad": 16
+    }
   ],
   "connections": [
-    { "id": "admin-to-webadmin", "from": "admin_user", "to": "web_admin", "label": "HTTPS", "variant": "emphasis" },
-    { "id": "admin-to-desktop", "from": "admin_user", "to": "desktop_admin" },
-    { "id": "admin-to-cli", "from": "admin_user", "to": "cli" },
-    { "id": "user-to-webmail", "from": "mail_user", "to": "webmail", "label": "HTTPS", "variant": "emphasis" },
-    { "id": "webadmin-to-api", "from": "web_admin", "to": "api_core", "label": "REST /api/v1" },
-    { "id": "desktop-to-api", "from": "desktop_admin", "to": "api_core" },
-    { "id": "cli-to-api", "from": "cli", "to": "api_core" },
-    { "id": "webmail-to-api", "from": "webmail", "to": "api_core", "label": "JMAP / REST" },
-    { "id": "api-to-auth", "from": "api_core", "to": "auth_security", "label": "authorize", "variant": "security" },
-    { "id": "api-to-db", "from": "api_core", "to": "postgres", "label": "EF Core 10", "variant": "emphasis" },
-    { "id": "mailflow-to-antispam", "from": "mail_flow", "to": "antispam", "label": "scan pipeline", "variant": "security", "labelDy": 24 },
-    { "id": "mailflow-to-db", "from": "mail_flow", "to": "postgres", "label": "state & queue", "fromSide": "top", "toSide": "bottom" },
-    { "id": "mailflow-to-storage", "from": "mail_flow", "to": "mail_storage", "label": "MIME I/O", "route": "straight" }
+    {
+      "id": "admin-to-webadmin",
+      "from": "admin_user",
+      "to": "web_admin",
+      "label": "HTTPS",
+      "variant": "emphasis"
+    },
+    {
+      "id": "admin-to-desktop",
+      "from": "admin_user",
+      "to": "desktop_admin"
+    },
+    {
+      "id": "admin-to-cli",
+      "from": "admin_user",
+      "to": "cli"
+    },
+    {
+      "id": "user-to-webmail",
+      "from": "mail_user",
+      "to": "webmail",
+      "label": "HTTPS",
+      "variant": "emphasis"
+    },
+    {
+      "id": "webadmin-to-api",
+      "from": "web_admin",
+      "to": "api_core",
+      "label": "REST /api/v1"
+    },
+    {
+      "id": "desktop-to-api",
+      "from": "desktop_admin",
+      "to": "api_core"
+    },
+    {
+      "id": "cli-to-api",
+      "from": "cli",
+      "to": "api_core"
+    },
+    {
+      "id": "webmail-to-api",
+      "from": "webmail",
+      "to": "api_core",
+      "label": "JMAP / REST"
+    },
+    {
+      "id": "api-to-auth",
+      "from": "api_core",
+      "to": "auth_security",
+      "label": "authorize",
+      "variant": "security"
+    },
+    {
+      "id": "api-to-db",
+      "from": "api_core",
+      "to": "postgres",
+      "label": "EF Core 10",
+      "variant": "emphasis"
+    },
+    {
+      "id": "mailflow-to-antispam",
+      "from": "mail_flow",
+      "to": "antispam",
+      "label": "scan pipeline",
+      "variant": "security",
+      "labelDy": 24
+    },
+    {
+      "id": "mailflow-to-db",
+      "from": "mail_flow",
+      "to": "postgres",
+      "label": "state & queue",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "mailflow-to-storage",
+      "from": "mail_flow",
+      "to": "mail_storage",
+      "label": "MIME I/O",
+      "route": "straight"
+    },
+    {
+      "id": "mailflow-to-worker",
+      "from": "mail_flow",
+      "to": "worker",
+      "label": "queued mail",
+      "variant": "emphasis"
+    },
+    {
+      "id": "worker-to-db",
+      "from": "worker",
+      "to": "postgres",
+      "label": "smtp_queue + attempts",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "worker-to-cloudflare",
+      "from": "worker",
+      "to": "cloudflare_worker",
+      "label": "tenant primary relay /send",
+      "variant": "emphasis"
+    },
+    {
+      "id": "cloudflare-to-recipient",
+      "from": "cloudflare_worker",
+      "to": "mail_user",
+      "label": "external delivery",
+      "variant": "emphasis"
+    }
   ],
   "cards": [
     {
@@ -75,6 +414,7 @@
       "items": [
         "Single deployable process with strict module boundaries",
         "Clean Architecture: Domain, Application, Infrastructure",
+        "One authorization helper gates every tenant-scoped read and write",
         "Pipeline-based Mail Flow with Spam & Malware seams"
       ]
     },
@@ -83,8 +423,18 @@
       "title": "Data & Security",
       "items": [
         "Strict multi-tenant isolation (404 on cross-tenant)",
+        "Passwordless shared mailboxes with same-domain read/write delegates",
         "PostgreSQL 17 for schema, queue, and full-text search",
         "Argon2id password hashing, TOTP, and FIDO2 WebAuthn"
+      ]
+    },
+    {
+      "dot": "orange",
+      "title": "Cloudflare Transport",
+      "items": [
+        "Per-domain transport mode: local or cloudflare",
+        "External recipients relay through the tenant primary Cloudflare Worker",
+        "Queue retry/backoff/dead-lettering remains in Miautrix"
       ]
     }
   ]

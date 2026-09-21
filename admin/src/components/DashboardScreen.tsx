@@ -11,19 +11,42 @@ interface DashboardStats {
   systemHealth: string;
   uptimeSeconds: number;
   tenantCount: number;
+
+  // Outbound transport metrics (combined “All”)
+  outboundDelivered24h: number;
+  outboundDeliveredTotal: number;
+  successfulAttempts24h: number;
+  failedAttempts24h: number;
+  totalAttempts24h: number;
+  retryAttempts24h: number;
+  deliverySuccessRate24h: number;
+  lastDeliveryAttemptAt?: string | null;
+  lastDeliveryResponseCode?: number | null;
+  lastDeliveryError?: string | null;
 }
 
 export const DashboardScreen: React.FC = () => {
   const [stats, setStats] = useState<DashboardStats>({
-    activeQueued: 14,
-    retrying: 3,
-    deadLetters: 1,
-    delivered24h: 12480,
-    quarantined24h: 142,
-    spamBlocked24h: 589,
+    activeQueued: 0,
+    retrying: 0,
+    deadLetters: 0,
+    delivered24h: 0,
+    quarantined24h: 0,
+    spamBlocked24h: 0,
     systemHealth: 'Healthy',
-    uptimeSeconds: 86400 * 14,
-    tenantCount: 5,
+    uptimeSeconds: 0,
+    tenantCount: 1,
+
+    outboundDelivered24h: 0,
+    outboundDeliveredTotal: 0,
+    successfulAttempts24h: 0,
+    failedAttempts24h: 0,
+    totalAttempts24h: 0,
+    retryAttempts24h: 0,
+    deliverySuccessRate24h: 100,
+    lastDeliveryAttemptAt: null,
+    lastDeliveryResponseCode: null,
+    lastDeliveryError: null,
   });
   const [loading, setLoading] = useState<boolean>(false);
 
@@ -35,6 +58,10 @@ export const DashboardScreen: React.FC = () => {
         const res = await apiClient.getDashboardSummary();
         if (res && res.data) {
           const d = res.data;
+
+          const breakdown = d.transport_breakdown ?? [];
+          const all = breakdown.find((x) => x.transport_mode === 'all') ?? breakdown[0];
+
           setStats({
             activeQueued: d.active_queued ?? 0,
             retrying: d.retrying ?? 0,
@@ -45,6 +72,17 @@ export const DashboardScreen: React.FC = () => {
             systemHealth: d.system_health ?? 'Healthy',
             uptimeSeconds: d.uptime_seconds ?? 0,
             tenantCount: d.tenant_count ?? 1,
+
+            outboundDelivered24h: all?.outbound_delivered24h ?? 0,
+            outboundDeliveredTotal: all?.outbound_delivered_total ?? 0,
+            successfulAttempts24h: all?.successful_attempts24h ?? 0,
+            failedAttempts24h: all?.failed_attempts24h ?? 0,
+            totalAttempts24h: all?.total_attempts24h ?? 0,
+            retryAttempts24h: all?.retry_attempts24h ?? 0,
+            deliverySuccessRate24h: all?.delivery_success_rate24h ?? 100,
+            lastDeliveryAttemptAt: all?.last_delivery_attempt_at ?? null,
+            lastDeliveryResponseCode: all?.last_delivery_response_code ?? null,
+            lastDeliveryError: all?.last_delivery_error ?? null,
           });
         }
       } catch {
@@ -89,7 +127,7 @@ export const DashboardScreen: React.FC = () => {
         <div className="card metric-card">
           <div className="metric-label">Delivered (24h)</div>
           <div className="metric-value text-success">{loading ? '...' : stats.delivered24h.toLocaleString()}</div>
-          <div className="metric-sub">99.8% on-time delivery</div>
+          <div className="metric-sub">Mailbox delivery volume (24h)</div>
         </div>
       </div>
 
@@ -122,8 +160,8 @@ export const DashboardScreen: React.FC = () => {
               <span className="badge badge-error">{stats.quarantined24h}</span>
             </div>
             <div className="status-item">
-              <span className="status-item-label">DKIM / SPF Failures</span>
-              <span className="badge badge-neutral">28</span>
+              <span className="status-item-label">Outbound delivery success rate</span>
+              <span className="badge badge-neutral">{Math.round((stats.deliverySuccessRate24h ?? 0) * 10) / 10}%</span>
             </div>
             <div className="status-item">
               <span className="status-item-label">Active Tenants</span>

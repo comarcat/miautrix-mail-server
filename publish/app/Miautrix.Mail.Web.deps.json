@@ -14,6 +14,7 @@
           "Miautrix.Mail.Identity": "1.0.0",
           "Miautrix.Mail.MailFlow": "1.0.0",
           "Miautrix.Mail.Persistence": "1.0.0",
+          "Miautrix.Mail.Protocols.Smtp": "1.0.0",
           "Miautrix.Mail.Queue": "1.0.0",
           "Miautrix.Mail.Security": "1.0.0",
           "Microsoft.AspNetCore.OpenApi": "10.0.4",
@@ -1478,6 +1479,7 @@
         "dependencies": {
           "Miautrix.Mail.Domain": "1.0.0",
           "Miautrix.Mail.Persistence": "1.0.0",
+          "Miautrix.Mail.Storage": "1.0.0",
           "Microsoft.EntityFrameworkCore": "10.0.4"
         },
         "runtime": {
@@ -1513,6 +1515,20 @@
           }
         }
       },
+      "Miautrix.Mail.Protocols.Smtp/1.0.0": {
+        "dependencies": {
+          "Miautrix.Mail.Application": "1.0.0",
+          "Miautrix.Mail.Domain": "1.0.0",
+          "Miautrix.Mail.Persistence": "1.0.0",
+          "Miautrix.Mail.Queue": "1.0.0"
+        },
+        "runtime": {
+          "Miautrix.Mail.Protocols.Smtp.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      },
       "Miautrix.Mail.Queue/1.0.0": {
         "dependencies": {
           "Miautrix.Mail.Domain": "1.0.0",
@@ -1532,6 +1548,17 @@
         },
         "runtime": {
           "Miautrix.Mail.Security.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      },
+      "Miautrix.Mail.Storage/1.0.0": {
+        "dependencies": {
+          "Miautrix.Mail.Domain": "1.0.0"
+        },
+        "runtime": {
+          "Miautrix.Mail.Storage.dll": {
             "assemblyVersion": "1.0.0.0",
             "fileVersion": "1.0.0.0"
           }
@@ -1662,12 +1689,22 @@
       "serviceable": false,
       "sha512": ""
     },
+    "Miautrix.Mail.Protocols.Smtp/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
     "Miautrix.Mail.Queue/1.0.0": {
       "type": "project",
       "serviceable": false,
       "sha512": ""
     },
     "Miautrix.Mail.Security/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "Miautrix.Mail.Storage/1.0.0": {
       "type": "project",
       "serviceable": false,
       "sha512": ""

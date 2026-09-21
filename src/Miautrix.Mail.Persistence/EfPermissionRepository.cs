@@ -34,6 +34,26 @@ public sealed class EfPermissionRepository : IPermissionRepository
             .Any();
     }
 
+    public bool IsMailboxOwner(Guid tenantId, Guid userId, Guid mailboxId)
+    {
+        return _db.Users
+            .Where(u => u.TenantId == tenantId && u.Id == userId)
+            .Join(
+                _db.Mailboxes.Where(m => m.TenantId == tenantId && m.Id == mailboxId && m.Kind == "user"),
+                u => u.Email.ToLower(),
+                m => m.Address.ToLower(),
+                (u, m) => m)
+            .Any();
+    }
+
+    public string? GetMailboxDelegateAccess(Guid tenantId, Guid userId, Guid mailboxId)
+    {
+        return _db.MailboxDelegates
+            .Where(d => d.TenantId == tenantId && d.UserId == userId && d.MailboxId == mailboxId)
+            .Select(d => d.AccessLevel)
+            .FirstOrDefault();
+    }
+
     public int GetTenantOwnerCount(Guid tenantId)
     {
         var ownerRoleIds = _db.Roles

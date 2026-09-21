@@ -87,7 +87,7 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({
 
   const handleRetry = async (id: string) => {
     try {
-      const res = await client.retryQueueItem(id);
+      const res = await client.retryQueueItem(id, 'Manual retry from Admin UI');
       setActionMessage(res.message || 'Queued for immediate retry');
       fetchQueuePage(currentCursor, statusFilter, activeSearch);
     } catch (err: unknown) {

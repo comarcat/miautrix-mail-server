@@ -15,6 +15,14 @@ describe('Webmail SPA UI Flow', () => {
       token: 'mock-jwt-token',
     });
 
+    vi.spyOn(webmailClient, 'me').mockResolvedValue({
+      data: {
+        id: 'u1',
+        email: 'alex.vance@miautrix.org',
+        must_change_password: false,
+      },
+    });
+
     render(<App />);
 
     expect(screen.getByText('Miautrix Webmail')).toBeInTheDocument();
@@ -32,6 +40,62 @@ describe('Webmail SPA UI Flow', () => {
     await waitFor(() => {
       expect(screen.getByRole('navigation', { name: /main navigation/i })).toBeInTheDocument();
     });
+  });
+
+  it('renders change password form when must_change_password is true after login', async () => {
+    vi.spyOn(webmailClient, 'login').mockResolvedValue({
+      data: { id: 'u1', email: 'alex.vance@miautrix.org' },
+      token: 'mock-jwt-token',
+    });
+
+    const meSpy = vi.spyOn(webmailClient, 'me');
+    meSpy
+      .mockResolvedValueOnce({
+        data: {
+          id: 'u1',
+          email: 'alex.vance@miautrix.org',
+          must_change_password: true,
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          id: 'u1',
+          email: 'alex.vance@miautrix.org',
+          must_change_password: false,
+        },
+      });
+
+    vi.spyOn(webmailClient, 'changePassword').mockResolvedValue({ data: {} });
+
+    render(<App />);
+
+    fireEvent.change(screen.getByLabelText(/email address/i), {
+      target: { value: 'alex.vance@miautrix.org' },
+    });
+    fireEvent.change(screen.getByLabelText(/password/i), {
+      target: { value: 'password123' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /change password/i })).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText(/current password/i), {
+      target: { value: 'old-password' },
+    });
+    fireEvent.change(screen.getByLabelText(/new password/i), {
+      target: { value: 'new-password' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /update password/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('navigation', { name: /main navigation/i })).toBeInTheDocument();
+    });
+
+    expect(meSpy).toHaveBeenCalled();
   });
 
   describe('Authenticated Session', () => {

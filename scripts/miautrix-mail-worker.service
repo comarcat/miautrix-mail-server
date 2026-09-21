@@ -1,0 +1,27 @@
+[Unit]
+Description=Miautrix Mail Worker (SMTP/IMAP Protocol Listener)
+After=network.target miautrix-mail.service
+Requires=miautrix-mail.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/miautrix-mail/worker
+ExecStart=/opt/miautrix-mail/worker/Miautrix.Mail.Worker
+Restart=on-failure
+RestartSec=5
+
+# SMTP submission/inbound (25, 465, 587) and IMAPS (993) are all below 1024, so binding them
+# requires CAP_NET_BIND_SERVICE. Grant exactly that one capability rather than running the
+# listener as root: a compromise in the protocol parsers stays unprivileged.
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+# Non-fatal if absent: a missing file here would otherwise fail the unit with the opaque
+# "unavailable resources or another system error" message instead of the Worker's own
+# explicit "MIAUTRIX_DB_CONNECTION is required in production" line.
+# Provision it with scripts/lxc-install-worker-env.sh.
+EnvironmentFile=-/opt/miautrix-mail/.env
+
+[Install]
+WantedBy=multi-user.target

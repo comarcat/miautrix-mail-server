@@ -40,6 +40,17 @@ public sealed class IdempotencyMiddleware
             return;
         }
 
+        // The Cloudflare inbound webhook is machine-to-machine: the Worker posts raw MIME and has
+        // no notion of this header, so requiring it would reject every relayed message with
+        // "idempotency_key_required". Retry deduplication for this path belongs on the message
+        // itself (Message-Id), which is the mail layer's identity to define, not a header we ask
+        // the transport to invent.
+        if (path.StartsWith("/api/v1/inbound", StringComparison.OrdinalIgnoreCase))
+        {
+            await _next(context);
+            return;
+        }
+
         var idempotencyKey = context.Request.Headers["Idempotency-Key"].FirstOrDefault();
         if (string.IsNullOrWhiteSpace(idempotencyKey))
         {

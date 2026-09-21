@@ -18,6 +18,10 @@ public class IsolationTests
         public int GetTenantOwnerCount(Guid tenantId) => 1;
 
         public bool IsUserTenantOwner(Guid tenantId, Guid userId) => true;
+
+        public bool IsMailboxOwner(Guid tenantId, Guid userId, Guid mailboxId) => false;
+
+        public string? GetMailboxDelegateAccess(Guid tenantId, Guid userId, Guid mailboxId) => null;
     }
 
     [Fact]

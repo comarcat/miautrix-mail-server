@@ -253,6 +253,14 @@ namespace Miautrix.Mail.Persistence.Migrations
                 {
                     b.HasBaseType("Miautrix.Mail.Domain.TenantScopedEntityBase");
 
+                    b.Property<string>("CloudflareWorkerUrl")
+                        .HasColumnType("text")
+                        .HasColumnName("cloudflare_worker_url");
+
+                    b.Property<string>("CloudflareZoneId")
+                        .HasColumnType("text")
+                        .HasColumnName("cloudflare_zone_id");
+
                     b.Property<string>("DkimPublicKey")
                         .HasColumnType("text")
                         .HasColumnName("dkim_public_key");
@@ -281,6 +289,13 @@ namespace Miautrix.Mail.Persistence.Migrations
                     b.Property<string>("SpfRecord")
                         .HasColumnType("text")
                         .HasColumnName("spf_record");
+
+                    b.Property<string>("TransportMode")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("local")
+                        .HasColumnName("transport_mode");
 
                     b.ToTable("domains", (string)null);
                 });
@@ -478,6 +493,16 @@ namespace Miautrix.Mail.Persistence.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_active");
 
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
                     b.Property<long>("QuotaBytes")
                         .HasColumnType("bigint")
                         .HasColumnName("quota_bytes");
@@ -487,6 +512,30 @@ namespace Miautrix.Mail.Persistence.Migrations
                         .HasColumnName("used_bytes");
 
                     b.ToTable("mailboxes", (string)null);
+                });
+
+            modelBuilder.Entity("Miautrix.Mail.Domain.MailboxDelegate", b =>
+                {
+                    b.HasBaseType("Miautrix.Mail.Domain.TenantScopedEntityBase");
+
+                    b.Property<string>("AccessLevel")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("access_level");
+
+                    b.Property<Guid>("MailboxId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("mailbox_id");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasIndex("MailboxId", "UserId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_mailbox_delegates_mailbox_id_user_id");
+
+                    b.ToTable("mailbox_delegates", (string)null);
                 });
 
             modelBuilder.Entity("Miautrix.Mail.Domain.MalwareVerdict", b =>
@@ -962,6 +1011,10 @@ namespace Miautrix.Mail.Persistence.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean")
                         .HasColumnName("is_active");
+
+                    b.Property<bool>("IsService")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_service");
 
                     b.Property<string>("Name")
                         .IsRequired()

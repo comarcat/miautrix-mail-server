@@ -40,11 +40,17 @@ export interface DomainItem {
   dmarc_record?: string;
   is_primary: boolean;
   created_at: string;
+  transport_mode: string;
+  cloudflare_zone_id?: string | null;
+  cloudflare_worker_url?: string | null;
 }
 
 export interface CreateDomainRequest {
   name: string;
   is_primary?: boolean;
+  transport_mode?: string;
+  cloudflare_zone_id?: string;
+  cloudflare_worker_url?: string;
 }
 
 export interface UpdateDomainRequest {
@@ -53,14 +59,19 @@ export interface UpdateDomainRequest {
   dkim_selector?: string;
   spf_record?: string;
   dmarc_record?: string;
+  transport_mode?: string;
+  cloudflare_zone_id?: string;
+  cloudflare_worker_url?: string;
 }
 
 export interface VerifyDomainResult {
   is_verified: boolean;
   message: string;
-  dkim_status: string;
-  spf_status: string;
-  dmarc_status: string;
+  transport_mode: string;
+  dkim_status?: string | null;
+  spf_status?: string | null;
+  dmarc_status?: string | null;
+  worker_status?: string | null;
 }
 
 // User Types
@@ -73,6 +84,39 @@ export interface AdminUserItem {
   mailbox_quota_bytes: number;
   mailbox_used_bytes: number;
   created_at: string;
+  must_change_password: boolean;
+  is_service: boolean;
+  mailbox_kind: string;
+}
+
+export interface MailboxDelegate {
+  user_id: string;
+  email: string;
+  name: string;
+  access_level: 'read' | 'write';
+}
+
+export interface MailboxDelegateRequest {
+  user_id: string;
+  access_level: 'read' | 'write';
+}
+
+export interface SharedMailbox {
+  id: string;
+  email: string;
+  name: string;
+  mailbox_quota_bytes: number;
+  mailbox_used_bytes: number;
+  is_active: boolean;
+  created_at: string;
+  delegates: MailboxDelegate[];
+}
+
+export interface CreateSharedMailboxRequest {
+  email: string;
+  name: string;
+  quota_bytes?: number;
+  delegates?: MailboxDelegateRequest[];
 }
 
 export interface CreateUserRequest {
@@ -81,13 +125,59 @@ export interface CreateUserRequest {
   password?: string;
   role?: string;
   quota_bytes?: number;
+  must_change_password?: boolean;
+  is_service?: boolean;
+  mailbox_kind?: string;
 }
 
 export interface UpdateUserRequest {
+  email?: string;
   name?: string;
   is_active?: boolean;
   role?: string;
   quota_bytes?: number;
+  must_change_password?: boolean;
+  is_service?: boolean;
+}
+
+export interface ResetPasswordRequest {
+  password?: string;
+  must_change_password: boolean;
+  generate_password?: boolean;
+}
+
+export interface ResetPasswordResult {
+  generated_password?: string | null;
+}
+
+export interface OrphanMailboxItem {
+  id: string;
+  email: string;
+  name: string;
+  kind: string;
+  mailbox_quota_bytes: number;
+  mailbox_used_bytes: number;
+  is_active: boolean;
+  created_at: string;
+  message_count: number;
+  attachment_count: number;
+}
+
+export interface AssignMailboxRequest {
+  address: string;
+  name?: string;
+  delegates?: MailboxDelegateRequest[];
+  quota_bytes?: number;
+}
+
+export interface DeleteMailboxRequest {
+  confirm_address: string;
+}
+
+export interface DeleteMailboxResult {
+  messages_deleted: number;
+  attachments_deleted: number;
+  blobs_deleted: number;
 }
 
 // Quarantine Types
@@ -129,6 +219,23 @@ export interface MailFlowRuleItem {
 }
 
 // System & Telemetry
+export interface TransportDashboardMetric {
+  transport_mode: string;
+  active_queued: number;
+  retrying: number;
+  dead_letters: number;
+  outbound_delivered24h: number;
+  outbound_delivered_total: number;
+  successful_attempts24h: number;
+  failed_attempts24h: number;
+  total_attempts24h: number;
+  retry_attempts24h: number;
+  delivery_success_rate24h: number;
+  last_delivery_attempt_at?: string | null;
+  last_delivery_response_code?: number | null;
+  last_delivery_error?: string | null;
+}
+
 export interface DashboardSummary {
   active_queued: number;
   retrying: number;
@@ -139,6 +246,9 @@ export interface DashboardSummary {
   system_health: string;
   uptime_seconds: number;
   tenant_count: number;
+
+  // Transport-aware outbound delivery metrics
+  transport_breakdown: TransportDashboardMetric[];
 }
 
 export interface SystemInfo {

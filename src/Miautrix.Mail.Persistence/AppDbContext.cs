@@ -30,6 +30,7 @@ public class AppDbContext : DbContext
     public DbSet<Invitation> Invitations => Set<Invitation>();
 
     public DbSet<Mailbox> Mailboxes => Set<Mailbox>();
+    public DbSet<MailboxDelegate> MailboxDelegates => Set<MailboxDelegate>();
     public DbSet<Folder> Folders => Set<Folder>();
     public DbSet<Message> Messages => Set<Message>();
     public DbSet<MessageRecipient> MessageRecipients => Set<MessageRecipient>();
@@ -106,6 +107,14 @@ public class AppDbContext : DbContext
             entity.Property(e => e.SpfRecord).HasColumnName("spf_record");
             entity.Property(e => e.DmarcRecord).HasColumnName("dmarc_record");
             entity.Property(e => e.IsPrimary).HasColumnName("is_primary");
+            // Defaulted so the migration backfills existing rows to "local" in the same statement:
+            // an EXPAND, safe to apply before the new code ships.
+            entity.Property(e => e.TransportMode)
+                .HasColumnName("transport_mode")
+                .HasDefaultValue(DomainTransportModes.Local)
+                .IsRequired();
+            entity.Property(e => e.CloudflareZoneId).HasColumnName("cloudflare_zone_id");
+            entity.Property(e => e.CloudflareWorkerUrl).HasColumnName("cloudflare_worker_url");
         });
 
         ConfigureTenantScoped<User>(modelBuilder, "users");
@@ -114,6 +123,7 @@ public class AppDbContext : DbContext
             entity.Property(e => e.Email).HasColumnName("email").IsRequired();
             entity.Property(e => e.Name).HasColumnName("name");
             entity.Property(e => e.IsActive).HasColumnName("is_active");
+            entity.Property(e => e.IsService).HasColumnName("is_service");
         });
 
         ConfigureTenantScoped<UserCredential>(modelBuilder, "user_credentials");
@@ -163,9 +173,23 @@ public class AppDbContext : DbContext
         {
             entity.Property(e => e.DomainId).HasColumnName("domain_id");
             entity.Property(e => e.Address).HasColumnName("address").IsRequired();
+            entity.Property(e => e.Name).HasColumnName("name").IsRequired();
+            entity.Property(e => e.Kind).HasColumnName("kind").IsRequired();
             entity.Property(e => e.QuotaBytes).HasColumnName("quota_bytes");
             entity.Property(e => e.UsedBytes).HasColumnName("used_bytes");
             entity.Property(e => e.IsActive).HasColumnName("is_active");
+        });
+
+        ConfigureTenantScoped<MailboxDelegate>(modelBuilder, "mailbox_delegates");
+        modelBuilder.Entity<MailboxDelegate>(entity =>
+        {
+            entity.Property(e => e.MailboxId).HasColumnName("mailbox_id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.AccessLevel).HasColumnName("access_level").IsRequired();
+
+            entity.HasIndex(e => new { e.MailboxId, e.UserId })
+                .IsUnique()
+                .HasDatabaseName("uq_mailbox_delegates_mailbox_id_user_id");
         });
 
         ConfigureTenantScoped<Folder>(modelBuilder, "folders");

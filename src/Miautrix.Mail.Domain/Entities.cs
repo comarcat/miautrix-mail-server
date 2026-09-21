@@ -31,12 +31,43 @@ public class Domain : TenantScopedEntityBase
     public string? SpfRecord { get; set; }
     public string? DmarcRecord { get; set; }
     public bool IsPrimary { get; set; }
+
+    /// <summary>
+    /// How this domain's SMTP traffic is relayed. <c>local</c> means the domain publishes its own
+    /// MX and TXT records and we bind the mail ports; <c>cloudflare</c> means Cloudflare relays
+    /// inbound and outbound SMTP through a Worker and manages the DNS records for us.
+    /// Cloudflare has no IMAP/POP3 product, so mailbox access stays local in both modes.
+    /// </summary>
+    public string TransportMode { get; set; } = DomainTransportModes.Local;
+
+    /// <summary>Cloudflare zone the domain belongs to. Not a secret — shown in the admin UI.</summary>
+    public string? CloudflareZoneId { get; set; }
+
+    /// <summary>Base URL of the deployed Cloudflare Worker that relays this domain's mail.</summary>
+    public string? CloudflareWorkerUrl { get; set; }
+}
+
+/// <summary>
+/// The values <see cref="Domain.TransportMode"/> may hold. Kept as constants rather than an enum
+/// so the column stays a plain string and adding a mode needs no destructive type migration.
+/// </summary>
+public static class DomainTransportModes
+{
+    /// <summary>MX points at us; we bind 25/465/587/993 and verification checks our own DNS records.</summary>
+    public const string Local = "local";
+
+    /// <summary>Cloudflare relays SMTP via a Worker; verification checks the Worker instead of DNS.</summary>
+    public const string Cloudflare = "cloudflare";
+
+    public static bool IsKnown(string? mode) =>
+        mode is Local or Cloudflare;
 }
 public class User : TenantScopedEntityBase
 {
     public string Email { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public bool IsActive { get; set; } = true;
+    public bool IsService { get; set; }
 }
 public class UserCredential : TenantScopedEntityBase
 {
@@ -80,9 +111,18 @@ public class Mailbox : TenantScopedEntityBase
 {
     public Guid DomainId { get; set; }
     public string Address { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Kind { get; set; } = "user";
     public long QuotaBytes { get; set; } = 10L * 1024 * 1024 * 1024;
     public long UsedBytes { get; set; }
     public bool IsActive { get; set; } = true;
+}
+
+public class MailboxDelegate : TenantScopedEntityBase
+{
+    public Guid MailboxId { get; set; }
+    public Guid UserId { get; set; }
+    public string AccessLevel { get; set; } = "read";
 }
 
 public class Folder : TenantScopedEntityBase

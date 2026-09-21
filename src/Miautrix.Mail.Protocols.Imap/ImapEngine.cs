@@ -21,6 +21,7 @@ public sealed partial class ImapSession
 {
     private readonly AppDbContext _dbContext;
     private readonly IMailStorage _storage;
+    private readonly IImapAuthenticator _authenticator;
 
     public Guid? TenantId { get; private set; }
     public Guid? MailboxId { get; private set; }
@@ -28,10 +29,11 @@ public sealed partial class ImapSession
     public Folder? SelectedFolder { get; private set; }
     public ImapState State { get; private set; } = ImapState.NotAuthenticated;
 
-    public ImapSession(AppDbContext dbContext, IMailStorage storage)
+    public ImapSession(AppDbContext dbContext, IMailStorage storage, IImapAuthenticator authenticator)
     {
         _dbContext = dbContext;
         _storage = storage;
+        _authenticator = authenticator;
     }
 
     [GeneratedRegex(@"^(\S+)\s+(\S+)(?:\s+(.*))?$", RegexOptions.Compiled)]
@@ -110,17 +112,17 @@ public sealed partial class ImapSession
         }
 
         var user = parts[0].Trim('"');
-        var mailbox = await _dbContext.Mailboxes
-            .FirstOrDefaultAsync(m => m.Address == user && m.IsActive, cancellationToken);
+        var password = parts[1].Trim('"');
 
-        if (mailbox == null)
+        var auth = await _authenticator.AuthenticateAsync(user, password, cancellationToken);
+        if (!auth.IsSuccess)
         {
-            return new ImapCommandResult(tag, "NO", "LOGIN failed: user not found", Array.Empty<string>());
+            return new ImapCommandResult(tag, "NO", "LOGIN failed: invalid credentials", Array.Empty<string>());
         }
 
-        TenantId = mailbox.TenantId;
-        MailboxId = mailbox.Id;
-        Username = mailbox.Address;
+        TenantId = auth.TenantId;
+        MailboxId = auth.MailboxId;
+        Username = user;
         State = ImapState.Authenticated;
 
         return new ImapCommandResult(tag, "OK", "LOGIN completed", Array.Empty<string>());

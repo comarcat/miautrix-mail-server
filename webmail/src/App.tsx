@@ -6,6 +6,7 @@ import { ContactsView } from './components/ContactsView';
 import { CalendarView } from './components/CalendarView';
 import { SieveRulesView } from './components/SieveRulesView';
 import { LoginView } from './components/LoginView';
+import { ChangePasswordView } from './components/ChangePasswordView';
 import { webmailClient } from './components/WebmailApiClient';
 import './webmail.css';
 
@@ -166,6 +167,7 @@ export const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isInitializing, setIsInitializing] = useState<boolean>(true);
   const [currentUserEmail, setCurrentUserEmail] = useState<string>('alex.vance@miautrix.org');
+  const [mustChangePassword, setMustChangePassword] = useState<boolean>(false);
 
   const [activeTab, setActiveTab] = useState<'inbox' | 'compose' | 'contacts' | 'calendar' | 'rules'>('inbox');
   const [messages, setMessages] = useState<EmailMessage[]>(INITIAL_MESSAGES);
@@ -175,6 +177,7 @@ export const App: React.FC = () => {
       const token = webmailClient.getToken();
       if (!token) {
         setIsAuthenticated(false);
+        setMustChangePassword(false);
         setIsInitializing(false);
         return;
       }
@@ -182,9 +185,14 @@ export const App: React.FC = () => {
       try {
         const res = await webmailClient.me();
         setCurrentUserEmail(res.data.email || 'alex.vance@miautrix.org');
+
+        const flag = !!(res.data.must_change_password ?? res.data.mustChangePassword);
+        setMustChangePassword(flag);
+
         setIsAuthenticated(true);
       } catch {
         setIsAuthenticated(false);
+        setMustChangePassword(false);
       } finally {
         setIsInitializing(false);
       }
@@ -194,6 +202,7 @@ export const App: React.FC = () => {
 
     const handleAuthExpired = () => {
       setIsAuthenticated(false);
+      setMustChangePassword(false);
     };
 
     window.addEventListener('miautrix:auth:expired', handleAuthExpired);
@@ -205,6 +214,7 @@ export const App: React.FC = () => {
   const handleSignOut = () => {
     webmailClient.logout().then(() => {
       setIsAuthenticated(false);
+      setMustChangePassword(false);
     });
   };
 
@@ -242,9 +252,27 @@ export const App: React.FC = () => {
   if (!isAuthenticated) {
     return (
       <LoginView
-        onLoginSuccess={(email) => {
-          setCurrentUserEmail(email);
+        onLoginSuccess={async (email) => {
+          const res = await webmailClient.me();
+          setCurrentUserEmail(res.data.email || email);
+
+          const flag = !!(res.data.must_change_password ?? res.data.mustChangePassword);
+          setMustChangePassword(flag);
+
           setIsAuthenticated(true);
+        }}
+      />
+    );
+  }
+
+  if (mustChangePassword) {
+    return (
+      <ChangePasswordView
+        onChanged={async () => {
+          const res = await webmailClient.me();
+          setCurrentUserEmail(res.data.email || currentUserEmail);
+          const flag = !!(res.data.must_change_password ?? res.data.mustChangePassword);
+          setMustChangePassword(flag);
         }}
       />
     );

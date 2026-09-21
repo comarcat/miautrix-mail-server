@@ -11,4 +11,5 @@ public static class SecurityEventCodes
     public const string AuthPasswordChanged = "AUTH-4040";
     public const string AuthSessionRevoked = "AUTH-4050";
     public const string AuthPrivilegeEscalation = "AUTH-4060";
+    public const string AuthInboundWebhookRejected = "AUTH-4070";
 }

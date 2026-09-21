@@ -20,7 +20,18 @@ public interface IAdminService
     Task<AdminUserDto?> GetUserAsync(Guid tenantId, Guid userId, Guid targetUserId, CancellationToken ct = default);
     Task<AdminUserDto> CreateUserAsync(Guid tenantId, Guid userId, CreateUserRequest request, CancellationToken ct = default);
     Task<AdminUserDto?> UpdateUserAsync(Guid tenantId, Guid userId, Guid targetUserId, UpdateUserRequest request, CancellationToken ct = default);
+    Task<SharedMailboxDto> CreateSharedMailboxAsync(Guid tenantId, Guid userId, CreateSharedMailboxRequest request, CancellationToken ct = default);
+    Task<IReadOnlyList<SharedMailboxDto>> ListSharedMailboxesAsync(Guid tenantId, Guid userId, CancellationToken ct = default);
+    Task<SharedMailboxDto?> GetSharedMailboxAsync(Guid tenantId, Guid userId, Guid mailboxId, CancellationToken ct = default);
+    Task<SharedMailboxDto> UpdateSharedMailboxDelegatesAsync(Guid tenantId, Guid userId, Guid mailboxId, IReadOnlyList<MailboxDelegateRequest> delegates, CancellationToken ct = default);
+    Task<ResetPasswordResult?> ResetPasswordAsync(Guid tenantId, Guid userId, Guid targetUserId, ResetPasswordRequest request, CancellationToken ct = default);
     Task<bool> DeleteUserAsync(Guid tenantId, Guid userId, Guid targetUserId, CancellationToken ct = default);
+
+    // Orphan mailboxes
+    Task<IReadOnlyList<OrphanMailboxDto>> ListOrphanMailboxesAsync(Guid tenantId, Guid userId, CancellationToken ct = default);
+    Task<SharedMailboxDto> AssignMailboxAsync(Guid tenantId, Guid userId, Guid mailboxId, AssignMailboxRequest request, CancellationToken ct = default);
+    Task<DeleteMailboxResult> DeleteMailboxAsync(Guid tenantId, Guid userId, Guid mailboxId, DeleteMailboxRequest request, CancellationToken ct = default);
+    Task<MailboxArchiveDto> ExportMailboxAsync(Guid tenantId, Guid userId, Guid mailboxId, CancellationToken ct = default);
 
     // Quarantine
     Task<IReadOnlyList<QuarantineItemDto>> ListQuarantineAsync(Guid tenantId, Guid userId, QuarantineFilter filter, CancellationToken ct = default);

@@ -3,10 +3,15 @@ using Miautrix.Mail.Application.Admin;
 using Miautrix.Mail.Application.Auth;
 using Miautrix.Mail.Application.Mail;
 using Miautrix.Mail.Application.Queue;
+using Miautrix.Mail.Application.Transport;
 using Miautrix.Mail.Identity;
 using Miautrix.Mail.Infrastructure.Backup;
+using Miautrix.Mail.Infrastructure.MailboxArchiving;
 using Miautrix.Mail.Persistence;
+using Miautrix.Mail.Protocols.Smtp;
+using Miautrix.Mail.Queue;
 using Miautrix.Mail.Security;
+using Miautrix.Mail.Storage;
 using Miautrix.Mail.Web.Contracts;
 using Miautrix.Mail.Web.Infrastructure;
 using Microsoft.AspNetCore.Http;
@@ -40,9 +45,32 @@ public class Program
             backupDirectory = "/opt/miautrix-mail/backups";
         }
 
+        // Content-addressed blob store. Must resolve to the same directory the IMAP/SMTP
+        // pipeline writes to, or exports and blob cleanup operate on the wrong files.
+        var storageDirectory = Environment.GetEnvironmentVariable("MIAUTRIX_STORAGE_DIR");
+        if (string.IsNullOrWhiteSpace(storageDirectory))
+        {
+            storageDirectory = Path.Combine(AppContext.BaseDirectory, "mail_data");
+        }
+
         builder.Services.AddSingleton<ISecurityEventSink, InMemorySecurityEventSink>();
         builder.Services.AddSingleton<IBackupService, BackupService>();
         builder.Services.AddSingleton(new BackupOptions(backupDirectory));
+        builder.Services.AddSingleton<IMailStorage>(new FileSystemMailStorage(storageDirectory));
+        builder.Services.AddSingleton<IMailboxArchiveService, MailboxArchiveService>();
+
+        // Inbound webhook shared secret. Deliberately not fatal when absent: the controller fails
+        // closed (rejects every request), which keeps a deployment that has not set up Cloudflare
+        // serving the REST API and port 25 as before.
+        var inboundToken = Environment.GetEnvironmentVariable("MIAUTRIX_INBOUND_TOKEN");
+        builder.Services.AddSingleton(new InboundWebhookOptions { Token = inboundToken });
+
+        // The inbound webhook feeds the same handler chain the SMTP listeners use, so a
+        // Cloudflare-relayed message is validated, queued and stored identically.
+        builder.Services.AddSingleton<IRetryPolicy, ExponentialBackoffWithJitterRetryPolicy>();
+        builder.Services.AddScoped<ISmtpQueueManager, SmtpQueueManager>();
+        builder.Services.AddScoped<ISmtpDomainValidator, SmtpDomainValidator>();
+        builder.Services.AddScoped<ISmtpInboundHandler, SmtpInboundHandler>();
 
         builder.Services.AddSingleton<IPasswordHasher, Argon2idPasswordHasher>();
         builder.Services.AddSingleton<ITotpService, TotpService>();
@@ -54,6 +82,14 @@ public class Program
         builder.Services.AddScoped<IMessageService, MessageService>();
         builder.Services.AddScoped<IAuthService, AuthService>();
         builder.Services.AddScoped<IAdminService, AdminService>();
+
+        // Cloudflare verify probe. The web app never dispatches queued mail, so it registers only
+        // the probe side of the transport, not IOutboundMailTransport.
+        builder.Services.AddHttpClient();
+        builder.Services.AddSingleton(CloudflareEmailOptions.FromEnvironment());
+        builder.Services.AddSingleton<CloudflareApiMailTransport>();
+        builder.Services.AddSingleton<ICloudflareTransport>(
+            sp => sp.GetRequiredService<CloudflareApiMailTransport>());
 
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddSingleton<IRequestContextAccessor, HeaderRequestContextAccessor>();

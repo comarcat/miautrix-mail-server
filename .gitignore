@@ -19,3 +19,17 @@ Thumbs.db
 .codebase-memory/
 *.log
 *.tmp
+
+# Secrets — never committed. See .claude/rules/secrets-and-logging.md
+.env
+.env.*
+!.env.example
+# Cloudflare transport credentials fed to lxc-install-worker-env.sh.
+.cloudflare.env
+cloudflare.env
+!cloudflare.env.example
+certificates/
+*.pem
+*.key
+*.pfx
+*.p12

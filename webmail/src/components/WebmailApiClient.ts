@@ -160,6 +160,17 @@ export class WebmailApiClient {
     return this.request<{ data: any }>('/auth/me');
   }
 
+  async changePassword(currentPassword: string, newPassword: string): Promise<{ data?: any; message?: string }> {
+    return this.request<{ data?: any; message?: string }>('/auth/change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        current_password: currentPassword,
+        new_password: newPassword,
+      }),
+    });
+  }
+
   async getMailboxes(): Promise<{ data: Mailbox[] }> {
     return this.request<{ data: Mailbox[] }>('/mailboxes');
   }

@@ -15,11 +15,11 @@ using Xunit;
 namespace Miautrix.Mail.IntegrationTests.Api;
 
 [Trait("Category", "Api")]
-public sealed class AuthApiTests : IClassFixture<WebApplicationFactory<Program>>
+public sealed class AuthApiTests : IClassFixture<WebApplicationFactory<Miautrix.Mail.Web.Program>>
 {
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly WebApplicationFactory<Miautrix.Mail.Web.Program> _factory;
 
-    public AuthApiTests(WebApplicationFactory<Program> factory)
+    public AuthApiTests(WebApplicationFactory<Miautrix.Mail.Web.Program> factory)
     {
         _factory = factory;
     }

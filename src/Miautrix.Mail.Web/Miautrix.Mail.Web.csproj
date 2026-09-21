@@ -14,6 +14,9 @@
     <ProjectReference Include="..\Miautrix.Mail.Identity\Miautrix.Mail.Identity.csproj" />
     <ProjectReference Include="..\Miautrix.Mail.Queue\Miautrix.Mail.Queue.csproj" />
     <ProjectReference Include="..\Miautrix.Mail.MailFlow\Miautrix.Mail.MailFlow.csproj" />
+    <!-- The inbound webhook feeds ISmtpInboundHandler so Cloudflare-relayed mail takes the exact
+         same processing path as mail arriving on port 25. -->
+    <ProjectReference Include="..\Miautrix.Mail.Protocols.Smtp\Miautrix.Mail.Protocols.Smtp.csproj" />
   </ItemGroup>
 
   <ItemGroup>

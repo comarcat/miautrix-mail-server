@@ -36,13 +36,19 @@ Tasks completed and verified (T1–T13):
 
 ## 🛠️ Deploying & Updating
 
-We now provide automated PowerShell / Bash scripts to quickly update the database and push new web artifacts (Admin Console and Webmail frontend) to the LXC target server:
+We now provide automated PowerShell / Bash scripts to update the database and push backend, worker, Admin Console, and Webmail artifacts to the LXC target server:
 
 - **Database from scratch:** `./scripts/init-database-scratch.ps1` -- provisions the DB, applies EF schemas and seeds the `admin@miautrix.org` user.
-- **Update Database:** `./scripts/update-database.ps1` -- runs `dotnet ef database update` and the seeder safely.
-- **Upload Websites:** `./scripts/deploy-websites.ps1` -- builds React frontends and uploads via SCP to `/opt/miautrix-mail/`.
+- **Development Database Update:** `./scripts/update-database.ps1` -- applies migrations and runs the seeder against the explicitly supplied development connection.
+- **Production Database Update:** `./scripts/update-prod-database.ps1` or `./scripts/update-prod-database.sh` -- requires an explicit production connection/password, refuses localhost/dev/test targets, requires database-name confirmation, and passes EF Core `--connection` so migrations cannot silently target development.
+- **Full application deploy:** `./deploy.ps1` -- publishes `Miautrix.Mail.Web` to `/opt/miautrix-mail/app`, publishes `Miautrix.Mail.Worker` to `/opt/miautrix-mail/worker`, builds Admin/Webmail, copies all artifacts, and restarts `miautrix-mail`, `miautrix-mail-worker`, and `nginx`.
+- **Upload Websites only:** `./scripts/deploy-websites.ps1` -- builds React frontends and uploads via SCP to `/opt/miautrix-mail/`.
 
 See the scripts directory for the raw files or execute them from the repository root.
+
+## ✉️ Outbound transport model
+
+Tenant-owned domains define transport configuration. External recipient domains such as `gmail.com` are **not** added to the tenant `domains` table. For outbound delivery, `Miautrix.Mail.Worker` reads due `smtp_queue` rows and uses a recipient-specific Cloudflare domain configuration when present; otherwise it falls back to the tenant's primary Cloudflare domain/Worker as the relay. The queue Retry action posts JSON with reason `Manual retry from Admin UI` and only resets queue state; delivery attempts are made by the worker service.
 
 ## 🛠️ Tech Stack & Prerequisites
 
@@ -84,3 +90,5 @@ dotnet test Miautrix.Mail.sln --filter Category=Rules
 - **Sensitive Data Redaction:** Passwords, TOTP secrets, session tokens, private keys, and message bodies are never logged.
 - **Strict Transport Security:** SMTP authentication without encryption is unconditionally rejected (`530 5.7.0`).
 - **Open-Relay Protection:** Inbound messages for non-local recipients are rejected at `RCPT TO` with `550 5.7.1`.
+- **Shared Mailboxes:** Shared mailboxes are passwordless mailbox resources, not login identities. They do not create `User`, `UserCredential`, or `Membership` records; backend delegate authorization is enforced centrally with same-domain `read`/`write` access and 404 concealment.
+- **Production Migration Note:** The 2026-09-20 login 500 (`42703: column m.name does not exist`) was caused by production schema drift after adding `Mailbox.Name`. Fixed by `20260920223000_AddMailboxName` and production-safe DB update scripts; **migration applied to production on 2026-09-20**.

@@ -102,7 +102,7 @@ public sealed class ImapTests : IDisposable
         _dbContext.Mailboxes.Add(mailbox);
         await _dbContext.SaveChangesAsync();
 
-        var session = new ImapSession(_dbContext, _storage);
+        var session = new ImapSession(_dbContext, _storage, new StubImapAuthenticator(tenantId, mailboxId));
 
         // Act 1: Login
         var loginResult = await session.ExecuteCommandAsync($"a001 LOGIN \"{address}\" \"secret\"");
@@ -137,5 +137,26 @@ public sealed class ImapTests : IDisposable
         var fetchUntagged = string.Join("\n", fetchResult.UntaggedResponses);
         Assert.Contains("\\Seen", fetchUntagged);
         Assert.Contains("\\Flagged", fetchUntagged);
+    }
+
+    /// <summary>
+    /// Stands in for credential verification so the APPEND/FETCH tests stay focused on
+    /// protocol behaviour. Credential checks themselves are covered by
+    /// <see cref="ImapAuthenticatorTests"/>.
+    /// </summary>
+    private sealed class StubImapAuthenticator : IImapAuthenticator
+    {
+        private readonly Guid _tenantId;
+        private readonly Guid _mailboxId;
+
+        public StubImapAuthenticator(Guid tenantId, Guid mailboxId)
+        {
+            _tenantId = tenantId;
+            _mailboxId = mailboxId;
+        }
+
+        public Task<ImapAuthenticationResult> AuthenticateAsync(
+            string username, string password, CancellationToken cancellationToken = default)
+            => Task.FromResult(new ImapAuthenticationResult(true, _tenantId, _mailboxId));
     }
 }

@@ -107,8 +107,9 @@ public sealed class MailFlowTests : IDisposable
             SpamScore: 2.1
         );
 
-        // Count existing messages in DB before simulation
-        int initialMessageCount = await _dbContext.Messages.CountAsync();
+        // Count existing messages in DB before simulation (scoped to this tenant so
+        // parallel tests writing to the shared database cannot skew the assertion).
+        int initialMessageCount = await _dbContext.Messages.CountAsync(m => m.TenantId == tenantId);
 
         // Act: Run dry-run simulation
         var simulationResult = await _engine.SimulateAsync(tenantId, sampleMessage);
@@ -135,7 +136,7 @@ public sealed class MailFlowTests : IDisposable
         // 4. Input message and database messages are untouched / zero mutation
         Assert.Equal(originalSubject, sampleMessage.Subject);
         Assert.Single(sampleMessage.Headers);
-        int finalMessageCount = await _dbContext.Messages.CountAsync();
+        int finalMessageCount = await _dbContext.Messages.CountAsync(m => m.TenantId == tenantId);
         Assert.Equal(initialMessageCount, finalMessageCount);
     }
 }

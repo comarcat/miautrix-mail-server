@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Miautrix.Mail.Domain;
 
 namespace Miautrix.Mail.Application.Admin;
 
@@ -13,25 +14,41 @@ public sealed record DomainDto(
     string? SpfRecord,
     string? DmarcRecord,
     bool IsPrimary,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    string TransportMode,
+    string? CloudflareZoneId,
+    string? CloudflareWorkerUrl);
 
 public sealed record CreateDomainRequest(
     string Name,
-    bool IsPrimary = false);
+    bool IsPrimary = false,
+    string TransportMode = DomainTransportModes.Local,
+    string? CloudflareZoneId = null,
+    string? CloudflareWorkerUrl = null);
 
 public sealed record UpdateDomainRequest(
     string? Name = null,
     bool? IsPrimary = null,
     string? DkimSelector = null,
     string? SpfRecord = null,
-    string? DmarcRecord = null);
+    string? DmarcRecord = null,
+    string? TransportMode = null,
+    string? CloudflareZoneId = null,
+    string? CloudflareWorkerUrl = null);
 
+/// <summary>
+/// The DNS status fields are null when the domain does not use the local transport: a
+/// Cloudflare-mode domain has no DKIM/SPF/DMARC verdict of its own. Empty string would render in
+/// the admin UI as "checked and failed", which is a different statement.
+/// </summary>
 public sealed record VerifyDomainResult(
     bool IsVerified,
     string Message,
-    string DkimStatus,
-    string SpfStatus,
-    string DmarcStatus);
+    string TransportMode,
+    string? DkimStatus,
+    string? SpfStatus,
+    string? DmarcStatus,
+    string? WorkerStatus);
 
 // User Contracts
 public sealed record AdminUserDto(
@@ -42,20 +59,95 @@ public sealed record AdminUserDto(
     string Role,
     long MailboxQuotaBytes,
     long MailboxUsedBytes,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    bool MustChangePassword,
+    bool IsService,
+    string MailboxKind);
+
+public sealed record MailboxDelegateDto(
+    Guid UserId,
+    string Email,
+    string Name,
+    string AccessLevel);
+
+public sealed record MailboxDelegateRequest(
+    Guid UserId,
+    string AccessLevel);
+
+public sealed record SharedMailboxDto(
+    Guid Id,
+    string Email,
+    string Name,
+    long MailboxQuotaBytes,
+    long MailboxUsedBytes,
+    bool IsActive,
+    DateTimeOffset CreatedAt,
+    IReadOnlyList<MailboxDelegateDto> Delegates);
+
+public sealed record CreateSharedMailboxRequest(
+    string Email,
+    string Name,
+    long? QuotaBytes = 10737418240,
+    IReadOnlyList<MailboxDelegateRequest>? Delegates = null);
 
 public sealed record CreateUserRequest(
     string Email,
     string Name,
-    string Password,
-    string? Role = "user",
-    long? QuotaBytes = 10737418240);
+    string? Password = null,
+    string? Role = "member",
+    long? QuotaBytes = 10737418240,
+    bool MustChangePassword = false,
+    bool IsService = false,
+    string? MailboxKind = "user",
+    IReadOnlyList<MailboxDelegateRequest>? Delegates = null);
 
 public sealed record UpdateUserRequest(
     string? Name,
     bool? IsActive,
     string? Role,
-    long? QuotaBytes);
+    long? QuotaBytes,
+    string? Email,
+    bool? MustChangePassword,
+    bool? IsService);
+
+public sealed record ResetPasswordRequest(
+    string? Password,
+    bool MustChangePassword,
+    bool GeneratePassword = false);
+
+public sealed record ResetPasswordResult(
+    string? GeneratedPassword);
+
+// Orphan mailbox contracts
+public sealed record OrphanMailboxDto(
+    Guid Id,
+    string Email,
+    string Name,
+    string Kind,
+    long MailboxQuotaBytes,
+    long MailboxUsedBytes,
+    bool IsActive,
+    DateTimeOffset CreatedAt,
+    int MessageCount,
+    int AttachmentCount);
+
+public sealed record AssignMailboxRequest(
+    string Address,
+    string? Name = null,
+    IReadOnlyList<MailboxDelegateRequest>? Delegates = null,
+    long? QuotaBytes = null);
+
+public sealed record DeleteMailboxRequest(
+    string ConfirmAddress);
+
+public sealed record DeleteMailboxResult(
+    int MessagesDeleted,
+    int AttachmentsDeleted,
+    int BlobsDeleted);
+
+public sealed record MailboxArchiveDto(
+    string TempFilePath,
+    string FileName);
 
 // Quarantine Contracts
 public sealed record QuarantineItemDto(
@@ -137,16 +229,33 @@ public sealed record RuleSimulationResult(
     List<string> Log);
 
 // System & Telemetry Contracts
+public sealed record TransportDashboardMetricDto(
+    string TransportMode,
+    int ActiveQueued,
+    int Retrying,
+    int DeadLetters,
+    int OutboundDelivered24h,
+    int OutboundDeliveredTotal,
+    int SuccessfulAttempts24h,
+    int FailedAttempts24h,
+    int TotalAttempts24h,
+    int RetryAttempts24h,
+    double DeliverySuccessRate24h,
+    DateTimeOffset? LastDeliveryAttemptAt,
+    int? LastDeliveryResponseCode,
+    string? LastDeliveryError);
+
 public sealed record DashboardSummaryDto(
     int ActiveQueued,
     int Retrying,
     int DeadLetters,
-    int Delivered24h,
+    int Delivered24h, // mailbox delivered (last 24h)
     int Quarantined24h,
     int SpamBlocked24h,
     string SystemHealth,
     long UptimeSeconds,
-    int TenantCount);
+    int TenantCount,
+    IReadOnlyList<TransportDashboardMetricDto> TransportBreakdown);
 
 public sealed record SystemInfoDto(
     string Version,

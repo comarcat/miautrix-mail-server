@@ -18,6 +18,8 @@ public interface IPermissionRepository
     bool HasPermission(Guid tenantId, Guid userId, string permissionCode);
     int GetTenantOwnerCount(Guid tenantId);
     bool IsUserTenantOwner(Guid tenantId, Guid userId);
+    bool IsMailboxOwner(Guid tenantId, Guid userId, Guid mailboxId);
+    string? GetMailboxDelegateAccess(Guid tenantId, Guid userId, Guid mailboxId);
 }
 
 public interface ITenantAuthorizationHelper
@@ -29,6 +31,12 @@ public interface ITenantAuthorizationHelper
         string requiredPermissionCode) where TResource : TenantScopedEntityBase;
 
     void AssertPermission(Guid tenantId, Guid userId, string permissionCode);
+
+    void AssertMailboxAccess(
+        Guid tenantId,
+        Guid userId,
+        Mailbox? mailbox,
+        bool requireWrite);
 
     void ValidateOwnerDemotion(Guid tenantId, Guid targetUserId);
 }
@@ -94,6 +102,41 @@ public sealed class TenantAuthorizationHelper : ITenantAuthorizationHelper
 
             throw new ResourceNotFoundException();
         }
+    }
+
+    public void AssertMailboxAccess(Guid tenantId, Guid userId, Mailbox? mailbox, bool requireWrite)
+    {
+        if (mailbox is null || mailbox.TenantId != tenantId)
+        {
+            AuthorizeAccess(tenantId, userId, mailbox, requireWrite ? "mailbox.update" : "mailbox.read");
+            return;
+        }
+
+        var permission = requireWrite ? "mailbox.update" : "mailbox.read";
+        if (_permissionRepo.HasPermission(tenantId, userId, permission))
+        {
+            return;
+        }
+
+        if (_permissionRepo.IsMailboxOwner(tenantId, userId, mailbox.Id))
+        {
+            return;
+        }
+
+        var access = mailbox.Kind.Equals("shared", StringComparison.OrdinalIgnoreCase)
+            ? _permissionRepo.GetMailboxDelegateAccess(tenantId, userId, mailbox.Id)
+            : null;
+        if (access is not null && (!requireWrite || access.Equals("write", StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+
+        _eventSink.RecordEvent(
+            tenantId,
+            userId,
+            SecurityEventCodes.AuthLoginFailed,
+            $"Mailbox access denied for user {userId} on mailbox {mailbox.Id} in tenant {tenantId}");
+        throw new ResourceNotFoundException();
     }
 
     public void ValidateOwnerDemotion(Guid tenantId, Guid targetUserId)

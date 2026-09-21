@@ -107,6 +107,33 @@ public sealed class UserController : ControllerBase
             statusCode: StatusCodes.Status200OK);
     }
 
+    [HttpPost("{userId:guid}/reset-password")]
+    [ProducesResponseType(typeof(ApiResponse<ResetPasswordResult>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiError), StatusCodes.Status404NotFound)]
+    public async Task<IResult> ResetPassword(Guid userId, [FromBody] ResetPasswordRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _adminService.ResetPasswordAsync(
+            _context.CurrentTenantId,
+            _context.CurrentUserId,
+            userId,
+            request,
+            cancellationToken);
+
+        if (result is null)
+        {
+            return ApiResults.Error(
+                HttpContext,
+                StatusCodes.Status404NotFound,
+                "user_not_found",
+                "User not found.");
+        }
+
+        return Results.Json(
+            new ApiResponse<ResetPasswordResult>(result),
+            ApiJson.Options,
+            statusCode: StatusCodes.Status200OK);
+    }
+
     [HttpDelete("{userId:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ApiError), StatusCodes.Status404NotFound)]

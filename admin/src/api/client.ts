@@ -9,6 +9,15 @@ import {
   AdminUserItem,
   CreateUserRequest,
   UpdateUserRequest,
+  ResetPasswordRequest,
+  ResetPasswordResult,
+  SharedMailbox,
+  CreateSharedMailboxRequest,
+  MailboxDelegateRequest,
+  OrphanMailboxItem,
+  AssignMailboxRequest,
+  DeleteMailboxRequest,
+  DeleteMailboxResult,
   QuarantineItem,
   AuditLogItem,
   MailFlowRuleItem,
@@ -183,6 +192,17 @@ export class AdminApiClient {
     return this.request<{ data: AdminUserItem }>('/auth/me');
   }
 
+  async changePassword(currentPassword: string, newPassword: string): Promise<{ data?: any; message?: string }> {
+    return this.request<{ data?: any; message?: string }>('/auth/change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        current_password: currentPassword,
+        new_password: newPassword,
+      }),
+    });
+  }
+
   // Queue
   async getQueue(params: QueueQueryParams = {}): Promise<ApiResponse<QueueItem[]>> {
     const query = new URLSearchParams();
@@ -195,9 +215,11 @@ export class AdminApiClient {
     return this.request<ApiResponse<QueueItem[]>>(`/mail/queue${qs ? `?${qs}` : ''}`);
   }
 
-  async retryQueueItem(id: string): Promise<{ success: boolean; message: string }> {
+  async retryQueueItem(id: string, reason: string): Promise<{ success: boolean; message: string }> {
     return this.request<{ success: boolean; message: string }>(`/mail/queue/${id}/retry`, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
     });
   }
 
@@ -261,10 +283,74 @@ export class AdminApiClient {
     });
   }
 
+  async resetPassword(id: string, data: ResetPasswordRequest): Promise<ApiResponse<ResetPasswordResult>> {
+    return this.request<ApiResponse<ResetPasswordResult>>(`/users/${id}/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  }
+
   async deleteUser(id: string): Promise<void> {
     return this.request<void>(`/users/${id}`, {
       method: 'DELETE',
     });
+  }
+
+  async getSharedMailboxes(): Promise<ApiResponse<SharedMailbox[]>> {
+    return this.request<ApiResponse<SharedMailbox[]>>('/shared-mailboxes');
+  }
+
+  async createSharedMailbox(data: CreateSharedMailboxRequest): Promise<ApiResponse<SharedMailbox>> {
+    return this.request<ApiResponse<SharedMailbox>>('/shared-mailboxes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  }
+
+  async replaceSharedMailboxDelegates(id: string, delegates: MailboxDelegateRequest[]): Promise<ApiResponse<SharedMailbox>> {
+    return this.request<ApiResponse<SharedMailbox>>(`/shared-mailboxes/${id}/delegates`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ delegates }),
+    });
+  }
+
+  // Orphan mailboxes
+  async getOrphanMailboxes(): Promise<ApiResponse<OrphanMailboxItem[]>> {
+    return this.request<ApiResponse<OrphanMailboxItem[]>>('/mailboxes/orphans');
+  }
+
+  async assignMailbox(id: string, data: AssignMailboxRequest): Promise<ApiResponse<SharedMailbox>> {
+    return this.request<ApiResponse<SharedMailbox>>(`/mailboxes/${id}/assign`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteMailbox(id: string, data: DeleteMailboxRequest): Promise<ApiResponse<DeleteMailboxResult>> {
+    return this.request<ApiResponse<DeleteMailboxResult>>(`/mailboxes/${id}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  }
+
+  async exportMailbox(id: string): Promise<Blob> {
+    const headers: Record<string, string> = { Accept: 'application/zip' };
+    if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
+    if (this.tenantId) headers['X-Tenant-Id'] = this.tenantId;
+    if (this.userId) headers['X-User-Id'] = this.userId;
+
+    const res = await fetch(`${this.baseUrl}/mailboxes/${id}/export`, { headers });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new Error(body?.error?.message || `Export failed (${res.status})`);
+    }
+
+    return res.blob();
   }
 
   // Quarantine

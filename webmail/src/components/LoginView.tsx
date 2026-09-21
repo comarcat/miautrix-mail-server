@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { webmailClient } from './WebmailApiClient';
 
 interface LoginViewProps {
-  onLoginSuccess: (email: string) => void;
+  onLoginSuccess: (email: string) => Promise<void> | void;
 }
 
 export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
@@ -20,7 +20,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
 
     try {
       await webmailClient.login(email, password);
-      onLoginSuccess(email);
+      await onLoginSuccess(email);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {

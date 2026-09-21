@@ -32,11 +32,7 @@ public sealed class MessageService : IMessageService
     {
         var mailbox = await _db.Mailboxes
             .FirstOrDefaultAsync(m => m.TenantId == tenantId && m.Id == mailboxId, cancellationToken);
-
-        if (mailbox is null)
-        {
-            return new MessageListPage(Array.Empty<MessageSummaryDto>(), null, false, 0);
-        }
+        _auth.AssertMailboxAccess(tenantId, userId, mailbox, requireWrite: false);
 
         var query = _db.Messages
             .Where(m => m.TenantId == tenantId && m.MailboxId == mailboxId);
@@ -114,6 +110,10 @@ public sealed class MessageService : IMessageService
         Guid messageId,
         CancellationToken cancellationToken = default)
     {
+        var mailbox = await _db.Mailboxes
+            .FirstOrDefaultAsync(m => m.TenantId == tenantId && m.Id == mailboxId, cancellationToken);
+        _auth.AssertMailboxAccess(tenantId, userId, mailbox, requireWrite: false);
+
         var message = await _db.Messages
             .FirstOrDefaultAsync(m => m.TenantId == tenantId && m.MailboxId == mailboxId && m.Id == messageId, cancellationToken);
 
@@ -158,6 +158,10 @@ public sealed class MessageService : IMessageService
         bool isRead,
         CancellationToken cancellationToken = default)
     {
+        var mailbox = await _db.Mailboxes
+            .FirstOrDefaultAsync(m => m.TenantId == tenantId && m.Id == mailboxId, cancellationToken);
+        _auth.AssertMailboxAccess(tenantId, userId, mailbox, requireWrite: true);
+
         var message = await _db.Messages
             .FirstOrDefaultAsync(m => m.TenantId == tenantId && m.MailboxId == mailboxId && m.Id == messageId, cancellationToken);
 
@@ -180,6 +184,10 @@ public sealed class MessageService : IMessageService
         Guid targetFolderId,
         CancellationToken cancellationToken = default)
     {
+        var mailbox = await _db.Mailboxes
+            .FirstOrDefaultAsync(m => m.TenantId == tenantId && m.Id == mailboxId, cancellationToken);
+        _auth.AssertMailboxAccess(tenantId, userId, mailbox, requireWrite: true);
+
         var message = await _db.Messages
             .FirstOrDefaultAsync(m => m.TenantId == tenantId && m.MailboxId == mailboxId && m.Id == messageId, cancellationToken);
 
@@ -210,6 +218,10 @@ public sealed class MessageService : IMessageService
         bool permanent = false,
         CancellationToken cancellationToken = default)
     {
+        var mailbox = await _db.Mailboxes
+            .FirstOrDefaultAsync(m => m.TenantId == tenantId && m.Id == mailboxId, cancellationToken);
+        _auth.AssertMailboxAccess(tenantId, userId, mailbox, requireWrite: true);
+
         var message = await _db.Messages
             .FirstOrDefaultAsync(m => m.TenantId == tenantId && m.MailboxId == mailboxId && m.Id == messageId, cancellationToken);
 
@@ -258,11 +270,7 @@ public sealed class MessageService : IMessageService
 
         var mailbox = await _db.Mailboxes
             .FirstOrDefaultAsync(m => m.TenantId == tenantId && m.Id == mailboxId, cancellationToken);
-
-        if (mailbox is null)
-        {
-            return new SendMessageResult(false, null, null, "Mailbox not found.");
-        }
+        _auth.AssertMailboxAccess(tenantId, userId, mailbox, requireWrite: true);
 
         var sentFolder = await _db.Folders
             .FirstOrDefaultAsync(f => f.TenantId == tenantId && f.MailboxId == mailboxId && f.Role == "sent", cancellationToken);
@@ -350,7 +358,7 @@ public sealed class MessageService : IMessageService
             firstQueueItemId ??= queueItem.Id;
         }
 
-        mailbox.UsedBytes += sizeBytes;
+        mailbox!.UsedBytes += sizeBytes;
         await _db.SaveChangesAsync(cancellationToken);
 
         return new SendMessageResult(true, messageId, firstQueueItemId, "Message sent and queued for delivery.");

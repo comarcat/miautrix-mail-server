@@ -5,7 +5,9 @@
 **Date:** 2026-09-16  
 **Project Sponsor:** Miautrix  
 **Project Lead / Architect:** Cristobal Arboleda  
-**Status:** Approved / Planning Complete  
+**Status:** Approved / Active Implementation & Production Integration
+
+**Last Updated:** 2026-09-21  
 
 ---
 
@@ -68,20 +70,21 @@ Miautrix Mail Server
 |---|---|---|---|---|
 | **M1: Core Foundation** | Scaffold, PostgreSQL schema, Seed data, Auth/MFA, RBAC, Audit | ✅ Complete | T1–T6 | `dotnet test --filter Category=Isolation\|Audit\|Identity` |
 | **M2: Mail Engine** | SMTP In/Out, SPF/DKIM/DMARC, Anti-Spam, IMAP, Sieve, FTS, Rules Engine | ✅ Complete | T7–T13 | `dotnet test --filter Category=Smtp\|Dkim\|Imap\|Rules` |
-| **M3: Surfaces & Client Apps** | OpenAPI REST endpoints, Web Admin, Webmail, CLI | 🔄 In Progress (Tasks #12-#17) | T14–T17 | API Integration tests & `pnpm test` |
-| **M4: Operational Readiness** | Desktop Client, Backup/Restore drills, Blue/Green symlink updater, License gates | 🔄 In Progress (Task #18) | T18–T21 | End-to-end backup verification & licensing tests |
+| **M3: Surfaces & Client Apps** | OpenAPI REST endpoints, Web Admin, Webmail, CLI | 🔄 In Progress (shared-mailbox UI/live validation) | T14–T17 | API Integration tests & `pnpm test` |
+| **M4: Operational Readiness** | Desktop Client, Backup/Restore drills, Blue/Green symlink updater, License gates | 🔄 In Progress (production migration/live verification) | T18–T21 | Migration verification, service restart, live login and licensing tests |
 
 ### Active Execution Phase: Production Integration & Functional Delivery
 
 | Task ID | Task Description | Scope & Acceptance | Blocked By | Status |
 |---|---|---|---|---|
-| **#12** | Database Migration & Seeding | Apply EF Core migrations to PostgreSQL `10.11.1.52` (`miautrix-mail-pro`); seed default tenant, permissions, roles, and default admin (`admin@miautrix.org` / `CH@nGEm3!`) with temporary password flag. | None | ⏳ Pending |
-| **#13** | Backend Authentication REST API | Implement `/api/v1/auth/login`, `/me`, `/logout`, and TOTP MFA verification. | #12 | ⏳ Pending |
-| **#14** | Backend Mailbox & Message REST API | Implement `/api/v1/mailboxes`, `/messages`, `/send`, folder counts, and message search. | #12 | ⏳ Pending |
-| **#15** | Backend Admin Management REST API | Implement `/api/v1/tenants`, `/domains`, `/users`, `/rules`, and `/audit` endpoints. | #12 | ⏳ Pending |
-| **#16** | Functional Webmail Frontend | Fix 100% full-width responsive layout, fix asset/icon paths, and wire to Auth/Mailbox REST APIs. | #13, #14 | ⏳ Pending |
-| **#17** | Functional Admin Console Frontend | Replace placeholder screens with functional UI for Domains, Users, Mailboxes, and System logs wired to REST APIs. | #13, #15 | ⏳ Pending |
-| **#18** | Automated Deployment & Live Verification | Build, migrate, publish Linux x64 binaries & SPAs, deploy to Debian LXC `10.11.1.51` behind `mail.miautrix.tech`, and verify end-to-end. | #16, #17 | ⏳ Pending |
+| **#12** | Database Migration & Seeding | EF migrations/seeding target PostgreSQL `10.11.1.52` (`miautrix-mail-pro`); production update scripts force explicit connection and confirmation. | None | ✅ Applied — `20260920223000_AddMailboxName` migrated to production 2026-09-20 |
+| **#13** | Backend Authentication REST API | `/api/v1/auth/login`, `/me`, `/refresh`, `/logout`, `/change-password`; live login 500 traced to schema drift (`column m.name does not exist`), not credential validation. | #12 | ✅ Implemented / ✅ Live login verified post-migration (2026-09-20) |
+| **#14** | Backend Mailbox & Message REST API | `/api/v1/mailboxes`, folders, `/messages`, `/send`; mailbox-scoped reads/writes now authorize through shared central mailbox access helper before message operations. | #12 | ✅ Implemented |
+| **#15** | Backend Admin Management REST API | `/api/v1/domains`, `/users`, `/shared-mailboxes`, `/rules`, `/audit`; shared mailboxes are passwordless mailbox resources with delegate assignment endpoints. | #12 | ✅ Implemented |
+| **#16** | Functional Webmail Frontend | Full-width responsive layout, asset/icon paths, Auth/Mailbox REST wiring. | #13, #14 | ✅ Implemented / 🔄 Live retest after migration |
+| **#17** | Functional Admin Console Frontend | Functional Admin UI including Users/Domains; shared mailbox create flow supports passwordless create and same-domain read/write delegates. Edit-time delegate UI remains backend/API-ready but not fully wired in visible form. | #13, #15 | 🔄 Mostly complete |
+| **#18** | Automated Deployment & Live Verification | Build, migrate, publish Linux x64 Web and Worker binaries & SPAs, deploy to Debian LXC `10.11.1.51` behind `mail.miautrix.tech`, and verify end-to-end. | #16, #17 | ✅ Web + worker deploy verified 2026-09-21 |
+| **CF-01** | Cloudflare Workers transport per domain | Cloudflare can be selected per tenant-owned domain; external recipients are delivered through the tenant's primary Cloudflare Worker without adding external domains to `domains`; Admin Queue Retry sends the required JSON reason. | #18 | ✅ Live verified 2026-09-21 |
 
 ---
 
@@ -94,6 +97,8 @@ Each work package carries strict Acceptance Criteria under the EARS standard (*W
 3. **Architecture Enforceability:** Domain layer has 0 external dependencies. Controllers contain zero business logic.
 4. **Data Layer Integrity:** Schema changes are forward-only (Expand → Migrate → Contract) managed strictly through EF Core migrations.
 5. **Security & Privacy:** Passwords and secrets are never logged; invitation tokens and API keys are stored as cryptographically secure hashes.
+6. **Shared Mailbox Identity Boundary:** Shared mailboxes are mailbox resources, not login identities. Creation does not require or process a password and does not create `User`, `UserCredential`, or `Membership` rows.
+7. **Delegate Authorization:** Shared mailbox delegates must be active same-tenant, exact-domain users. `read` delegates may read mailbox/folder/message/attachment content; `write` delegates may perform approved mutations such as mark-read, move, delete, and send.
 
 ---
 

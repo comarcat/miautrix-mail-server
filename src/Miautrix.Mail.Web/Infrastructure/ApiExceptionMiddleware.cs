@@ -42,6 +42,15 @@ public sealed class ApiExceptionMiddleware
             _logger.LogWarning(ex, "Invalid operation during request {RequestId}", context.TraceIdentifier);
             await WriteErrorAsync(context, StatusCodes.Status400BadRequest, "bad_request", ex.Message);
         }
+        catch (ArgumentException ex) when (ex is not ArgumentNullException)
+        {
+            // Service-layer validation of a caller-supplied value (an unknown transport mode, a
+            // malformed address) is a bad request, not a server fault. ArgumentNullException is
+            // excluded: a null reaching a guard usually means the caller of this API is broken,
+            // and reporting that as a 400 would hide the bug behind a client-error status.
+            _logger.LogWarning(ex, "Rejected request {RequestId}", context.TraceIdentifier);
+            await WriteErrorAsync(context, StatusCodes.Status400BadRequest, "bad_request", ex.Message);
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unhandled exception during request {RequestId}", context.TraceIdentifier);

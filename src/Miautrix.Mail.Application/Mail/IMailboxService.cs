@@ -31,6 +31,7 @@ public interface IMailboxService
 
     Task<FolderDto> EnsureDefaultFoldersAsync(
         Guid tenantId,
+        Guid userId,
         Guid mailboxId,
         CancellationToken cancellationToken = default);
 }

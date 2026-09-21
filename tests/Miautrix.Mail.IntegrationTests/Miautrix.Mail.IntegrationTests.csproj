@@ -33,6 +33,7 @@
     <ProjectReference Include="..\..\src\Miautrix.Mail.Cli\Miautrix.Mail.Cli.csproj" />
     <ProjectReference Include="..\..\src\Miautrix.Mail.Infrastructure\Miautrix.Mail.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\Miautrix.Mail.Licensing\Miautrix.Mail.Licensing.csproj" />
+    <ProjectReference Include="..\..\src\Miautrix.Mail.Worker\Miautrix.Mail.Worker.csproj" />
   </ItemGroup>
 
 </Project>

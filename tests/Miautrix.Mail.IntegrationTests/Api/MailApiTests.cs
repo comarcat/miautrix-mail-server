@@ -17,11 +17,11 @@ using Xunit;
 namespace Miautrix.Mail.IntegrationTests.Api;
 
 [Trait("Category", "Api")]
-public sealed class MailApiTests : IClassFixture<WebApplicationFactory<Program>>
+public sealed class MailApiTests : IClassFixture<WebApplicationFactory<Miautrix.Mail.Web.Program>>
 {
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly WebApplicationFactory<Miautrix.Mail.Web.Program> _factory;
 
-    public MailApiTests(WebApplicationFactory<Program> factory)
+    public MailApiTests(WebApplicationFactory<Miautrix.Mail.Web.Program> factory)
     {
         _factory = factory;
     }
@@ -226,7 +226,7 @@ public sealed class MailApiTests : IClassFixture<WebApplicationFactory<Program>>
             UpdatedAt = DateTimeOffset.UtcNow
         });
 
-        // Add mailbox.view permission
+        // Add mailbox.read permission
         var roleId = Guid.NewGuid();
         var permissionId = Guid.NewGuid();
 
@@ -244,7 +244,7 @@ public sealed class MailApiTests : IClassFixture<WebApplicationFactory<Program>>
         {
             Id = permissionId,
             TenantId = tenantId,
-            Code = "mailbox.view",
+            Code = "mailbox.read",
             Name = "View Mailboxes",
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow

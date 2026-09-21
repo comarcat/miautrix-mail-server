@@ -17,6 +17,12 @@ Self-hosted, multi-tenant mail platform. Modular monolith, .NET 10, PostgreSQL, 
 | `pnpm --filter webmail dev` | Webmail in dev mode |
 | `pnpm --filter desktop dev` | Desktop shell in dev mode |
 
+## Discovery workflow
+
+- Use graphify/codebase-memory first for structural code discovery: architecture overview, symbol search, traces, and snippets before file-by-file reads.
+- Use archify artifacts (`architecture.html`, `architecture.json`) for architecture context before manually reconstructing module boundaries.
+- Fall back to `Grep`, `Glob`, and `Read` for literals, config files, docs, and coverage gaps.
+
 ## Architecture rules
 
 - **Dependency direction is inward.** `Domain` depends on nothing. `Application` depends only on
