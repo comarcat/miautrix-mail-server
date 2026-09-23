@@ -27,6 +27,9 @@ export interface QueueQueryParams {
   limit?: number;
   status?: string;
   search?: string;
+  start_at?: string;
+  end_at?: string;
+  domain?: string;
 }
 
 // Domain Types
@@ -260,6 +263,23 @@ export interface SystemInfo {
   storage_total_bytes: number;
   active_workers: number;
   os_version: string;
+}
+
+export interface SecuritySettings {
+  password_hashing_algorithm: string;
+  argon2_memory_kb: number;
+  argon2_iterations: number;
+  argon2_parallelism: number;
+  session_lifetime_minutes: number;
+  refresh_lifetime_days: number;
+  lockout_max_failed_attempts: number;
+  lockout_duration_minutes: number;
+  mfa_enforced: boolean;
+}
+
+export interface TenantInfo {
+  id: string;
+  slug: string;
 }
 
 export interface LicensingInfo {

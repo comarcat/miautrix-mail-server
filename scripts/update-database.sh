@@ -23,5 +23,14 @@ dotnet ef database update --project src/Miautrix.Mail.Persistence --startup-proj
 echo "[2/2] Running database seeder..."
 dotnet run --project src/Miautrix.Mail.Seeder
 
+if command -v psql >/dev/null 2>&1; then
+  echo "Verifying tenants.mfa_enforced exists..."
+  PGPASSWORD="${DB_PASS}" \
+    psql "host=${DB_HOST} port=${DB_PORT} dbname=${DB_NAME} user=${DB_USER}" \
+    -tAc "select column_name from information_schema.columns where table_name='tenants' and column_name='mfa_enforced';" | grep -qx "mfa_enforced"
+else
+  echo "psql not found; skipping direct column verification."
+fi
+
 echo ""
 echo "Database migration and seeding completed successfully!"

@@ -5,6 +5,7 @@ export type ScreenId =
   | 'dashboard'
   | 'mail-flow'
   | 'users'
+  | 'shared-mailboxes'
   | 'domains'
   | 'identity'
   | 'security'
@@ -32,6 +33,7 @@ export const MENU_ITEMS: MenuItem[] = [
   { id: 'queue', label: 'Queue', icon: 'list', group: 'Operations' },
   { id: 'rule-designer', label: 'Rule Designer', icon: 'branch', group: 'Operations' },
   { id: 'users', label: 'Users', icon: 'users', group: 'Directory' },
+  { id: 'shared-mailboxes', label: 'Shared Mailboxes', icon: 'inbox', group: 'Directory' },
   { id: 'domains', label: 'Domains', icon: 'globe', group: 'Directory' },
   { id: 'identity', label: 'Identity', icon: 'shield', group: 'Directory' },
   { id: 'security', label: 'Security', icon: 'lock', group: 'Protection' },
@@ -63,6 +65,7 @@ const MenuIcon: React.FC<{ name: string }> = ({ name }) => {
     database: <><ellipse cx="12" cy="5" rx="9" ry="3" /><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" /><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" /></>,
     server: <><rect x="2" y="2" width="20" height="8" rx="2" ry="2" /><rect x="2" y="14" width="20" height="8" rx="2" ry="2" /><line x1="6" y1="6" x2="6.01" y2="6" /><line x1="6" y1="18" x2="6.01" y2="18" /></>,
     key: <><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" /></>,
+    inbox: <><polyline points="22 12 16 12 14 15 10 15 8 12 2 12" /><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" /></>,
   };
 
   return (

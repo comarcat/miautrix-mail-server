@@ -34,6 +34,8 @@ public sealed class AdminService : IAdminService
     private readonly IPasswordHasher _passwordHasher;
     private readonly IMailboxArchiveService _mailboxArchiveService;
     private readonly ICloudflareTransport _cloudflareTransport;
+    private readonly ISessionManager _sessionManager;
+    private readonly LockoutOptions _lockoutOptions;
     private readonly LookupClient _dnsClient = new LookupClient();
 
     public AdminService(
@@ -43,7 +45,9 @@ public sealed class AdminService : IAdminService
         BackupOptions backupOptions,
         IPasswordHasher passwordHasher,
         IMailboxArchiveService mailboxArchiveService,
-        ICloudflareTransport cloudflareTransport)
+        ICloudflareTransport cloudflareTransport,
+        ISessionManager sessionManager,
+        LockoutOptions lockoutOptions)
     {
         _db = db;
         _auth = auth;
@@ -52,6 +56,8 @@ public sealed class AdminService : IAdminService
         _passwordHasher = passwordHasher;
         _mailboxArchiveService = mailboxArchiveService;
         _cloudflareTransport = cloudflareTransport;
+        _sessionManager = sessionManager;
+        _lockoutOptions = lockoutOptions;
     }
 
     // -------------------------------------------------------------
@@ -1224,6 +1230,62 @@ public sealed class AdminService : IAdminService
             Log: logs));
     }
 
+    public async Task<IReadOnlyList<TenantDto>> ListTenantsAsync(Guid tenantId, Guid userId, CancellationToken ct = default)
+    {
+        _auth.AssertPermission(tenantId, userId, "system.view");
+
+        var tenants = await _db.Tenants
+            .AsNoTracking()
+            .OrderBy(t => t.Slug)
+            .ToListAsync(ct);
+
+        return tenants.Select(t => new TenantDto(t.Id, t.Slug)).ToList();
+    }
+
+    public async Task<SecuritySettingsDto> GetSecuritySettingsAsync(Guid domainId, Guid userId, CancellationToken ct = default)
+    {
+        // We need the tenantId to assert permission and find the domain
+        var domain = await _db.Domains.FirstOrDefaultAsync(d => d.Id == domainId, ct)
+            ?? throw new InvalidOperationException("Domain not found.");
+
+        _auth.AssertPermission(domain.TenantId, userId, "system.view");
+
+        var argon2Opts = Argon2idPasswordHasher.CurrentOptions;
+
+        return new SecuritySettingsDto(
+            PasswordHashingAlgorithm: "Argon2id",
+            Argon2MemoryKb: argon2Opts.MemoryKb,
+            Argon2Iterations: argon2Opts.Iterations,
+            Argon2Parallelism: argon2Opts.Parallelism,
+            SessionLifetimeMinutes: domain.SessionLifetimeMinutes ?? (int)_sessionManager.DefaultSessionLifetime.TotalMinutes,
+            RefreshLifetimeDays: (int)_sessionManager.DefaultRefreshLifetime.TotalDays,
+            LockoutMaxFailedAttempts: domain.LockoutMaxFailedAttempts ?? _lockoutOptions.MaxFailedAttempts,
+            LockoutDurationMinutes: domain.LockoutDurationMinutes ?? (int)_lockoutOptions.LockoutDuration.TotalMinutes,
+            MfaEnforced: domain.MfaEnforced);
+    }
+
+    public async Task<SecuritySettingsDto> UpdateSecuritySettingsAsync(Guid domainId, Guid userId, UpdateSecuritySettingsRequest request, CancellationToken ct = default)
+    {
+        var domain = await _db.Domains.FirstOrDefaultAsync(d => d.Id == domainId, ct)
+            ?? throw new InvalidOperationException("Domain not found.");
+
+        _auth.AssertPermission(domain.TenantId, userId, "system.manage");
+
+        if (request.MfaEnforced.HasValue)
+            domain.MfaEnforced = request.MfaEnforced.Value;
+        if (request.SessionLifetimeMinutes.HasValue)
+            domain.SessionLifetimeMinutes = request.SessionLifetimeMinutes.Value;
+        if (request.LockoutMaxFailedAttempts.HasValue)
+            domain.LockoutMaxFailedAttempts = request.LockoutMaxFailedAttempts.Value;
+        if (request.LockoutDurationMinutes.HasValue)
+            domain.LockoutDurationMinutes = request.LockoutDurationMinutes.Value;
+
+        domain.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(ct);
+
+        return await GetSecuritySettingsAsync(domainId, userId, ct);
+    }
+
     // -------------------------------------------------------------
     // System & Telemetry
     // -------------------------------------------------------------
@@ -1853,6 +1915,7 @@ public sealed class AdminService : IAdminService
         d.Id,
         d.Name,
         d.IsVerified,
+        d.MfaEnforced,
         d.DkimSelector,
         d.DkimPublicKey,
         d.SpfRecord,

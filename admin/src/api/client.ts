@@ -25,6 +25,8 @@ import {
   SystemInfo,
   LicensingInfo,
   BackupJobItem,
+  SecuritySettings,
+  TenantInfo,
 } from '../types';
 
 export class AdminApiClient {
@@ -210,6 +212,9 @@ export class AdminApiClient {
     if (params.limit) query.set('limit', params.limit.toString());
     if (params.status && params.status !== 'all') query.set('status', params.status);
     if (params.search) query.set('search', params.search);
+    if (params.start_at) query.set('start_at', params.start_at);
+    if (params.end_at) query.set('end_at', params.end_at);
+    if (params.domain && params.domain !== 'all') query.set('domain', params.domain);
 
     const qs = query.toString();
     return this.request<ApiResponse<QueueItem[]>>(`/mail/queue${qs ? `?${qs}` : ''}`);
@@ -226,6 +231,14 @@ export class AdminApiClient {
   async deleteQueueItem(id: string): Promise<{ success: boolean }> {
     return this.request<{ success: boolean }>(`/mail/queue/${id}`, {
       method: 'DELETE',
+    });
+  }
+
+  async reassignQueueItem(id: string, targetMailboxAddress: string): Promise<ApiResponse<QueueItem>> {
+    return this.request<ApiResponse<QueueItem>>(`/mail/queue/${id}/reassign`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target_mailbox_address: targetMailboxAddress }),
     });
   }
 
@@ -408,8 +421,41 @@ export class AdminApiClient {
     return this.request<ApiResponse<SystemInfo>>('/system/info');
   }
 
+  async getSecuritySettings(): Promise<ApiResponse<SecuritySettings>> {
+    return this.request<ApiResponse<SecuritySettings>>('/system/security');
+  }
+
+  async updateSecuritySettings(
+    data: Partial<Pick<SecuritySettings, 'mfa_enforced' | 'session_lifetime_minutes' | 'lockout_max_failed_attempts' | 'lockout_duration_minutes'>>
+  ): Promise<ApiResponse<SecuritySettings>> {
+    return this.request<ApiResponse<SecuritySettings>>('/system/security', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  }
+
   async getLicensing(): Promise<ApiResponse<LicensingInfo>> {
     return this.request<ApiResponse<LicensingInfo>>('/system/licensing');
+  }
+
+  async getTenants(): Promise<ApiResponse<TenantInfo[]>> {
+    return this.request<ApiResponse<TenantInfo[]>>('/system/tenants');
+  }
+
+  async getDomainSecuritySettings(domainId: string): Promise<ApiResponse<SecuritySettings>> {
+    return this.request<ApiResponse<SecuritySettings>>(`/system/domains/${domainId}/security`);
+  }
+
+  async updateDomainSecuritySettings(
+    domainId: string,
+    data: Partial<Pick<SecuritySettings, 'mfa_enforced' | 'session_lifetime_minutes' | 'lockout_max_failed_attempts' | 'lockout_duration_minutes'>>
+  ): Promise<ApiResponse<SecuritySettings>> {
+    return this.request<ApiResponse<SecuritySettings>>(`/system/domains/${domainId}/security`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
   }
 
   async getBackups(): Promise<ApiResponse<BackupJobItem[]>> {

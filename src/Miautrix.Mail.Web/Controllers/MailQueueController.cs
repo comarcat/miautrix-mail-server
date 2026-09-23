@@ -3,6 +3,7 @@ using Miautrix.Mail.Domain;
 using Miautrix.Mail.Web.Contracts;
 using Miautrix.Mail.Web.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
+using System.ComponentModel.DataAnnotations;
 
 namespace Miautrix.Mail.Web.Controllers;
 
@@ -34,6 +35,9 @@ public sealed class MailQueueController : ControllerBase
         [FromQuery] string? search = null,
         [FromQuery] int limit = 20,
         [FromQuery] string? cursor = null,
+        [FromQuery(Name = "start_at")] string? startAt = null,
+        [FromQuery(Name = "end_at")] string? endAt = null,
+        [FromQuery] string? domain = null,
         CancellationToken cancellationToken = default)
     {
         QueueStatusFilter? statusFilter = null;
@@ -59,7 +63,27 @@ public sealed class MailQueueController : ControllerBase
             }
         }
 
-        var filter = new QueueFilter(statusFilter, search, limit, cursor);
+        if (!TryParseDate(startAt, out var parsedStartAt))
+        {
+            return ApiResults.Error(
+                HttpContext,
+                StatusCodes.Status422UnprocessableEntity,
+                "validation_failed",
+                "Query parameter 'start_at' must be a valid date/time.",
+                new Dictionary<string, string[]> { ["start_at"] = [$"Received '{startAt}'."] });
+        }
+
+        if (!TryParseDate(endAt, out var parsedEndAt))
+        {
+            return ApiResults.Error(
+                HttpContext,
+                StatusCodes.Status422UnprocessableEntity,
+                "validation_failed",
+                "Query parameter 'end_at' must be a valid date/time.",
+                new Dictionary<string, string[]> { ["end_at"] = [$"Received '{endAt}'."] });
+        }
+
+        var filter = new QueueFilter(statusFilter, search, limit, cursor, parsedStartAt, parsedEndAt, domain);
         var page = await _queueService.ListAsync(
             _contextAccessor.CurrentTenantId,
             _contextAccessor.CurrentUserId,
@@ -92,6 +116,46 @@ public sealed class MailQueueController : ControllerBase
             statusCode: StatusCodes.Status200OK);
     }
 
+    public sealed class ReassignQueueItemRequest
+    {
+        [Required]
+        public string? TargetMailboxAddress { get; set; }
+    }
+
+    [HttpPost("{id:guid}/reassign")]
+    [ProducesResponseType(typeof(ApiResponse<QueueItemDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiError), StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IResult> Reassign(
+        Guid id,
+        [FromBody] ReassignQueueItemRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.TargetMailboxAddress))
+        {
+            return ApiResults.Error(
+                HttpContext,
+                StatusCodes.Status422UnprocessableEntity,
+                "validation_failed",
+                "Request body must include TargetMailboxAddress.",
+                new Dictionary<string, string[]>
+                {
+                    ["TargetMailboxAddress"] = [$"Received '{request.TargetMailboxAddress}'."],
+                });
+        }
+
+        var item = await _queueService.ReassignAsync(
+            _contextAccessor.CurrentTenantId,
+            _contextAccessor.CurrentUserId,
+            id,
+            request.TargetMailboxAddress!,
+            cancellationToken);
+
+        return Results.Json(
+            new ApiResponse<QueueItemDto>(ToDto(item)),
+            ApiJson.Options,
+            statusCode: StatusCodes.Status200OK);
+    }
+
     [HttpDelete("{id:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IResult> Delete(Guid id, CancellationToken cancellationToken)
@@ -103,6 +167,23 @@ public sealed class MailQueueController : ControllerBase
             cancellationToken);
 
         return Results.StatusCode(StatusCodes.Status204NoContent);
+    }
+
+    private static bool TryParseDate(string? value, out DateTimeOffset? parsed)
+    {
+        parsed = null;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return true;
+        }
+
+        if (!DateTimeOffset.TryParse(value, out var dto))
+        {
+            return false;
+        }
+
+        parsed = dto.ToUniversalTime();
+        return true;
     }
 
     private static QueueItemDto ToDto(SmtpQueueItem item) => new(

@@ -52,6 +52,24 @@ public sealed class MailQueueService : IMailQueueService
                 (q.Subject != null && EF.Functions.ILike(q.Subject, $"%{term}%")));
         }
 
+        if (filter.StartAt.HasValue)
+        {
+            query = query.Where(q => q.CreatedAt >= filter.StartAt.Value);
+        }
+
+        if (filter.EndAt.HasValue)
+        {
+            query = query.Where(q => q.CreatedAt <= filter.EndAt.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter.Domain) && !string.Equals(filter.Domain, "all", StringComparison.OrdinalIgnoreCase))
+        {
+            var domain = filter.Domain.Trim().TrimStart('@');
+            query = query.Where(q =>
+                EF.Functions.ILike(q.Sender, $"%@{domain}") ||
+                EF.Functions.ILike(q.Recipient, $"%@{domain}"));
+        }
+
         var ordered = query
             .OrderBy(q => q.CreatedAt)
             .ThenBy(q => q.Id);
@@ -124,6 +142,60 @@ public sealed class MailQueueService : IMailQueueService
         _db.SmtpDeliveryAttempts.RemoveRange(attempts);
         _db.SmtpQueue.Remove(item);
         await _db.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<SmtpQueueItem> ReassignAsync(
+        Guid tenantId,
+        Guid userId,
+        Guid queueItemId,
+        string targetMailboxAddress,
+        CancellationToken cancellationToken = default)
+    {
+        var item = await _db.SmtpQueue.FirstOrDefaultAsync(
+            q => q.Id == queueItemId && q.TenantId == tenantId, cancellationToken)
+            ?? throw new ResourceNotFoundException();
+
+        _authorization.AuthorizeAccess(tenantId, userId, item, "queue.retry");
+
+        if (item.Status != "Failed" && item.Status != "Retrying" && item.Status != "DeadLetter")
+        {
+            throw new InvalidOperationException("Only failed and dead-letter queue items can be reassigned.");
+        }
+
+        if (string.IsNullOrWhiteSpace(targetMailboxAddress))
+        {
+            throw new ArgumentException("target mailbox address is required.", nameof(targetMailboxAddress));
+        }
+
+        var normalizedAddress = targetMailboxAddress.Trim().ToLowerInvariant();
+
+        var mailbox = await _db.Mailboxes
+            .FirstOrDefaultAsync(
+                m => m.TenantId == tenantId && m.Address.ToLower() == normalizedAddress,
+                cancellationToken);
+
+        if (mailbox is null)
+        {
+            throw new ResourceNotFoundException("Target mailbox not found.");
+        }
+
+        // Reset retry state so the inbound persistence dispatcher picks it up again.
+        item.Recipient = mailbox.Address;
+        item.Status = "Pending";
+        item.Attempts = 0;
+        item.LastAttemptAt = null;
+        item.NextAttemptAt = DateTimeOffset.UtcNow;
+        item.LastError = null;
+        item.UpdatedAt = DateTimeOffset.UtcNow;
+
+        var attempts = await _db.SmtpDeliveryAttempts
+            .Where(a => a.TenantId == tenantId && a.QueueItemId == queueItemId)
+            .ToListAsync(cancellationToken);
+
+        _db.SmtpDeliveryAttempts.RemoveRange(attempts);
+
+        await _db.SaveChangesAsync(cancellationToken);
+        return item;
     }
 
     private static string[] ToDomainStatuses(QueueStatusFilter status) => status switch

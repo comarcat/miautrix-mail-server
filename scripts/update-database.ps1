@@ -48,5 +48,18 @@ if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
+Write-Host "Verifying domains.mfa_enforced exists..." -ForegroundColor Yellow
+$psql = Get-Command psql -ErrorAction SilentlyContinue
+if ($psql) {
+    $env:PGPASSWORD = $DbPass
+    $column = psql "host=$DbHost port=$DbPort dbname=$DbName user=$DbUser" -tAc "select column_name from information_schema.columns where table_name='domains' and column_name='mfa_enforced';"
+    Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
+    if (($column | Select-Object -First 1).Trim() -ne "mfa_enforced") {
+        throw "Migration verification failed: domains.mfa_enforced was not found."
+    }
+} else {
+    Write-Host "psql not found; skipping direct column verification." -ForegroundColor DarkYellow
+}
+
 Write-Host ""
 Write-Host "Database migration and seeding completed successfully!" -ForegroundColor Green

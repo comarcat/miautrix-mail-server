@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Miautrix.Mail.AntiSpam;
 using Miautrix.Mail.Application.Transport;
 using Miautrix.Mail.Identity;
 using Miautrix.Mail.Persistence;
@@ -113,6 +114,10 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<IRetryPolicy, ExponentialBackoffWithJitterRetryPolicy>();
         services.AddScoped<ISmtpQueueManager, SmtpQueueManager>();
 
+        // Inbound filtering
+        services.AddScoped<ISpamProvider, RuleBasedSpamProvider>();
+        services.AddScoped<IQuarantineService, QuarantineService>();
+
         // Outbound transports. Registered as a set and selected by Mode, so adding a provider is a
         // registration rather than a branch inside the dispatcher. Only "cloudflare" is present:
         // "local" has no delivery path yet, and its queued mail must keep behaving as it does today.
@@ -144,6 +149,8 @@ var host = Host.CreateDefaultBuilder(args)
         // Hosted services — IMAP
         services.AddHostedService<ImapListenerService>();
 
+        // Hosted service — inbound processing for local storage
+        services.AddHostedService<InboundQueueDispatcher>();
         // Hosted service — outbound delivery for domains on a non-local transport
         services.AddHostedService<OutboundQueueDispatcher>();
     })

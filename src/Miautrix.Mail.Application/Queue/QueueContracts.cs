@@ -20,7 +20,10 @@ public sealed record QueueFilter(
     QueueStatusFilter? Status,
     string? Search,
     int Limit,
-    string? Cursor);
+    string? Cursor,
+    DateTimeOffset? StartAt,
+    DateTimeOffset? EndAt,
+    string? Domain);
 
 /// <summary>One page of queue items plus the cursor to fetch the next page.</summary>
 public sealed record QueuePage(

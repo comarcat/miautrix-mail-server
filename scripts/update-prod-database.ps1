@@ -80,4 +80,28 @@ if ($Seed) {
     Write-Host "[2/2] Seeder skipped. Use -Seed if required." -ForegroundColor Yellow
 }
 
+Write-Host "Verifying domains.mfa_enforced exists..." -ForegroundColor Yellow
+$verifyConnection = $ConnectionString
+$verifyQuery = "select column_name from information_schema.columns where table_name='domains' and column_name='mfa_enforced';"
+try {
+    $psql = Get-Command psql -ErrorAction SilentlyContinue
+    if ($psql) {
+        $password = [regex]::Match($verifyConnection, "Password=([^;]+)").Groups[1].Value
+        $hostName = [regex]::Match($verifyConnection, "Host=([^;]+)").Groups[1].Value
+        $port = [regex]::Match($verifyConnection, "Port=([^;]+)").Groups[1].Value
+        $dbName = [regex]::Match($verifyConnection, "Database=([^;]+)").Groups[1].Value
+        $user = [regex]::Match($verifyConnection, "Username=([^;]+)").Groups[1].Value
+        $env:PGPASSWORD = $password
+        $column = psql "host=$hostName port=$port dbname=$dbName user=$user" -tAc $verifyQuery
+        if (($column | Select-Object -First 1).Trim() -ne "mfa_enforced") {
+            throw "Migration verification failed: domains.mfa_enforced was not found."
+        }
+        Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
+    } else {
+        Write-Host "psql not found; skipping direct column verification." -ForegroundColor DarkYellow
+    }
+} finally {
+    Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
+}
+
 Write-Host "Production database update completed successfully." -ForegroundColor Green

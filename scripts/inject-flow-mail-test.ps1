@@ -1,4 +1,4 @@
-# Inject a test email to flow@miautrix.tech with an empty .txt attachment.
+# Inject a test email to flows@miautrix.tech with a configurable file attachment.
 #
 # This version does NOT require swaks. It uses a minimal SMTP client implemented
 # with .NET SslStream (STARTTLS + AUTH LOGIN).
@@ -9,16 +9,17 @@
 #   $env:SMTP_USERNAME="user@miautrix.tech"
 #   $env:SMTP_PASSWORD="..."   # NOT echoed
 #   $env:SMTP_FROM="user@miautrix.tech"  # optional
-#   $env:TEST_SUBJECT="[miautrix] ZIP attachment empty.txt test" # optional
-#   .\scripts\inject-flow-mail-test.ps1
+#   $env:TEST_SUBJECT="[miautrix] ZIP attachment file test" # optional
+#   .\scripts\inject-flow-mail-test.ps1 -AttachmentPath .\empty.txt
 #
 # Optional:
 #   $env:SMTP_SKIP_TLS_VERIFY="true"  # only for self-signed test certs
 
 [CmdletBinding()]
 param(
-    [string]$ToAddress = 'flow@miautrix.tech',
-    [string]$Subject = $env:TEST_SUBJECT
+    [string]$ToAddress = 'owner@miautrix.tech',
+    [string]$Subject = $env:TEST_SUBJECT,
+    [string]$AttachmentPath = $env:TEST_ATTACHMENT_PATH
 )
 
 $ErrorActionPreference = 'Stop'
@@ -35,7 +36,26 @@ $username = Get-EnvRequired 'SMTP_USERNAME'
 $password = Get-EnvRequired 'SMTP_PASSWORD'
 $fromAddress = if ([string]::IsNullOrWhiteSpace($env:SMTP_FROM)) { $username } else { $env:SMTP_FROM }
 
-if ([string]::IsNullOrWhiteSpace($Subject)) { $Subject = '[miautrix] ZIP attachment empty.txt test' }
+if ([string]::IsNullOrWhiteSpace($Subject)) { $Subject = '[miautrix] ZIP attachment file test' }
+
+if ([string]::IsNullOrWhiteSpace($AttachmentPath)) {
+    $AttachmentPath = Join-Path (Get-Item $PSScriptRoot).Parent.FullName 'empty.txt'
+}
+if (-not (Test-Path -LiteralPath $AttachmentPath -PathType Leaf)) {
+    throw "AttachmentPath not found: $AttachmentPath"
+}
+$attachmentItem = Get-Item -LiteralPath $AttachmentPath
+$attachmentFileName = $attachmentItem.Name
+$attachmentBytes = [System.IO.File]::ReadAllBytes($attachmentItem.FullName)
+$attachmentBase64 = [Convert]::ToBase64String($attachmentBytes)
+$attachmentBase64Lines = if ($attachmentBase64.Length -eq 0) {
+    @('')
+} else {
+    for ($i = 0; $i -lt $attachmentBase64.Length; $i += 76) {
+        $attachmentBase64.Substring($i, [Math]::Min(76, $attachmentBase64.Length - $i))
+    }
+}
+$attachmentContentType = 'application/octet-stream'
 
 $skipTlsVerify = $false
 if (-not [string]::IsNullOrWhiteSpace($env:SMTP_SKIP_TLS_VERIFY)) {
@@ -48,7 +68,7 @@ $msgGuid = [Guid]::NewGuid().ToString()
 $messageId = "<$msgGuid@$hostName>"
 
 # Build message.
-$text = 'This is a test message to verify ZIP export downloads.'
+$text = "This is a test message to verify ZIP export downloads with attachment '$attachmentFileName'."
 
 $lines = @(
     "From: $fromAddress",
@@ -66,10 +86,11 @@ $lines = @(
     $text,
     '',
     "--$boundary",
-    'Content-Type: text/plain; name=`"empty.txt`"',
-    'Content-Disposition: attachment; filename=`"empty.txt`"',
+    "Content-Type: $attachmentContentType; name=`"$attachmentFileName`"",
+    "Content-Disposition: attachment; filename=`"$attachmentFileName`"",
     'Content-Transfer-Encoding: base64',
-    '', # no base64 payload => empty.txt is zero bytes
+    ''
+) + $attachmentBase64Lines + @(
     "--$boundary--",
     ''
 )
@@ -219,7 +240,7 @@ try {
     Send-SmtpLine -Writer $writer -Line 'QUIT'
     $quitResp = Read-SmtpResponse -Reader $reader
 
-    Write-Host "OK: injected message to $ToAddress via ${hostName}:$port (empty attachment empty.txt)." -ForegroundColor Green
+    Write-Host "OK: injected message to $ToAddress via ${hostName}:$port (attachment $attachmentFileName)." -ForegroundColor Green
 }
 finally {
     try {

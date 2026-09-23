@@ -31,9 +31,10 @@
           "postgres",
           "mail_storage",
           "worker",
-          "cloudflare_worker"
+          "cloudflare_worker",
+          "external_recipient"
         ],
-        "note": "Mail transmission pipeline with local protocol listeners, queue dispatch, and optional Cloudflare Worker relay for per-domain outbound transport."
+        "note": "Mail pipeline with local protocol listeners, queue dispatch, and optional Cloudflare Worker relay per domain."
       },
       {
         "id": "storage-state",
@@ -53,7 +54,7 @@
       "id": "admin_user",
       "type": "external",
       "label": "Tenant Admin",
-      "sublabel": "Browser / Terminal",
+      "sublabel": "Admin client",
       "pos": [
         40,
         160
@@ -67,7 +68,7 @@
       "id": "mail_user",
       "type": "external",
       "label": "Tenant User",
-      "sublabel": "Web / IMAP / JMAP",
+      "sublabel": "Mail client",
       "pos": [
         40,
         440
@@ -137,7 +138,7 @@
       "id": "auth_security",
       "type": "security",
       "label": "Identity & Auth",
-      "sublabel": "Argon2id + TOTP + FIDO2 + Delegates",
+      "sublabel": "Argon2id / TOTP / FIDO2",
       "pos": [
         490,
         90
@@ -167,7 +168,7 @@
       "id": "mail_flow",
       "type": "backend",
       "label": "Mail Engine & Queue",
-      "sublabel": "SMTP / IMAP / Sieve / Queue",
+      "sublabel": "SMTP / IMAP / Queue",
       "pos": [
         490,
         400
@@ -185,7 +186,7 @@
       "sublabel": "Rules + ClamAV Seam",
       "pos": [
         490,
-        550
+        600
       ],
       "size": [
         150,
@@ -226,10 +227,10 @@
       "id": "worker",
       "type": "backend",
       "label": "Miautrix Worker",
-      "sublabel": "SMTP / IMAP / Queue Dispatcher",
+      "sublabel": "Queue dispatcher",
       "pos": [
-        490,
-        470
+        760,
+        560
       ],
       "size": [
         160,
@@ -241,16 +242,30 @@
       "id": "cloudflare_worker",
       "type": "cloud",
       "label": "Cloudflare Worker",
-      "sublabel": "Per-domain relay / POST /send",
+      "sublabel": "Per-domain relay",
       "pos": [
-        760,
-        550
+        950,
+        600
       ],
       "size": [
         160,
         64
       ],
       "tag": "Optional Transport"
+    },
+    {
+      "id": "external_recipient",
+      "type": "external",
+      "label": "External Recipient",
+      "sublabel": "Mailbox",
+      "pos": [
+        1185,
+        600
+      ],
+      "size": [
+        150,
+        60
+      ]
     }
   ],
   "boundaries": [
@@ -372,14 +387,7 @@
       "id": "mailflow-to-worker",
       "from": "mail_flow",
       "to": "worker",
-      "label": "queued mail",
-      "variant": "emphasis"
-    },
-    {
-      "id": "worker-to-db",
-      "from": "worker",
-      "to": "postgres",
-      "label": "smtp_queue + attempts",
+      "variant": "emphasis",
       "fromSide": "right",
       "toSide": "left"
     },
@@ -387,15 +395,28 @@
       "id": "worker-to-cloudflare",
       "from": "worker",
       "to": "cloudflare_worker",
-      "label": "tenant primary relay /send",
-      "variant": "emphasis"
+      "label": "relay /send",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "left",
+      "labelAt": [
+        1040,
+        570
+      ]
     },
     {
       "id": "cloudflare-to-recipient",
       "from": "cloudflare_worker",
-      "to": "mail_user",
-      "label": "external delivery",
-      "variant": "emphasis"
+      "to": "external_recipient",
+      "label": "SMTP",
+      "variant": "emphasis",
+      "route": "auto",
+      "fromSide": "right",
+      "toSide": "left",
+      "labelAt": [
+        1135,
+        675
+      ]
     }
   ],
   "cards": [
@@ -424,6 +445,7 @@
       "items": [
         "Strict multi-tenant isolation (404 on cross-tenant)",
         "Passwordless shared mailboxes with same-domain read/write delegates",
+        "Domain-scoped MFA, lockout, and webmail session settings",
         "PostgreSQL 17 for schema, queue, and full-text search",
         "Argon2id password hashing, TOTP, and FIDO2 WebAuthn"
       ]

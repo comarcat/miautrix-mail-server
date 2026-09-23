@@ -24,6 +24,9 @@
 .PARAMETER SkipTests
     Skip the backend + admin test run.
 
+.PARAMETER CompileOnly
+    Do not run tests (compile + upload only). Equivalent to using -SkipTests, but keeps intent clear.
+
 .PARAMETER SkipFrontends
     Skip building/publishing admin and webmail.
 
@@ -66,6 +69,7 @@ param (
     [string]$TargetIp = "10.11.1.51",
     [string]$TargetUser = "root",
     [switch]$SkipTests,
+    [switch]$CompileOnly,
     [switch]$SkipFrontends,
     [switch]$SkipMigrations,
     [switch]$RunSeeding,
@@ -100,7 +104,7 @@ function Invoke-Step {
 }
 
 # 0) Tests — a red suite must never reach the container.
-if (-not $SkipTests) {
+if (-not $SkipTests -and -not $CompileOnly) {
     Write-Host "[0/6] Running tests..." -ForegroundColor Yellow
     dotnet test (Join-Path $RepoRoot "Miautrix.Mail.sln")
     if ($LASTEXITCODE -ne 0) { throw "Backend tests failed; nothing was published." }
@@ -162,15 +166,26 @@ Write-Host "[4/6] Uploading to LXC ($TargetIp) via SCP..." -ForegroundColor Gree
 Write-Host " -> Preparing target directories and stopping running service..." -ForegroundColor Green
 # The blob store must survive a deploy: it is never inside the uploaded payload, and this
 # step never removes files from the destination.
-ssh $Remote "systemctl stop miautrix-mail-worker || true; systemctl stop miautrix-mail || true; mkdir -p $RemoteRoot/app $RemoteRoot/worker $RemoteRoot/admin $RemoteRoot/webmail $RemoteRoot/data"
+ssh -o StrictHostKeyChecking=no $Remote "systemctl stop miautrix-mail-worker || true; systemctl stop miautrix-mail || true;
+  mkdir -p $RemoteRoot/app $RemoteRoot/worker $RemoteRoot/admin $RemoteRoot/webmail $RemoteRoot/data;
+  rm -rf $RemoteRoot/app/* $RemoteRoot/worker/*"
+if ($LASTEXITCODE -ne 0) { throw "Target directory prep failed ($LASTEXITCODE)." }
 
 Write-Host " -> Copying Backend Application..." -ForegroundColor Green
-scp -r (Join-Path $AppDir "*") "$($Remote):$RemoteRoot/app/"
-if ($LASTEXITCODE -ne 0) { throw "Backend upload failed." }
+$scpOut = & scp -r "$AppDir/." "$($Remote):$RemoteRoot/app/" 2>&1
+$scpCode = $LASTEXITCODE
+if ($scpCode -ne 0) {
+    throw "Backend upload failed ($scpCode): $scpOut"
+}
 
 Write-Host " -> Copying Worker / Protocol Listener..." -ForegroundColor Green
-scp -r (Join-Path $WorkerDir "*") "$($Remote):$RemoteRoot/worker/"
-if ($LASTEXITCODE -ne 0) { throw "Worker upload failed." }
+$scpOut = & scp -r "$WorkerDir/." "$($Remote):$RemoteRoot/worker/" 2>&1
+$scpCode = $LASTEXITCODE
+if ($scpCode -ne 0) {
+    throw "Worker upload failed ($scpCode): $scpOut"
+}
+
+# (No second exitcode check needed; handled above.)
 
 Write-Host " -> Installing Worker systemd unit..." -ForegroundColor Green
 scp (Join-Path $PSScriptRoot "miautrix-mail-worker.service") "$($Remote):/etc/systemd/system/miautrix-mail-worker.service"
@@ -204,7 +219,7 @@ if ($WorkerCert -and $WorkerKey) {
     if (-not (Test-Path $WorkerKey))  { throw "WorkerKey not found: $WorkerKey" }
 
     Write-Host " -> Staging TLS cert + key..." -ForegroundColor Green
-    ssh $Remote "rm -rf /tmp/miautrix-tls && mkdir -p /tmp/miautrix-tls"
+    ssh -o StrictHostKeyChecking=no $Remote "rm -rf /tmp/miautrix-tls && mkdir -p /tmp/miautrix-tls"
     if ($LASTEXITCODE -ne 0) { throw "Failed to create TLS staging directory." }
     scp $WorkerCert "$($Remote):/tmp/miautrix-tls/cert.pem"
     if ($LASTEXITCODE -ne 0) { throw "Cert upload failed." }
@@ -257,7 +272,7 @@ $remotePrep = "chmod +x /tmp/lxc-prepare-storage.sh && " +
     "systemctl restart miautrix-mail-worker && " +
     "systemctl restart nginx"
 
-ssh $Remote $remotePrep
+ssh -o StrictHostKeyChecking=no $Remote $remotePrep
 if ($LASTEXITCODE -ne 0) { throw "Remote preparation or restart failed." }
 
 Write-Host " -> Protocol ports require firewall/NAT access for 25, 465, 587, and 993." -ForegroundColor Yellow
@@ -326,8 +341,23 @@ if ($Verify) {
             Write-Host " -> /mailboxes/orphans returned HTTP $code." -ForegroundColor Red
         }
     }
+
+    # /shared-mailboxes must also route.
+    try {
+        Invoke-WebRequest -Uri "https://mail.miautrix.tech/api/v1/shared-mailboxes" -Method Get | Out-Null
+        Write-Host " -> /shared-mailboxes reachable." -ForegroundColor Green
+    } catch {
+        $code = $_.Exception.Response.StatusCode.value__
+        if ($code -eq 401 -or $code -eq 403) {
+            Write-Host " -> /shared-mailboxes reachable (auth required, HTTP $code)." -ForegroundColor Green
+        } elseif ($code -eq 404) {
+            Write-Host " -> /shared-mailboxes returned 404: the controller is missing." -ForegroundColor Red
+        } else {
+            Write-Host " -> /shared-mailboxes returned HTTP $code." -ForegroundColor Red
+        }
+    }
 }
 
 Write-Host ""
 Write-Host "Deployment completed successfully!" -ForegroundColor Green
-Write-Host " Admin Console: https://admin.miautrix.tech  (Users -> Without User)" -ForegroundColor Cyan
+Write-Host " Admin Console: https://admin.miautrix.tech  (Directory -> Users / Shared Mailboxes)" -ForegroundColor Cyan

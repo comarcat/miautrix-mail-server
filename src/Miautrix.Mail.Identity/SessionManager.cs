@@ -14,12 +14,17 @@ public interface ISessionManager
     AuthToken GenerateToken(TimeSpan lifetime);
     string HashToken(string rawToken);
     (AuthToken SessionToken, AuthToken RefreshToken) IssueSessionTokens(TimeSpan? sessionLifetime = null, TimeSpan? refreshLifetime = null);
+    TimeSpan DefaultSessionLifetime { get; }
+    TimeSpan DefaultRefreshLifetime { get; }
 }
 
 public sealed class SessionManager : ISessionManager
 {
-    private static readonly TimeSpan DefaultSessionLifetime = TimeSpan.FromHours(1);
-    private static readonly TimeSpan DefaultRefreshLifetime = TimeSpan.FromDays(30);
+    private static readonly TimeSpan s_defaultSessionLifetime = TimeSpan.FromHours(1);
+    private static readonly TimeSpan s_defaultRefreshLifetime = TimeSpan.FromDays(30);
+
+    public TimeSpan DefaultSessionLifetime => s_defaultSessionLifetime;
+    public TimeSpan DefaultRefreshLifetime => s_defaultRefreshLifetime;
 
     public AuthToken GenerateToken(TimeSpan lifetime)
     {

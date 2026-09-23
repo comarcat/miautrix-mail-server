@@ -75,6 +75,7 @@ public class Program
         builder.Services.AddSingleton<IPasswordHasher, Argon2idPasswordHasher>();
         builder.Services.AddSingleton<ITotpService, TotpService>();
         builder.Services.AddSingleton<ISessionManager, SessionManager>();
+        builder.Services.AddSingleton<LockoutOptions>();
         builder.Services.AddScoped<IPermissionRepository, EfPermissionRepository>();
         builder.Services.AddScoped<ITenantAuthorizationHelper, TenantAuthorizationHelper>();
         builder.Services.AddScoped<IMailQueueService, MailQueueService>();

@@ -12,6 +12,14 @@ public interface IPasswordHasher
 
 public sealed class Argon2idPasswordHasher : IPasswordHasher
 {
+    public sealed record Argon2idHasherOptions(
+        int MemoryKb,
+        int Iterations,
+        int Parallelism);
+
+    public static Argon2idHasherOptions CurrentOptions =>
+        new(MemorySize, Iterations, DegreeOfParallelism);
+
     private const int SaltSize = 16;
     private const int HashSize = 32;
     private const int Iterations = 3;

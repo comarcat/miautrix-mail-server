@@ -281,10 +281,28 @@ namespace Miautrix.Mail.Persistence.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_verified");
 
+                    b.Property<int?>("LockoutDurationMinutes")
+                        .HasColumnType("integer")
+                        .HasColumnName("lockout_duration_minutes");
+
+                    b.Property<int?>("LockoutMaxFailedAttempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("lockout_max_failed_attempts");
+
+                    b.Property<bool>("MfaEnforced")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("mfa_enforced");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("name");
+
+                    b.Property<int?>("SessionLifetimeMinutes")
+                        .HasColumnType("integer")
+                        .HasColumnName("session_lifetime_minutes");
 
                     b.Property<string>("SpfRecord")
                         .HasColumnType("text")

@@ -358,8 +358,8 @@ public sealed class MailboxAdminApiTests : IClassFixture<WebApplicationFactory<M
             var entries = archive.Entries.Select(e => e.FullName).ToList();
 
             Assert.Contains(entries, e => e.EndsWith("/manifest.json", StringComparison.Ordinal));
-            Assert.Contains(entries, e => e.EndsWith(".eml", StringComparison.Ordinal) && e.Contains("7 - Quarterly report"));
-            Assert.Contains(entries, e => e.Contains("attachments/7/report.pdf"));
+            Assert.Contains(entries, e => e.EndsWith(".eml", StringComparison.Ordinal) && e.Contains("1 - Quarterly report"));
+            Assert.Contains(entries, e => e.Contains("attachments/1.1 report.pdf"));
 
             var emlEntry = archive.Entries.Single(e => e.FullName.EndsWith(".eml", StringComparison.Ordinal));
             using var reader = new StreamReader(emlEntry.Open());

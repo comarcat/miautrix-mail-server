@@ -9,6 +9,7 @@ public sealed record DomainDto(
     Guid Id,
     string Name,
     bool IsVerified,
+    bool MfaEnforced,
     string? DkimSelector,
     string? DkimPublicKey,
     string? SpfRecord,
@@ -284,3 +285,24 @@ public sealed record BackupJobDto(
     long SizeBytes,
     DateTimeOffset CreatedAt,
     DateTimeOffset? CompletedAt);
+
+public sealed record SecuritySettingsDto(
+    string PasswordHashingAlgorithm,
+    int Argon2MemoryKb,
+    int Argon2Iterations,
+    int Argon2Parallelism,
+    int SessionLifetimeMinutes,
+    int RefreshLifetimeDays,
+    int LockoutMaxFailedAttempts,
+    int LockoutDurationMinutes,
+    bool MfaEnforced);
+
+public sealed record UpdateSecuritySettingsRequest(
+    bool? MfaEnforced = null,
+    int? SessionLifetimeMinutes = null,
+    int? LockoutMaxFailedAttempts = null,
+    int? LockoutDurationMinutes = null);
+
+public sealed record TenantDto(
+    Guid Id,
+    string Slug);

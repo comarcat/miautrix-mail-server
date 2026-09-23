@@ -26,6 +26,10 @@ public class Domain : TenantScopedEntityBase
 {
     public string Name { get; set; } = string.Empty;
     public bool IsVerified { get; set; }
+    public bool MfaEnforced { get; set; }
+    public int? SessionLifetimeMinutes { get; set; }
+    public int? LockoutMaxFailedAttempts { get; set; }
+    public int? LockoutDurationMinutes { get; set; }
     public string? DkimSelector { get; set; }
     public string? DkimPublicKey { get; set; }
     public string? SpfRecord { get; set; }

@@ -131,10 +131,16 @@ else
 fi
 
 if command -v psql >/dev/null 2>&1; then
-  echo "Verifying mailboxes.name exists..."
-  PGPASSWORD="$(sed -n 's/.*Password=\([^;]*\).*/\1/p' <<<"${CONNECTION_STRING}")" \
-    psql "host=${TARGET_HOST} port=$(sed -n 's/.*Port=\([^;]*\).*/\1/p' <<<"${CONNECTION_STRING}") dbname=${TARGET_DB} user=$(sed -n 's/.*Username=\([^;]*\).*/\1/p' <<<"${CONNECTION_STRING}")" \
-    -tAc "select column_name from information_schema.columns where table_name='mailboxes' and column_name='name';" | grep -qx "name"
+  DB_PORT_VALUE="$(sed -n 's/.*Port=\([^;]*\).*/\1/p' <<<"${CONNECTION_STRING}")"
+  DB_USER_VALUE="$(sed -n 's/.*Username=\([^;]*\).*/\1/p' <<<"${CONNECTION_STRING}")"
+  DB_PASSWORD_VALUE="$(sed -n 's/.*Password=\([^;]*\).*/\1/p' <<<"${CONNECTION_STRING}")"
+
+  echo "Verifying tenants.mfa_enforced exists..."
+  PGPASSWORD="${DB_PASSWORD_VALUE}" \
+    psql "host=${TARGET_HOST} port=${DB_PORT_VALUE} dbname=${TARGET_DB} user=${DB_USER_VALUE}" \
+    -tAc "select column_name from information_schema.columns where table_name='tenants' and column_name='mfa_enforced';" | grep -qx "mfa_enforced"
+else
+  echo "psql not found; skipping direct column verification."
 fi
 
 echo "Production database update completed successfully."

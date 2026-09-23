@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { QueueItem, ApiResponse, QueueQueryParams } from '../types';
 import { AdminApiClient, apiClient as defaultClient } from '../api/client';
-import { matchesDomain } from '../utils/domainFilter';
+import { ALL_DOMAINS } from '../utils/domainFilter';
 
 interface QueueScreenProps {
   client?: AdminApiClient;
@@ -17,6 +17,9 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({
   const [items, setItems] = useState<QueueItem[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchInput, setSearchInput] = useState<string>('');
+  const today = new Date().toISOString().slice(0, 10);
+  const [startDate, setStartDate] = useState<string>(today);
+  const [endDate, setEndDate] = useState<string>(today);
   const [activeSearch, setActiveSearch] = useState<string>('');
   const [currentCursor, setCurrentCursor] = useState<string | null>(null);
   const [cursorHistory, setCursorHistory] = useState<string[]>([]);
@@ -26,18 +29,36 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<QueueItem | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [reassignAddress, setReassignAddress] = useState<string>('');
+  const [reassignBusy, setReassignBusy] = useState<boolean>(false);
+
+  const toStartAt = (date: string) => (date ? `${date}T00:00:01` : undefined);
+  const toEndAt = (date: string) => (date ? `${date}T23:59:59` : undefined);
 
   const fetchQueuePage = useCallback(
-    async (cursor: string | null, status: string, search: string) => {
+    async (
+      cursor: string | null,
+      status: string,
+      search: string,
+      fromDate: string,
+      toDate: string,
+    ) => {
       setLoading(true);
       setError(null);
       try {
+        const domainParam =
+          !domainFilter || domainFilter === ALL_DOMAINS ? 'all' : domainFilter;
+
         const params: QueueQueryParams = {
           limit: pageSize,
           cursor: cursor || undefined,
           status: status !== 'all' ? status : undefined,
           search: search.trim() || undefined,
+          start_at: toStartAt(fromDate),
+          end_at: toEndAt(toDate),
+          domain: domainParam,
         };
+
         const response: ApiResponse<QueueItem[]> = await client.getQueue(params);
         setItems(response.data || []);
         setNextCursor(response.meta?.next_cursor || null);
@@ -49,12 +70,25 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({
         setLoading(false);
       }
     },
-    [client, pageSize]
+    [client, pageSize, domainFilter]
   );
 
   useEffect(() => {
-    fetchQueuePage(currentCursor, statusFilter, activeSearch);
-  }, [fetchQueuePage, currentCursor, statusFilter, activeSearch]);
+    fetchQueuePage(currentCursor, statusFilter, activeSearch, startDate, endDate);
+  }, [
+    fetchQueuePage,
+    currentCursor,
+    statusFilter,
+    activeSearch,
+    startDate,
+    endDate,
+  ]);
+
+  useEffect(() => {
+    // Domain picker changes must be cursor-safe.
+    setCurrentCursor(null);
+    setCursorHistory([]);
+  }, [domainFilter]);
 
   const handleStatusChange = (status: string) => {
     setStatusFilter(status);
@@ -85,13 +119,37 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({
     }
   };
 
+
   const handleRetry = async (id: string) => {
     try {
       const res = await client.retryQueueItem(id, 'Manual retry from Admin UI');
       setActionMessage(res.message || 'Queued for immediate retry');
-      fetchQueuePage(currentCursor, statusFilter, activeSearch);
+      fetchQueuePage(currentCursor, statusFilter, activeSearch, startDate, endDate);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Retry failed');
+    }
+  };
+
+  const handleReassign = async () => {
+    if (!selectedItem) return;
+    const address = reassignAddress.trim();
+    if (!address) {
+      setError('Enter a mailbox address to resend to.');
+      return;
+    }
+
+    setReassignBusy(true);
+    setError(null);
+    try {
+      await client.reassignQueueItem(selectedItem.id, address);
+      setActionMessage('Queue item reassigned; persistence will re-deliver.');
+      setSelectedItem(null);
+      setReassignAddress('');
+      fetchQueuePage(currentCursor, statusFilter, activeSearch, startDate, endDate);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Reassign failed');
+    } finally {
+      setReassignBusy(false);
     }
   };
 
@@ -100,7 +158,7 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({
     try {
       await client.deleteQueueItem(id);
       setActionMessage('Message removed from queue');
-      fetchQueuePage(currentCursor, statusFilter, activeSearch);
+      fetchQueuePage(currentCursor, statusFilter, activeSearch, startDate, endDate);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Delete failed');
     }
@@ -129,8 +187,6 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({
     }
   };
 
-  const visibleItems = items.filter((i) => matchesDomain(domainFilter, i.recipient, i.sender));
-
   return (
     <div className="screen-container queue-screen" data-testid="queue-screen">
       <div className="screen-header">
@@ -143,7 +199,9 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({
         <div className="header-actions">
           <button
             className="btn btn-secondary"
-            onClick={() => fetchQueuePage(currentCursor, statusFilter, activeSearch)}
+            onClick={() =>
+              fetchQueuePage(currentCursor, statusFilter, activeSearch, startDate, endDate)
+            }
             title="Refresh queue view"
           >
             Refresh
@@ -154,14 +212,18 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({
       {actionMessage && (
         <div className="alert alert-info" role="status">
           <span>{actionMessage}</span>
-          <button className="alert-close" onClick={() => setActionMessage(null)}>✕</button>
+          <button className="alert-close" onClick={() => setActionMessage(null)}>
+            ✕
+          </button>
         </div>
       )}
 
       {error && (
         <div className="alert alert-error" role="alert">
           <span>{error}</span>
-          <button className="alert-close" onClick={() => setError(null)}>✕</button>
+          <button className="alert-close" onClick={() => setError(null)}>
+            ✕
+          </button>
         </div>
       )}
 
@@ -181,6 +243,37 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({
                 : status.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
             </button>
           ))}
+        </div>
+
+        <div className="filter-dates">
+          <div className="date-field">
+            <label className="date-label">Start Date</label>
+            <input
+              type="date"
+              className="input-date"
+              value={startDate}
+              onChange={(e) => {
+                setStartDate(e.target.value);
+                setCurrentCursor(null);
+                setCursorHistory([]);
+              }}
+              aria-label="Start date"
+            />
+          </div>
+          <div className="date-field">
+            <label className="date-label">End Date</label>
+            <input
+              type="date"
+              className="input-date"
+              value={endDate}
+              onChange={(e) => {
+                setEndDate(e.target.value);
+                setCurrentCursor(null);
+                setCursorHistory([]);
+              }}
+              aria-label="End date"
+            />
+          </div>
         </div>
 
         <form onSubmit={handleSearchSubmit} className="search-form">
@@ -207,7 +300,7 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({
             <div className="spinner" />
             <p>Loading queue messages...</p>
           </div>
-        ) : visibleItems.length === 0 ? (
+        ) : items.length === 0 ? (
           <div className="empty-state" data-testid="queue-empty">
             <p>No messages found in queue matching criteria.</p>
           </div>
@@ -227,7 +320,7 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {visibleItems.map((item) => (
+                {items.map((item) => (
                   <tr key={item.id} className="table-row">
                     <td>
                       <span className={`badge ${getStatusBadgeClass(item.status)}`}>
@@ -281,7 +374,7 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({
         <div className="pagination-bar" data-testid="pagination-bar">
           <div className="pagination-info">
             <span>
-              Showing {visibleItems.length} items {currentCursor ? '(cursor paged)' : '(page 1)'}
+              Showing {items.length} items {currentCursor ? '(cursor paged)' : '(page 1)'}
             </span>
           </div>
           <div className="pagination-controls">
@@ -310,7 +403,9 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3 className="modal-title">Queue Message Details</h3>
-              <button className="btn-close" onClick={() => setSelectedItem(null)}>✕</button>
+              <button className="btn-close" onClick={() => setSelectedItem(null)}>
+                ✕
+              </button>
             </div>
             <div className="modal-body">
               <div className="detail-row">
@@ -368,6 +463,30 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({
                 >
                   Retry Now
                 </button>
+              )}
+              {(selectedItem.status === 'retrying' || selectedItem.status === 'dead_letter') && (
+                <div style={{ width: '100%' }}>
+                  <div className="detail-row" style={{ marginTop: '12px' }}>
+                    <span className="detail-label">Resend/Assign to:</span>
+                    <input
+                      type="email"
+                      className="input-text"
+                      value={reassignAddress}
+                      onChange={(e) => setReassignAddress(e.target.value)}
+                      placeholder="user@example.com"
+                      aria-label="Resend mailbox address"
+                      style={{ flex: 1, marginLeft: '12px' }}
+                    />
+                  </div>
+                  <button
+                    className="btn btn-primary"
+                    disabled={reassignBusy}
+                    onClick={() => handleReassign()}
+                    title="Reassign the queue item to a different mailbox and re-deliver"
+                  >
+                    {reassignBusy ? 'Reassigning…' : 'Resend/Assign'}
+                  </button>
+                </div>
               )}
             </div>
           </div>

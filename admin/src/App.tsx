@@ -5,6 +5,7 @@ import { QueueScreen } from './components/QueueScreen';
 import { RuleDesignerScreen } from './components/RuleDesignerScreen';
 import { MailFlowScreen } from './components/MailFlowScreen';
 import { UsersScreen } from './components/UsersScreen';
+import { SharedMailboxesScreen } from './components/SharedMailboxesScreen';
 import { DomainsScreen } from './components/DomainsScreen';
 import { IdentityScreen } from './components/IdentityScreen';
 import { SecurityScreen } from './components/SecurityScreen';
@@ -99,12 +100,14 @@ export const App: React.FC = () => {
         return <MailFlowScreen onOpenDesigner={() => setActiveScreen('rule-designer')} />;
       case 'users':
         return <UsersScreen domainFilter={selectedDomain} />;
+      case 'shared-mailboxes':
+        return <SharedMailboxesScreen domainFilter={selectedDomain} />;
       case 'domains':
         return <DomainsScreen />;
       case 'identity':
         return <IdentityScreen />;
       case 'security':
-        return <SecurityScreen />;
+        return <SecurityScreen selectedDomain={selectedDomain} />;
       case 'anti-spam':
         return <AntiSpamScreen />;
       case 'anti-malware':

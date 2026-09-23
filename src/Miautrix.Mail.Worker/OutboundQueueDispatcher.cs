@@ -173,6 +173,7 @@ public sealed class OutboundQueueDispatcher : BackgroundService
                 .Where(d => d.TransportMode == DomainTransportModes.Cloudflare)
                 .ToDictionary(d => d.Name.ToLowerInvariant(), d => (d.CloudflareWorkerUrl, d.CloudflareZoneId));
 
+
             var rows = await db.SmtpQueue
                 .Where(q => q.TenantId == tenantId && (q.Status == "Pending" || q.Status == "Failed") && q.NextAttemptAt <= now)
                 .OrderBy(q => q.NextAttemptAt)
@@ -184,15 +185,11 @@ public sealed class OutboundQueueDispatcher : BackgroundService
                 var host = row.Recipient.Split('@').Last().ToLowerInvariant();
 
                 // 1. Try recipient-specific relay config.
-                // 2. Fallback to the tenant's Primary domain relay.
                 if (domainMap.TryGetValue(host, out var config))
                 {
                     await DeliverAsync(queueManager, transport, row, config.Item1, config.Item2, ct);
                 }
-                else if (primary != null)
-                {
-                    await DeliverAsync(queueManager, transport, row, primary.CloudflareWorkerUrl, primary.CloudflareZoneId, ct);
-                }
+                // else: recipient domain is not Cloudflare-enabled => leave Pending/Failed for retries.
 
                 totalProcessed++;
                 if (totalProcessed >= BatchSize) break;

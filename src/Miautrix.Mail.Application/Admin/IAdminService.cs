@@ -56,4 +56,7 @@ public interface IAdminService
     Task<LicensingDto> GetLicensingAsync(Guid tenantId, Guid userId, CancellationToken ct = default);
     Task<IReadOnlyList<BackupJobDto>> GetBackupJobsAsync(Guid tenantId, Guid userId, CancellationToken ct = default);
     Task<BackupJobDto> CreateBackupAsync(Guid tenantId, Guid userId, CancellationToken ct = default);
+    Task<IReadOnlyList<TenantDto>> ListTenantsAsync(Guid tenantId, Guid userId, CancellationToken ct = default);
+    Task<SecuritySettingsDto> GetSecuritySettingsAsync(Guid domainId, Guid userId, CancellationToken ct = default);
+    Task<SecuritySettingsDto> UpdateSecuritySettingsAsync(Guid domainId, Guid userId, UpdateSecuritySettingsRequest request, CancellationToken ct = default);
 }

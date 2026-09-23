@@ -9,6 +9,7 @@
     ".NETCoreApp,Version=v10.0/linux-x64": {
       "Miautrix.Mail.Worker/1.0.0": {
         "dependencies": {
+          "Miautrix.Mail.AntiSpam": "1.0.0",
           "Miautrix.Mail.Application": "1.0.0",
           "Miautrix.Mail.Domain": "1.0.0",
           "Miautrix.Mail.Identity": "1.0.0",
@@ -1270,6 +1271,19 @@
           }
         }
       },
+      "Miautrix.Mail.AntiSpam/1.0.0": {
+        "dependencies": {
+          "Miautrix.Mail.Domain": "1.0.0",
+          "Miautrix.Mail.Persistence": "1.0.0",
+          "Miautrix.Mail.Protocols.Smtp": "1.0.0"
+        },
+        "runtime": {
+          "Miautrix.Mail.AntiSpam.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      },
       "Miautrix.Mail.Application/1.0.0": {
         "dependencies": {
           "DnsClient": "1.8.0",
@@ -1690,6 +1704,11 @@
       "sha512": "sha512-xXo5NcIPeMUMfpo9Efl/3Rgomjb/Jfa3Aa0BgSfqYctN4YpwjPzvIrnD9JTwoKqe3pFtLF9vmtMl892+wwZ6EA==",
       "path": "system.diagnostics.eventlog/10.0.4",
       "hashPath": "system.diagnostics.eventlog.10.0.4.nupkg.sha512"
+    },
+    "Miautrix.Mail.AntiSpam/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
     },
     "Miautrix.Mail.Application/1.0.0": {
       "type": "project",

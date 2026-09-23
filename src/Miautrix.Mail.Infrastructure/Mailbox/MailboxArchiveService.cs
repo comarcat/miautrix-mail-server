@@ -103,17 +103,26 @@ public sealed class MailboxArchiveService : IMailboxArchiveService
         var missingBlobs = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
         var archiveMessages = new List<MailboxArchiveMessage>();
         var usedFolderDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var folderDirsById = new Dictionary<Guid, string>();
+        var usedEmlNamesByFolder = new Dictionary<Guid, HashSet<string>>();
         var attachmentCount = 0;
+        var messageIndex = 0;
 
         try
         {
             foreach (var message in messages)
             {
+                messageIndex++;
                 var folderName = folderNames.TryGetValue(message.FolderId, out var name) && !string.IsNullOrWhiteSpace(name)
                     ? name
                     : UnfiledFolder;
-                var folderDir = Path.Combine(rootDir, UniqueName(usedFolderDirs, SanitizeName(folderName, UnfiledFolder)));
-                Directory.CreateDirectory(folderDir);
+
+                if (!folderDirsById.TryGetValue(message.FolderId, out var folderDir))
+                {
+                    folderDir = Path.Combine(rootDir, UniqueName(usedFolderDirs, SanitizeName(folderName, UnfiledFolder)));
+                    folderDirsById[message.FolderId] = folderDir;
+                    Directory.CreateDirectory(folderDir);
+                }
 
                 var messageAttachments = attachmentsByMessage.TryGetValue(message.Id, out var list) ? list : [];
                 var archiveAttachments = new List<MailboxArchiveAttachment>(messageAttachments.Count);
@@ -137,7 +146,13 @@ public sealed class MailboxArchiveService : IMailboxArchiveService
                     }
                 }
 
-                var emlFileName = $"{message.Uid} - {SanitizeName(message.Subject, "no subject")}.eml";
+                if (!usedEmlNamesByFolder.TryGetValue(message.FolderId, out var usedEmlNames))
+                {
+                    usedEmlNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    usedEmlNamesByFolder[message.FolderId] = usedEmlNames;
+                }
+
+                var emlFileName = UniqueName(usedEmlNames, $"{messageIndex} - {SanitizeName(message.Subject, "no subject")}.eml");
                 var emlRelativePath = $"{rootName}/{Path.GetFileName(folderDir)}/{emlFileName}";
                 var emlPath = Path.Combine(folderDir, emlFileName);
                 var emlBytes = BuildEml(message, messageAttachments, resolved);
@@ -145,12 +160,14 @@ public sealed class MailboxArchiveService : IMailboxArchiveService
 
                 if (messageAttachments.Count > 0)
                 {
-                    var attachmentDir = Path.Combine(folderDir, "attachments", message.Uid.ToString());
+                    var attachmentDir = Path.Combine(folderDir, "attachments");
                     Directory.CreateDirectory(attachmentDir);
                     var usedAttachmentNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    var attachmentIndex = 0;
 
                     foreach (var attachment in messageAttachments)
                     {
+                        attachmentIndex++;
                         if (resolved is null || !resolved.TryGetValue(attachment.Id, out var bytes))
                         {
                             archiveAttachments.Add(new MailboxArchiveAttachment(
@@ -158,7 +175,7 @@ public sealed class MailboxArchiveService : IMailboxArchiveService
                             continue;
                         }
 
-                        var fileName = UniqueName(usedAttachmentNames, SanitizeName(attachment.FileName, "attachment"));
+                        var fileName = UniqueName(usedAttachmentNames, $"{messageIndex}.{attachmentIndex} {SanitizeName(attachment.FileName, "attachment")}");
                         await File.WriteAllBytesAsync(Path.Combine(attachmentDir, fileName), bytes, ct);
                         attachmentCount++;
                         archiveAttachments.Add(new MailboxArchiveAttachment(
@@ -166,7 +183,7 @@ public sealed class MailboxArchiveService : IMailboxArchiveService
                             attachment.ContentType,
                             bytes.LongLength,
                             true,
-                            $"{rootName}/{Path.GetFileName(folderDir)}/attachments/{message.Uid}/{fileName}"));
+                            $"{rootName}/{Path.GetFileName(folderDir)}/attachments/{fileName}"));
                     }
                 }
 

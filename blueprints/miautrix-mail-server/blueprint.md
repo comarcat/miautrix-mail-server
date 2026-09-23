@@ -16,6 +16,8 @@ clarifying question. Every step carries an EARS acceptance criterion, a verify c
 
 Read Section 9 in order. Do not skip, reorder, or merge steps.
 
+Security control follow-up work for TLS policy controls, DANE/DNSSEC validation, and DKIM key rotation is tracked in `docs/security.md`.
+
 **Section 20 names the verification work that was and was not done.** Read it first.
 
 ---

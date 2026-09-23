@@ -78,7 +78,6 @@ public class AppDbContext : DbContext
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.CreatedAt).HasColumnName("created_at");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
-
             entity.Property(e => e.Slug)
                 .HasColumnName("slug")
                 .IsRequired();
@@ -102,6 +101,10 @@ public class AppDbContext : DbContext
         {
             entity.Property(e => e.Name).HasColumnName("name").IsRequired();
             entity.Property(e => e.IsVerified).HasColumnName("is_verified");
+            entity.Property(e => e.MfaEnforced).HasColumnName("mfa_enforced").HasDefaultValue(false).IsRequired();
+            entity.Property(e => e.SessionLifetimeMinutes).HasColumnName("session_lifetime_minutes");
+            entity.Property(e => e.LockoutMaxFailedAttempts).HasColumnName("lockout_max_failed_attempts");
+            entity.Property(e => e.LockoutDurationMinutes).HasColumnName("lockout_duration_minutes");
             entity.Property(e => e.DkimSelector).HasColumnName("dkim_selector");
             entity.Property(e => e.DkimPublicKey).HasColumnName("dkim_public_key");
             entity.Property(e => e.SpfRecord).HasColumnName("spf_record");

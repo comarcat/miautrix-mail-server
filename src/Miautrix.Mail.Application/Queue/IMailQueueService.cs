@@ -17,6 +17,17 @@ public interface IMailQueueService
         string reason,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Reassign the queue item recipient mailbox and re-queue it for inbound persistence.
+    /// Applicable to failed and dead-letter queue items.
+    /// </summary>
+    Task<SmtpQueueItem> ReassignAsync(
+        Guid tenantId,
+        Guid userId,
+        Guid queueItemId,
+        string targetMailboxAddress,
+        CancellationToken cancellationToken = default);
+
     Task DeleteAsync(
         Guid tenantId,
         Guid userId,
