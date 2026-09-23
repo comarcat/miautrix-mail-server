@@ -7,7 +7,7 @@
 **Project Lead / Architect:** Cristobal Arboleda  
 **Status:** Approved / Active Implementation & Production Integration
 
-**Last Updated:** 2026-09-21  
+**Last Updated:** 2026-09-23  
 
 ---
 
@@ -82,9 +82,9 @@ Miautrix Mail Server
 | **#14** | Backend Mailbox & Message REST API | `/api/v1/mailboxes`, folders, `/messages`, `/send`; mailbox-scoped reads/writes now authorize through shared central mailbox access helper before message operations. | #12 | ✅ Implemented |
 | **#15** | Backend Admin Management REST API | `/api/v1/domains`, `/users`, `/shared-mailboxes`, `/rules`, `/audit`; shared mailboxes are passwordless mailbox resources with delegate assignment endpoints. | #12 | ✅ Implemented |
 | **#16** | Functional Webmail Frontend | Full-width responsive layout, asset/icon paths, Auth/Mailbox REST wiring. | #13, #14 | ✅ Implemented / 🔄 Live retest after migration |
-| **#17** | Functional Admin Console Frontend | Functional Admin UI including Users/Domains; shared mailbox create flow supports passwordless create and same-domain read/write delegates. Edit-time delegate UI remains backend/API-ready but not fully wired in visible form. | #13, #15 | 🔄 Mostly complete |
-| **#18** | Automated Deployment & Live Verification | Build, migrate, publish Linux x64 Web and Worker binaries & SPAs, deploy to Debian LXC `10.11.1.51` behind `mail.miautrix.tech`, and verify end-to-end. | #16, #17 | ✅ Web + worker deploy verified 2026-09-21 |
-| **CF-01** | Cloudflare Workers transport per domain | Cloudflare can be selected per tenant-owned domain; external recipients are delivered through the tenant's primary Cloudflare Worker without adding external domains to `domains`; Admin Queue Retry sends the required JSON reason. | #18 | ✅ Live verified 2026-09-21 |
+| **#17** | Functional Admin Console Frontend | Functional Admin UI including Users/Domains/Quarantine; quarantine supports domain/date filtering, 2-button row actions, and "suspected spam released" tag on delivery. | #13, #15 | ✅ Implemented |
+| **#18** | Automated Deployment & Live Verification | Build, migrate, publish Linux x64 Web, Worker, and AntiSpam binaries & SPAs, deploy to Debian LXC `10.11.1.51` behind `mail.miautrix.tech`, and verify end-to-end. | #16, #17 | ✅ Web + worker deploy verified 2026-09-21 |
+| **CF-01** | Cloudflare Workers transport per domain | Cloudflare can be selected per tenant-owned domain; external recipients delivered via tenant worker. Queue Retry and Quarantine Release send required diagnostic/tags. | #18 | ✅ Live verified 2026-09-21, ✅ Admin release workflow verified 2026-09-23 |
 
 ---
 
@@ -99,6 +99,7 @@ Each work package carries strict Acceptance Criteria under the EARS standard (*W
 5. **Security & Privacy:** Passwords and secrets are never logged; invitation tokens and API keys are stored as cryptographically secure hashes.
 6. **Shared Mailbox Identity Boundary:** Shared mailboxes are mailbox resources, not login identities. Creation does not require or process a password and does not create `User`, `UserCredential`, or `Membership` rows.
 7. **Delegate Authorization:** Shared mailbox delegates must be active same-tenant, exact-domain users. `read` delegates may read mailbox/folder/message/attachment content; `write` delegates may perform approved mutations such as mark-read, move, delete, and send.
+8. **Quarantine Lifecycle:** Discard updates quarantine status to `Discarded` without deleting database rows or `.eml` artifacts; Release queues the message for delivery with `[SPAM Supected-Released]` subject tagging and worker anti-spam bypass.
 
 ---
 
