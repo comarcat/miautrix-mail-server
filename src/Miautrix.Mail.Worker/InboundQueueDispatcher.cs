@@ -22,6 +22,8 @@ public sealed class InboundQueueDispatcher : BackgroundService
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(5);
     private const int BatchSize = 50;
 
+    private const string SpamSupectedReleasedTag = "[SPAM Supected-Released]";
+
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<InboundQueueDispatcher> _logger;
 
@@ -99,7 +101,17 @@ public sealed class InboundQueueDispatcher : BackgroundService
             Subject: subject,
             RawMessage: item.RawMessage);
 
-        var result = await quarantineService.ProcessInboundMessageAsync(item.TenantId, mailContext, cancellationToken: ct);
+        // If the admin explicitly released a quarantined spam message, prevent it from being re-quarantined.
+        // AdminService tags the subject with the exact prefix below before enqueuing.
+        var threshold = item.Subject != null && item.Subject.Contains(SpamSupectedReleasedTag, StringComparison.OrdinalIgnoreCase)
+            ? 1000.0
+            : 5.0;
+
+        var result = await quarantineService.ProcessInboundMessageAsync(
+            item.TenantId,
+            mailContext,
+            threshold: threshold,
+            cancellationToken: ct);
 
         if (!result.Delivered)
         {

@@ -12,6 +12,7 @@
     <ProjectReference Include="..\Miautrix.Mail.Security\Miautrix.Mail.Security.csproj" />
     <ProjectReference Include="..\Miautrix.Mail.Identity\Miautrix.Mail.Identity.csproj" />
     <ProjectReference Include="..\Miautrix.Mail.Infrastructure\Miautrix.Mail.Infrastructure.csproj" />
+    <ProjectReference Include="..\Miautrix.Mail.Queue\Miautrix.Mail.Queue.csproj" />
   </ItemGroup>
 
   <ItemGroup>

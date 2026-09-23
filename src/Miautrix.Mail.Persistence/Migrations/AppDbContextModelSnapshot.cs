@@ -304,6 +304,42 @@ namespace Miautrix.Mail.Persistence.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("session_lifetime_minutes");
 
+                    b.Property<double>("SpamGreylistScore")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("double precision")
+                        .HasDefaultValue(4.0)
+                        .HasColumnName("spam_greylist_score");
+
+                    b.Property<bool>("SpamGreylistingEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("spam_greylisting_enabled");
+
+                    b.Property<double>("SpamHeaderScore")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("double precision")
+                        .HasDefaultValue(6.0)
+                        .HasColumnName("spam_header_score");
+
+                    b.Property<double>("SpamQuarantineScore")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("double precision")
+                        .HasDefaultValue(10.0)
+                        .HasColumnName("spam_quarantine_score");
+
+                    b.Property<double>("SpamRejectScore")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("double precision")
+                        .HasDefaultValue(14.0)
+                        .HasColumnName("spam_reject_score");
+
+                    b.Property<bool>("SpamSpfDmarcEnforcementEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("spam_spf_dmarc_enforcement_enabled");
+
                     b.Property<string>("SpfRecord")
                         .HasColumnType("text")
                         .HasColumnName("spf_record");

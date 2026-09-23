@@ -37,6 +37,8 @@ public interface IAdminService
     Task<IReadOnlyList<QuarantineItemDto>> ListQuarantineAsync(Guid tenantId, Guid userId, QuarantineFilter filter, CancellationToken ct = default);
     Task<QuarantineItemDto?> GetQuarantineItemAsync(Guid tenantId, Guid userId, Guid id, CancellationToken ct = default);
     Task<bool> ReleaseQuarantineItemAsync(Guid tenantId, Guid userId, Guid id, CancellationToken ct = default);
+    Task<bool> DeliverAndDeleteQuarantineItemAsync(Guid tenantId, Guid userId, Guid id, CancellationToken ct = default);
+    Task<MailFlowRuleDto?> BlockQuarantineSenderDomainAsync(Guid tenantId, Guid userId, Guid id, CancellationToken ct = default);
     Task<bool> DeleteQuarantineItemAsync(Guid tenantId, Guid userId, Guid id, CancellationToken ct = default);
 
     // Audit
@@ -59,4 +61,6 @@ public interface IAdminService
     Task<IReadOnlyList<TenantDto>> ListTenantsAsync(Guid tenantId, Guid userId, CancellationToken ct = default);
     Task<SecuritySettingsDto> GetSecuritySettingsAsync(Guid domainId, Guid userId, CancellationToken ct = default);
     Task<SecuritySettingsDto> UpdateSecuritySettingsAsync(Guid domainId, Guid userId, UpdateSecuritySettingsRequest request, CancellationToken ct = default);
+    Task<AntiSpamSettingsDto> GetAntiSpamSettingsAsync(Guid domainId, Guid userId, CancellationToken ct = default);
+    Task<AntiSpamSettingsDto> UpdateAntiSpamSettingsAsync(Guid domainId, Guid userId, UpdateAntiSpamSettingsRequest request, CancellationToken ct = default);
 }

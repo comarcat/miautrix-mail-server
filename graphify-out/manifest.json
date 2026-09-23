@@ -24,15 +24,15 @@
     "semantic_hash": "7f553b925843ea92099966f163b87865"
   },
   "architecture.json": {
-    "mtime": 1790029020.4084215,
-    "seen": 1790031773.338431,
-    "ast_hash": "b6f7cdd8065266daf501ac2e0253356d",
+    "mtime": 1790132731.7594557,
+    "seen": 1790133280.4271019,
+    "ast_hash": "97af12aec65e569c0f03221078fd4e65",
     "semantic_hash": ""
   },
   "architecture.visual-check.json": {
-    "mtime": 1789953565.7913373,
-    "seen": 1790031773.338431,
-    "ast_hash": "7eb9c59d01d99355d7d25d082e27bbe0",
+    "mtime": 1790132746.5383124,
+    "seen": 1790133280.4271019,
+    "ast_hash": "44c101d609dbfa13069300e1ebca8a44",
     "semantic_hash": ""
   },
   "blueprints/_verify/versions.mjs": {
@@ -594,9 +594,9 @@
     "semantic_hash": ""
   },
   "architecture.html": {
-    "mtime": 1789953507.7360587,
-    "seen": 1790031773.338431,
-    "ast_hash": "2af2bb8ef81dbeac399053aa2f77107c",
+    "mtime": 1790132737.9431903,
+    "seen": 1790133280.4283922,
+    "ast_hash": "e2a9e801e02ce9bd7d8f65c9fb4d3585",
     "semantic_hash": ""
   },
   "blueprints/miautrix-mail-server/blueprint.md": {
@@ -3715,8 +3715,8 @@
   },
   "migrations.sql": {
     "mtime": 1789787693.1218731,
-    "seen": 1790031773.338431,
-    "ast_hash": "",
+    "seen": 1790133280.4271019,
+    "ast_hash": "9902ae9c1aeb571bf0ef6b23d090b8a4",
     "semantic_hash": ""
   },
   "admin/src/components/ChangePasswordView.tsx": {
@@ -3853,8 +3853,8 @@
   },
   "scripts/init-db-permissions.sql": {
     "mtime": 1789839391.504161,
-    "seen": 1790031773.338431,
-    "ast_hash": "",
+    "seen": 1790133280.4271019,
+    "ast_hash": "6d5cd9bd694bf2500127165a95b285bd",
     "semantic_hash": ""
   },
   "scripts/inject-flow-mail-test.ps1": {
@@ -4019,12 +4019,6 @@
     "ast_hash": "da58794980f46ae58adcdd286bf72479",
     "semantic_hash": ""
   },
-  "architecture.visual-check.html": {
-    "mtime": 1789953565.7903378,
-    "seen": 1790031773.338431,
-    "ast_hash": "70200f4c1c2f169f693506b9ddcde037",
-    "semantic_hash": ""
-  },
   "empty.txt": {
     "mtime": 1789964262.945804,
     "seen": 1790031773.338431,
@@ -4041,30 +4035,6 @@
     "mtime": 1790132196.524961,
     "seen": 1790132511.0867229,
     "ast_hash": "4ccd099f13855db6dc377a7cd156f8cc",
-    "semantic_hash": ""
-  },
-  "architecture.visual-check.1440x900.dark.png": {
-    "mtime": 1789953565.3781404,
-    "seen": 1790031773.338431,
-    "ast_hash": "727127cc91a2eb31b12cb7946f6f7f2e",
-    "semantic_hash": ""
-  },
-  "architecture.visual-check.1440x900.light.png": {
-    "mtime": 1789953563.9621935,
-    "seen": 1790031773.338431,
-    "ast_hash": "e1ad15764aa43344a0f08e6553efd9a3",
-    "semantic_hash": ""
-  },
-  "architecture.visual-check.2048x1320.dark.png": {
-    "mtime": 1789953565.7883363,
-    "seen": 1790031773.338431,
-    "ast_hash": "fc7b6e1c9b54c95c64aab571acb959c6",
-    "semantic_hash": ""
-  },
-  "architecture.visual-check.2048x1320.light.png": {
-    "mtime": 1789953564.9894805,
-    "seen": 1790031773.338431,
-    "ast_hash": "56d7ca6d0db1fe5ba982118ba5d893a8",
     "semantic_hash": ""
   },
   "publish/admin/images/Admin-Icons.jpg": {

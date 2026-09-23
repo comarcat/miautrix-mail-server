@@ -109,7 +109,7 @@ export const App: React.FC = () => {
       case 'security':
         return <SecurityScreen selectedDomain={selectedDomain} />;
       case 'anti-spam':
-        return <AntiSpamScreen />;
+        return <AntiSpamScreen selectedDomain={selectedDomain} />;
       case 'anti-malware':
         return <AntiMalwareScreen />;
       case 'quarantine':

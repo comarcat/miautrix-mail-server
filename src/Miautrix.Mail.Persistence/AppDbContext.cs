@@ -105,6 +105,12 @@ public class AppDbContext : DbContext
             entity.Property(e => e.SessionLifetimeMinutes).HasColumnName("session_lifetime_minutes");
             entity.Property(e => e.LockoutMaxFailedAttempts).HasColumnName("lockout_max_failed_attempts");
             entity.Property(e => e.LockoutDurationMinutes).HasColumnName("lockout_duration_minutes");
+            entity.Property(e => e.SpamRejectScore).HasColumnName("spam_reject_score").HasDefaultValue(14.0).IsRequired();
+            entity.Property(e => e.SpamQuarantineScore).HasColumnName("spam_quarantine_score").HasDefaultValue(10.0).IsRequired();
+            entity.Property(e => e.SpamHeaderScore).HasColumnName("spam_header_score").HasDefaultValue(6.0).IsRequired();
+            entity.Property(e => e.SpamGreylistScore).HasColumnName("spam_greylist_score").HasDefaultValue(4.0).IsRequired();
+            entity.Property(e => e.SpamGreylistingEnabled).HasColumnName("spam_greylisting_enabled").HasDefaultValue(true).IsRequired();
+            entity.Property(e => e.SpamSpfDmarcEnforcementEnabled).HasColumnName("spam_spf_dmarc_enforcement_enabled").HasDefaultValue(true).IsRequired();
             entity.Property(e => e.DkimSelector).HasColumnName("dkim_selector");
             entity.Property(e => e.DkimPublicKey).HasColumnName("dkim_public_key");
             entity.Property(e => e.SpfRecord).HasColumnName("spf_record");

@@ -30,6 +30,12 @@ public class Domain : TenantScopedEntityBase
     public int? SessionLifetimeMinutes { get; set; }
     public int? LockoutMaxFailedAttempts { get; set; }
     public int? LockoutDurationMinutes { get; set; }
+    public double SpamRejectScore { get; set; } = 14.0;
+    public double SpamQuarantineScore { get; set; } = 10.0;
+    public double SpamHeaderScore { get; set; } = 6.0;
+    public double SpamGreylistScore { get; set; } = 4.0;
+    public bool SpamGreylistingEnabled { get; set; } = true;
+    public bool SpamSpfDmarcEnforcementEnabled { get; set; } = true;
     public string? DkimSelector { get; set; }
     public string? DkimPublicKey { get; set; }
     public string? SpfRecord { get; set; }

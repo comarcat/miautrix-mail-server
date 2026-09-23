@@ -26,6 +26,7 @@ import {
   LicensingInfo,
   BackupJobItem,
   SecuritySettings,
+  AntiSpamSettings,
   TenantInfo,
 } from '../types';
 
@@ -367,16 +368,30 @@ export class AdminApiClient {
   }
 
   // Quarantine
-  async getQuarantine(params: { status?: string; search?: string } = {}): Promise<ApiResponse<QuarantineItem[]>> {
+  async getQuarantine(params: { status?: string; search?: string; from?: string; to?: string } = {}): Promise<ApiResponse<QuarantineItem[]>> {
     const query = new URLSearchParams();
     if (params.status) query.set('status', params.status);
     if (params.search) query.set('search', params.search);
+    if (params.from) query.set('from', params.from);
+    if (params.to) query.set('to', params.to);
     const qs = query.toString();
     return this.request<ApiResponse<QuarantineItem[]>>(`/quarantine${qs ? `?${qs}` : ''}`);
   }
 
   async releaseQuarantine(id: string): Promise<{ success: boolean; message: string }> {
     return this.request<{ success: boolean; message: string }>(`/quarantine/${id}/release`, {
+      method: 'POST',
+    });
+  }
+
+  async deliverAndDeleteQuarantine(id: string): Promise<{ success: boolean; message: string }> {
+    return this.request<{ success: boolean; message: string }>(`/quarantine/${id}/deliver-and-delete`, {
+      method: 'POST',
+    });
+  }
+
+  async blockQuarantineSenderDomain(id: string): Promise<ApiResponse<MailFlowRuleItem>> {
+    return this.request<ApiResponse<MailFlowRuleItem>>(`/quarantine/${id}/block-sender-domain`, {
       method: 'POST',
     });
   }
@@ -452,6 +467,21 @@ export class AdminApiClient {
     data: Partial<Pick<SecuritySettings, 'mfa_enforced' | 'session_lifetime_minutes' | 'lockout_max_failed_attempts' | 'lockout_duration_minutes'>>
   ): Promise<ApiResponse<SecuritySettings>> {
     return this.request<ApiResponse<SecuritySettings>>(`/system/domains/${domainId}/security`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getDomainAntiSpamSettings(domainId: string): Promise<ApiResponse<AntiSpamSettings>> {
+    return this.request<ApiResponse<AntiSpamSettings>>(`/system/domains/${domainId}/anti-spam`);
+  }
+
+  async updateDomainAntiSpamSettings(
+    domainId: string,
+    data: Partial<AntiSpamSettings>
+  ): Promise<ApiResponse<AntiSpamSettings>> {
+    return this.request<ApiResponse<AntiSpamSettings>>(`/system/domains/${domainId}/anti-spam`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),

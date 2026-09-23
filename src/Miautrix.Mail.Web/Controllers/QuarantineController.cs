@@ -30,9 +30,11 @@ public sealed class QuarantineController : ControllerBase
         [FromQuery] string? search = null,
         [FromQuery] int limit = 50,
         [FromQuery] string? cursor = null,
+        [FromQuery] DateTimeOffset? from = null,
+        [FromQuery] DateTimeOffset? to = null,
         CancellationToken cancellationToken = default)
     {
-        var filter = new QuarantineFilter(status, search, limit, cursor);
+        var filter = new QuarantineFilter(status, search, limit, cursor, from, to);
         var items = await _adminService.ListQuarantineAsync(
             _context.CurrentTenantId,
             _context.CurrentUserId,
@@ -93,6 +95,58 @@ public sealed class QuarantineController : ControllerBase
 
         return Results.Json(
             new { success = true, message = "Message released and delivered to recipient inbox." },
+            ApiJson.Options,
+            statusCode: StatusCodes.Status200OK);
+    }
+
+    [HttpPost("{id:guid}/deliver-and-delete")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiError), StatusCodes.Status404NotFound)]
+    public async Task<IResult> DeliverAndDelete(Guid id, CancellationToken cancellationToken)
+    {
+        var delivered = await _adminService.DeliverAndDeleteQuarantineItemAsync(
+            _context.CurrentTenantId,
+            _context.CurrentUserId,
+            id,
+            cancellationToken);
+
+        if (!delivered)
+        {
+            return ApiResults.Error(
+                HttpContext,
+                StatusCodes.Status404NotFound,
+                "quarantine_item_not_found",
+                "Quarantine item not found.");
+        }
+
+        return Results.Json(
+            new { success = true, message = "Message released to inbox and removed from quarantine." },
+            ApiJson.Options,
+            statusCode: StatusCodes.Status200OK);
+    }
+
+    [HttpPost("{id:guid}/block-sender-domain")]
+    [ProducesResponseType(typeof(ApiResponse<MailFlowRuleDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiError), StatusCodes.Status404NotFound)]
+    public async Task<IResult> BlockSenderDomain(Guid id, CancellationToken cancellationToken)
+    {
+        var rule = await _adminService.BlockQuarantineSenderDomainAsync(
+            _context.CurrentTenantId,
+            _context.CurrentUserId,
+            id,
+            cancellationToken);
+
+        if (rule is null)
+        {
+            return ApiResults.Error(
+                HttpContext,
+                StatusCodes.Status404NotFound,
+                "quarantine_item_not_found",
+                "Quarantine item not found.");
+        }
+
+        return Results.Json(
+            new ApiResponse<MailFlowRuleDto>(rule),
             ApiJson.Options,
             statusCode: StatusCodes.Status200OK);
     }

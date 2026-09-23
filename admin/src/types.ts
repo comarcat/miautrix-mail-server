@@ -277,6 +277,15 @@ export interface SecuritySettings {
   mfa_enforced: boolean;
 }
 
+export interface AntiSpamSettings {
+  reject_score: number;
+  quarantine_score: number;
+  header_score: number;
+  greylist_score: number;
+  greylisting_enabled: boolean;
+  spf_dmarc_enforcement_enabled: boolean;
+}
+
 export interface TenantInfo {
   id: string;
   slug: string;

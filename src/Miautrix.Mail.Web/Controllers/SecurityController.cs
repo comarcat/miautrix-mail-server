@@ -103,6 +103,54 @@ public sealed class SecurityController : ControllerBase
         }
     }
 
+    [HttpGet("domains/{domainId:guid}/anti-spam")]
+    [ProducesResponseType(typeof(ApiResponse<AntiSpamSettingsDto>), StatusCodes.Status200OK)]
+    public async Task<IResult> GetDomainAntiSpamSettings(Guid domainId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var settings = await _adminService.GetAntiSpamSettingsAsync(
+                domainId,
+                _context.CurrentUserId,
+                cancellationToken);
+
+            return Results.Json(
+                new ApiResponse<AntiSpamSettingsDto>(settings),
+                ApiJson.Options,
+                statusCode: StatusCodes.Status200OK);
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("Domain not found"))
+        {
+            return Results.NotFound(new { error = new { code = "not_found", message = ex.Message } });
+        }
+    }
+
+    [HttpPatch("domains/{domainId:guid}/anti-spam")]
+    [ProducesResponseType(typeof(ApiResponse<AntiSpamSettingsDto>), StatusCodes.Status200OK)]
+    public async Task<IResult> UpdateDomainAntiSpamSettings(
+        Guid domainId,
+        [FromBody] UpdateAntiSpamSettingsRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var settings = await _adminService.UpdateAntiSpamSettingsAsync(
+                domainId,
+                _context.CurrentUserId,
+                request,
+                cancellationToken);
+
+            return Results.Json(
+                new ApiResponse<AntiSpamSettingsDto>(settings),
+                ApiJson.Options,
+                statusCode: StatusCodes.Status200OK);
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("Domain not found"))
+        {
+            return Results.NotFound(new { error = new { code = "not_found", message = ex.Message } });
+        }
+    }
+
     [HttpGet("domains/{domainId:guid}/security")]
     [ProducesResponseType(typeof(ApiResponse<SecuritySettingsDto>), StatusCodes.Status200OK)]
     public async Task<IResult> GetDomainSecuritySettings(Guid domainId, CancellationToken cancellationToken)

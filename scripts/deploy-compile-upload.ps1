@@ -166,10 +166,10 @@ Write-Host "[4/6] Uploading to LXC ($TargetIp) via SCP..." -ForegroundColor Gree
 Write-Host " -> Preparing target directories and stopping running service..." -ForegroundColor Green
 # The blob store must survive a deploy: it is never inside the uploaded payload, and this
 # step never removes files from the destination.
-ssh -o StrictHostKeyChecking=no $Remote "systemctl stop miautrix-mail-worker || true; systemctl stop miautrix-mail || true;
+$sshOut = & ssh -o StrictHostKeyChecking=no $Remote "systemctl stop miautrix-mail-worker || true; systemctl stop miautrix-mail || true;
   mkdir -p $RemoteRoot/app $RemoteRoot/worker $RemoteRoot/admin $RemoteRoot/webmail $RemoteRoot/data;
-  rm -rf $RemoteRoot/app/* $RemoteRoot/worker/*"
-if ($LASTEXITCODE -ne 0) { throw "Target directory prep failed ($LASTEXITCODE)." }
+  rm -rf $RemoteRoot/app/* $RemoteRoot/worker/*" 2>&1
+if ($LASTEXITCODE -ne 0) { throw "Target directory prep failed ($LASTEXITCODE): $sshOut" }
 
 Write-Host " -> Copying Backend Application..." -ForegroundColor Green
 $scpOut = & scp -r "$AppDir/." "$($Remote):$RemoteRoot/app/" 2>&1

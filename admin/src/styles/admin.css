@@ -710,6 +710,27 @@ p { margin: 0; color: var(--text-dim); }
   align-items: center;
 }
 
+.quarantine-actions-col,
+.quarantine-actions-cell {
+  min-width: 220px;
+  width: 220px;
+}
+
+.quarantine-row-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(88px, 1fr));
+  gap: var(--s-8);
+}
+
+.quarantine-row-actions .btn-link {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-sm);
+  background: var(--card-raise);
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
 /* ================ BADGES ================ */
 
 .badge {

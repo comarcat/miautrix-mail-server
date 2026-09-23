@@ -167,7 +167,9 @@ public sealed record QuarantineFilter(
     string? Status = null,
     string? Search = null,
     int Limit = 50,
-    string? Cursor = null);
+    string? Cursor = null,
+    DateTimeOffset? From = null,
+    DateTimeOffset? To = null);
 
 // Audit Contracts
 public sealed record AuditLogDto(
@@ -302,6 +304,22 @@ public sealed record UpdateSecuritySettingsRequest(
     int? SessionLifetimeMinutes = null,
     int? LockoutMaxFailedAttempts = null,
     int? LockoutDurationMinutes = null);
+
+public sealed record AntiSpamSettingsDto(
+    double RejectScore,
+    double QuarantineScore,
+    double HeaderScore,
+    double GreylistScore,
+    bool GreylistingEnabled,
+    bool SpfDmarcEnforcementEnabled);
+
+public sealed record UpdateAntiSpamSettingsRequest(
+    double? RejectScore = null,
+    double? QuarantineScore = null,
+    double? HeaderScore = null,
+    double? GreylistScore = null,
+    bool? GreylistingEnabled = null,
+    bool? SpfDmarcEnforcementEnabled = null);
 
 public sealed record TenantDto(
     Guid Id,

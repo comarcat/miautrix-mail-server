@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Miautrix.Mail.Application.Transport;
@@ -14,6 +15,7 @@ using Miautrix.Mail.Infrastructure.MailboxArchiving;
 using Miautrix.Mail.Identity;
 using Miautrix.Mail.Persistence;
 using Miautrix.Mail.Security;
+using Miautrix.Mail.Queue;
 using Microsoft.EntityFrameworkCore;
 
 using DnsClient;
@@ -26,8 +28,11 @@ namespace Miautrix.Mail.Application.Admin;
 public sealed class AdminService : IAdminService
 {
     private static readonly DateTimeOffset ProcessStartedAt = Process.GetCurrentProcess().StartTime.ToUniversalTime();
+    private const string SpamSupectedReleasedTag = "[SPAM Supected-Released]";
 
     private readonly AppDbContext _db;
+    private readonly ISmtpQueueManager _smtpQueueManager;
+
     private readonly ITenantAuthorizationHelper _auth;
     private readonly IBackupService _backupService;
     private readonly BackupOptions _backupOptions;
@@ -47,7 +52,8 @@ public sealed class AdminService : IAdminService
         IMailboxArchiveService mailboxArchiveService,
         ICloudflareTransport cloudflareTransport,
         ISessionManager sessionManager,
-        LockoutOptions lockoutOptions)
+        LockoutOptions lockoutOptions,
+        ISmtpQueueManager smtpQueueManager)
     {
         _db = db;
         _auth = auth;
@@ -58,6 +64,7 @@ public sealed class AdminService : IAdminService
         _cloudflareTransport = cloudflareTransport;
         _sessionManager = sessionManager;
         _lockoutOptions = lockoutOptions;
+        _smtpQueueManager = smtpQueueManager;
     }
 
     // -------------------------------------------------------------
@@ -963,6 +970,16 @@ public sealed class AdminService : IAdminService
             query = query.Where(q => q.Sender.ToLower().Contains(search) || q.Recipient.ToLower().Contains(search) || (q.Subject != null && q.Subject.ToLower().Contains(search)));
         }
 
+        if (filter.From.HasValue)
+        {
+            query = query.Where(q => q.QuarantinedAt >= filter.From.Value);
+        }
+
+        if (filter.To.HasValue)
+        {
+            query = query.Where(q => q.QuarantinedAt <= filter.To.Value);
+        }
+
         var items = await query
             .OrderByDescending(q => q.QuarantinedAt)
             .Take(Math.Min(filter.Limit, 100))
@@ -1016,6 +1033,24 @@ public sealed class AdminService : IAdminService
 
         _auth.AuthorizeAccess(tenantId, userId, item, "quarantine.manage");
 
+        var subject = item.Subject ?? string.Empty;
+        if (!subject.Contains(SpamSupectedReleasedTag, StringComparison.OrdinalIgnoreCase))
+        {
+            item.Subject = string.IsNullOrWhiteSpace(subject)
+                ? SpamSupectedReleasedTag
+                : $"{SpamSupectedReleasedTag} {subject}";
+        }
+
+        // Enqueue for real delivery via the existing SMTP outbox pipeline.
+        // The worker will parse RawMessage + Subject and write it to the recipient mailbox.
+        await _smtpQueueManager.EnqueueAsync(
+            tenantId,
+            item.Sender,
+            item.Recipient,
+            item.RawMessage,
+            item.Subject,
+            ct);
+
         item.Status = "Released";
         item.ReleasedAt = DateTimeOffset.UtcNow;
         item.IsDelivered = true;
@@ -1023,6 +1058,116 @@ public sealed class AdminService : IAdminService
 
         await _db.SaveChangesAsync(ct);
         return true;
+    }
+
+    public async Task<bool> DeliverAndDeleteQuarantineItemAsync(Guid tenantId, Guid userId, Guid id, CancellationToken ct = default)
+    {
+        _auth.AssertPermission(tenantId, userId, "quarantine.manage");
+
+        var item = await _db.Quarantine
+            .FirstOrDefaultAsync(q => q.TenantId == tenantId && q.Id == id, ct);
+
+        if (item is null) return false;
+
+        _auth.AuthorizeAccess(tenantId, userId, item, "quarantine.manage");
+
+        var subject = item.Subject ?? string.Empty;
+        if (!subject.Contains(SpamSupectedReleasedTag, StringComparison.OrdinalIgnoreCase))
+        {
+            item.Subject = string.IsNullOrWhiteSpace(subject)
+                ? SpamSupectedReleasedTag
+                : $"{SpamSupectedReleasedTag} {subject}";
+        }
+
+        // Enqueue for real delivery, then drop the quarantine row.
+        await _smtpQueueManager.EnqueueAsync(
+            tenantId,
+            item.Sender,
+            item.Recipient,
+            item.RawMessage,
+            item.Subject,
+            ct);
+
+        item.Status = "Released";
+        item.ReleasedAt = DateTimeOffset.UtcNow;
+        item.IsDelivered = true;
+        item.UpdatedAt = DateTimeOffset.UtcNow;
+
+        _db.Quarantine.Remove(item);
+        await _db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    public async Task<MailFlowRuleDto?> BlockQuarantineSenderDomainAsync(Guid tenantId, Guid userId, Guid id, CancellationToken ct = default)
+    {
+        _auth.AssertPermission(tenantId, userId, "quarantine.manage");
+        _auth.AssertPermission(tenantId, userId, "rule.manage");
+
+        var item = await _db.Quarantine
+            .FirstOrDefaultAsync(q => q.TenantId == tenantId && q.Id == id, ct);
+
+        if (item is null) return null;
+
+        _auth.AuthorizeAccess(tenantId, userId, item, "quarantine.manage");
+
+        var senderDomain = ExtractEmailDomain(item.Sender);
+        if (senderDomain is null)
+        {
+            throw new InvalidOperationException("Quarantine item sender does not contain a valid domain.");
+        }
+
+        var ruleName = $"Block sender domain: {senderDomain}";
+        var existing = await _db.MailFlowRules
+            .Where(r => r.TenantId == tenantId && r.Name == ruleName)
+            .OrderBy(r => r.Priority)
+            .FirstOrDefaultAsync(ct);
+
+        if (existing is not null)
+        {
+            return new MailFlowRuleDto(
+                existing.Id,
+                existing.Name,
+                existing.Priority,
+                existing.IsEnabled,
+                existing.ConditionsJson,
+                existing.ActionsJson,
+                existing.CreatedAt);
+        }
+
+        var conditions = JsonSerializer.Serialize(new[]
+        {
+            new { Field = "Sender", Operator = "EndsWith", Value = $"@{senderDomain}" }
+        });
+        var actions = JsonSerializer.Serialize(new object[]
+        {
+            new { ActionType = "Reject", Parameter = $"Sender domain {senderDomain} blocked from quarantine." },
+            new { ActionType = "StopProcessing", Parameter = (string?)null }
+        });
+
+        var rule = new MailFlowRule
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            Name = ruleName,
+            Priority = 10,
+            IsEnabled = true,
+            ConditionsJson = conditions,
+            ActionsJson = actions,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+
+        _db.MailFlowRules.Add(rule);
+        await _db.SaveChangesAsync(ct);
+
+        return new MailFlowRuleDto(
+            rule.Id,
+            rule.Name,
+            rule.Priority,
+            rule.IsEnabled,
+            rule.ConditionsJson,
+            rule.ActionsJson,
+            rule.CreatedAt);
     }
 
     public async Task<bool> DeleteQuarantineItemAsync(Guid tenantId, Guid userId, Guid id, CancellationToken ct = default)
@@ -1036,7 +1181,11 @@ public sealed class AdminService : IAdminService
 
         _auth.AuthorizeAccess(tenantId, userId, item, "quarantine.manage");
 
-        _db.Quarantine.Remove(item);
+        // Discard keeps the row for audit/inspection purposes.
+        // "Discarded" messages must still appear in the admin UI filter.
+        item.Status = "Discarded";
+        item.UpdatedAt = DateTimeOffset.UtcNow;
+
         await _db.SaveChangesAsync(ct);
         return true;
     }
@@ -1284,6 +1433,53 @@ public sealed class AdminService : IAdminService
         await _db.SaveChangesAsync(ct);
 
         return await GetSecuritySettingsAsync(domainId, userId, ct);
+    }
+
+    public async Task<AntiSpamSettingsDto> GetAntiSpamSettingsAsync(Guid domainId, Guid userId, CancellationToken ct = default)
+    {
+        var domain = await _db.Domains.FirstOrDefaultAsync(d => d.Id == domainId, ct)
+            ?? throw new InvalidOperationException("Domain not found.");
+
+        _auth.AssertPermission(domain.TenantId, userId, "system.view");
+        return ToAntiSpamSettingsDto(domain);
+    }
+
+    public async Task<AntiSpamSettingsDto> UpdateAntiSpamSettingsAsync(Guid domainId, Guid userId, UpdateAntiSpamSettingsRequest request, CancellationToken ct = default)
+    {
+        var domain = await _db.Domains.FirstOrDefaultAsync(d => d.Id == domainId, ct)
+            ?? throw new InvalidOperationException("Domain not found.");
+
+        _auth.AssertPermission(domain.TenantId, userId, "system.manage");
+
+        if (request.RejectScore.HasValue) domain.SpamRejectScore = ValidateScore(request.RejectScore.Value, 10.0, 25.0, "Reject score");
+        if (request.QuarantineScore.HasValue) domain.SpamQuarantineScore = ValidateScore(request.QuarantineScore.Value, 6.0, 15.0, "Quarantine score");
+        if (request.HeaderScore.HasValue) domain.SpamHeaderScore = ValidateScore(request.HeaderScore.Value, 4.0, 10.0, "Header score");
+        if (request.GreylistScore.HasValue) domain.SpamGreylistScore = ValidateScore(request.GreylistScore.Value, 2.0, 8.0, "Greylist score");
+        if (request.GreylistingEnabled.HasValue) domain.SpamGreylistingEnabled = request.GreylistingEnabled.Value;
+        if (request.SpfDmarcEnforcementEnabled.HasValue) domain.SpamSpfDmarcEnforcementEnabled = request.SpfDmarcEnforcementEnabled.Value;
+
+        domain.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(ct);
+
+        return ToAntiSpamSettingsDto(domain);
+    }
+
+    private static AntiSpamSettingsDto ToAntiSpamSettingsDto(DomainEntity domain) => new(
+        domain.SpamRejectScore,
+        domain.SpamQuarantineScore,
+        domain.SpamHeaderScore,
+        domain.SpamGreylistScore,
+        domain.SpamGreylistingEnabled,
+        domain.SpamSpfDmarcEnforcementEnabled);
+
+    private static double ValidateScore(double value, double min, double max, string label)
+    {
+        if (value < min || value > max)
+        {
+            throw new InvalidOperationException($"{label} must be between {min:0.0} and {max:0.0}.");
+        }
+
+        return value;
     }
 
     // -------------------------------------------------------------
@@ -1764,6 +1960,24 @@ public sealed class AdminService : IAdminService
         }
 
         return normalized;
+    }
+
+    private static string? ExtractEmailDomain(string email)
+    {
+        var normalized = email.Trim().Trim('<', '>').ToLowerInvariant();
+        var at = normalized.LastIndexOf('@');
+        if (at < 0 || at == normalized.Length - 1)
+        {
+            return null;
+        }
+
+        var domain = normalized[(at + 1)..].Trim();
+        if (domain.Length == 0 || !domain.Contains('.', StringComparison.Ordinal) || domain.Any(char.IsWhiteSpace))
+        {
+            return null;
+        }
+
+        return domain;
     }
 
     private static string NormalizeMailboxKind(string? mailboxKind)
