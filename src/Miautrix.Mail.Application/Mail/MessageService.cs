@@ -97,6 +97,10 @@ public sealed class MessageService : IMessageService
 
         var attachmentSet = new HashSet<Guid>(attachments);
 
+        var messageFlags = await _db.MessageFlags
+            .Where(f => f.TenantId == tenantId && messageIds.Contains(f.MessageId))
+            .ToDictionaryAsync(f => f.MessageId, f => f.Flag, cancellationToken);
+
         var dtoList = items.Select(m => new MessageSummaryDto(
             m.Id,
             m.MailboxId,
@@ -108,6 +112,7 @@ public sealed class MessageService : IMessageService
             m.SizeBytes,
             m.IsRead,
             attachmentSet.Contains(m.Id),
+            messageFlags.GetValueOrDefault(m.Id),
             GetPreview(m.BodyText))).ToList();
 
         return new MessageListPage(dtoList, null, hasMore, totalCount);
@@ -136,6 +141,10 @@ public sealed class MessageService : IMessageService
             .Where(a => a.TenantId == tenantId && a.MessageId == messageId)
             .ToListAsync(cancellationToken);
 
+        var flag = await _db.MessageFlags
+            .FirstOrDefaultAsync(f => f.TenantId == tenantId && f.MessageId == messageId, cancellationToken);
+        var flagColor = flag?.Flag;
+
         var attachmentDtos = attachments.Select(a => new AttachmentDto(
             a.Id,
             a.MessageId,
@@ -157,6 +166,7 @@ public sealed class MessageService : IMessageService
             message.BodyText,
             message.BodyHtml,
             message.RawHeaders,
+            flagColor,
             attachmentDtos);
     }
 
@@ -366,23 +376,7 @@ public sealed class MessageService : IMessageService
             .FirstOrDefaultAsync(m => m.TenantId == tenantId && m.Id == mailboxId, cancellationToken);
         _auth.AssertMailboxAccess(tenantId, userId, mailbox, requireWrite: true);
 
-        var sentFolder = await _db.Folders
-            .FirstOrDefaultAsync(f => f.TenantId == tenantId && f.MailboxId == mailboxId && f.Role == "sent", cancellationToken);
-
-        if (sentFolder is null)
-        {
-            sentFolder = new Folder
-            {
-                Id = Guid.NewGuid(),
-                TenantId = tenantId,
-                MailboxId = mailboxId,
-                Name = "Sent",
-                Role = "sent",
-                CreatedAt = DateTimeOffset.UtcNow,
-                UpdatedAt = DateTimeOffset.UtcNow
-            };
-            _db.Folders.Add(sentFolder);
-        }
+        var sentFolder = await GetOrCreateSentFolderAsync(tenantId, mailboxId, cancellationToken);
 
         var bodyContent = request.BodyText ?? request.BodyHtml ?? string.Empty;
         var rawContent = $"From: {request.From}\r\nTo: {string.Join(", ", request.To)}\r\nSubject: {request.Subject}\r\nDate: {DateTimeOffset.UtcNow:R}\r\n\r\n{bodyContent}";
@@ -453,9 +447,181 @@ public sealed class MessageService : IMessageService
         }
 
         mailbox!.UsedBytes += sizeBytes;
+
+        if (mailbox.Kind.Equals("shared", StringComparison.OrdinalIgnoreCase))
+        {
+            var user = await _db.Users
+                .FirstOrDefaultAsync(u => u.TenantId == tenantId && u.Id == userId, cancellationToken);
+            if (user is not null)
+            {
+                var personalMailbox = await _db.Mailboxes
+                    .FirstOrDefaultAsync(m =>
+                        m.TenantId == tenantId &&
+                        m.Id != mailbox.Id &&
+                        m.Address.ToLower() == user.Email.ToLower(),
+                        cancellationToken);
+
+                if (personalMailbox is not null)
+                {
+                    var personalSentFolder = await GetOrCreateSentFolderAsync(tenantId, personalMailbox.Id, cancellationToken);
+                    var personalMessageId = Guid.NewGuid();
+                    _db.Messages.Add(CloneSentMessage(message, personalMessageId, personalMailbox.Id, personalSentFolder.Id));
+                    personalMailbox.UsedBytes += sizeBytes;
+                }
+            }
+        }
+
         await _db.SaveChangesAsync(cancellationToken);
 
         return new SendMessageResult(true, messageId, firstQueueItemId, "Message sent and queued for delivery.");
+    }
+
+    private async Task<Folder> GetOrCreateSentFolderAsync(Guid tenantId, Guid mailboxId, CancellationToken cancellationToken)
+    {
+        var sentFolder = await _db.Folders
+            .FirstOrDefaultAsync(f => f.TenantId == tenantId && f.MailboxId == mailboxId && f.Role == "sent", cancellationToken);
+
+        if (sentFolder is not null)
+        {
+            return sentFolder;
+        }
+
+        sentFolder = new Folder
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            MailboxId = mailboxId,
+            Name = "Sent",
+            Role = "sent",
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+        _db.Folders.Add(sentFolder);
+        return sentFolder;
+    }
+
+    private static Message CloneSentMessage(Message source, Guid messageId, Guid mailboxId, Guid folderId) => new()
+    {
+        Id = messageId,
+        TenantId = source.TenantId,
+        MailboxId = mailboxId,
+        FolderId = folderId,
+        Sender = source.Sender,
+        Recipient = source.Recipient,
+        Subject = source.Subject,
+        Date = source.Date,
+        ContentHash = source.ContentHash,
+        StoragePath = $"/storage/mail/{source.TenantId}/{mailboxId}/{messageId}.eml",
+        SizeBytes = source.SizeBytes,
+        Flags = source.Flags,
+        IsRead = source.IsRead,
+        BodyText = source.BodyText,
+        BodyHtml = source.BodyHtml,
+        RawHeaders = source.RawHeaders,
+        CreatedAt = DateTimeOffset.UtcNow,
+        UpdatedAt = DateTimeOffset.UtcNow
+    };
+
+    public async Task<bool> SetFlagAsync(
+        Guid tenantId,
+        Guid userId,
+        Guid mailboxId,
+        Guid messageId,
+        string? flagColor,
+        CancellationToken cancellationToken = default)
+    {
+        var mailbox = await _db.Mailboxes
+            .FirstOrDefaultAsync(m => m.TenantId == tenantId && m.Id == mailboxId, cancellationToken);
+        _auth.AssertMailboxAccess(tenantId, userId, mailbox, requireWrite: true);
+
+        var message = await _db.Messages
+            .FirstOrDefaultAsync(m => m.TenantId == tenantId && m.MailboxId == mailboxId && m.Id == messageId, cancellationToken);
+        if (message is null) return false;
+
+        var existingFlag = await _db.MessageFlags
+            .FirstOrDefaultAsync(f => f.TenantId == tenantId && f.MessageId == messageId, cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(flagColor))
+        {
+            if (existingFlag is not null)
+            {
+                _db.MessageFlags.Remove(existingFlag);
+                await _db.SaveChangesAsync(cancellationToken);
+            }
+            return true;
+        }
+
+        if (existingFlag is not null)
+        {
+            existingFlag.Flag = flagColor;
+            existingFlag.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+        else
+        {
+            _db.MessageFlags.Add(new MessageFlag
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                MessageId = messageId,
+                Flag = flagColor,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow
+            });
+        }
+        await _db.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    public async Task<bool> SetFlagAlertConfigAsync(
+        Guid tenantId,
+        Guid userId,
+        Guid mailboxId,
+        string flagColor,
+        string alertConfigurationJson,
+        CancellationToken cancellationToken = default)
+    {
+        var mailbox = await _db.Mailboxes
+            .FirstOrDefaultAsync(m => m.TenantId == tenantId && m.Id == mailboxId, cancellationToken);
+        _auth.AssertMailboxAccess(tenantId, userId, mailbox, requireWrite: true);
+
+        var existingConfig = await _db.FlagAlertConfigurations
+            .FirstOrDefaultAsync(f => f.TenantId == tenantId && f.MailboxId == mailboxId && f.Flag == flagColor, cancellationToken);
+
+        if (existingConfig is not null)
+        {
+            existingConfig.AlertConfigurationJson = alertConfigurationJson;
+            existingConfig.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+        else
+        {
+            _db.FlagAlertConfigurations.Add(new FlagAlertConfiguration
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                MailboxId = mailboxId,
+                Flag = flagColor,
+                AlertConfigurationJson = alertConfigurationJson,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow
+            });
+        }
+        await _db.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    public async Task<IReadOnlyList<FlagAlertConfiguration>> GetFlagAlertConfigsAsync(
+        Guid tenantId,
+        Guid userId,
+        Guid mailboxId,
+        CancellationToken cancellationToken = default)
+    {
+        var mailbox = await _db.Mailboxes
+            .FirstOrDefaultAsync(m => m.TenantId == tenantId && m.Id == mailboxId, cancellationToken);
+        _auth.AssertMailboxAccess(tenantId, userId, mailbox, requireWrite: false);
+
+        return await _db.FlagAlertConfigurations
+            .Where(f => f.TenantId == tenantId && f.MailboxId == mailboxId)
+            .ToListAsync(cancellationToken);
     }
 
     private static string? GetPreview(string? bodyText)

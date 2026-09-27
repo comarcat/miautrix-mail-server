@@ -202,6 +202,26 @@ public sealed class MessageController : ControllerBase
             ApiJson.Options,
             statusCode: StatusCodes.Status200OK);
     }
+
+    [HttpPut("{messageId:guid}/flag")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ApiError), StatusCodes.Status404NotFound)]
+    public async Task<IResult> SetFlag(
+        Guid mailboxId,
+        Guid messageId,
+        [FromBody] SetFlagRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var success = await _messageService.SetFlagAsync(
+            _context.CurrentTenantId,
+            _context.CurrentUserId,
+            mailboxId,
+            messageId,
+            request.Color,
+            cancellationToken);
+
+        return success ? Results.NoContent() : Results.NotFound();
+    }
 }
 
 public sealed record MarkReadRequest(bool IsRead);

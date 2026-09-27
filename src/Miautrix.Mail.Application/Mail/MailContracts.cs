@@ -11,7 +11,9 @@ public sealed record MailboxDto(
     long QuotaBytes,
     long UsedBytes,
     bool IsActive,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    string Kind,
+    string AccessLevel);
 
 public sealed record FolderDto(
     Guid Id,
@@ -40,6 +42,7 @@ public sealed record MessageSummaryDto(
     long SizeBytes,
     bool IsRead,
     bool HasAttachments,
+    string? FlagColor = null,
     string? Preview = null);
 
 public sealed record AttachmentDto(
@@ -70,6 +73,7 @@ public sealed record MessageDetailDto(
     string? BodyText,
     string? BodyHtml,
     string RawHeaders,
+    string? FlagColor,
     IReadOnlyList<AttachmentDto> Attachments);
 
 public sealed record SendMessageRequest(

@@ -14,11 +14,13 @@ public sealed class MailboxService : IMailboxService
 {
     private readonly AppDbContext _db;
     private readonly ITenantAuthorizationHelper _auth;
+    private readonly IPermissionRepository _permissionRepo;
 
-    public MailboxService(AppDbContext db, ITenantAuthorizationHelper auth)
+    public MailboxService(AppDbContext db, ITenantAuthorizationHelper auth, IPermissionRepository permissionRepo)
     {
         _db = db;
         _auth = auth;
+        _permissionRepo = permissionRepo;
     }
 
     public async Task<FolderDto> UpdateFolderParentAsync(
@@ -118,7 +120,7 @@ public sealed class MailboxService : IMailboxService
             try
             {
                 _auth.AssertMailboxAccess(tenantId, userId, mailbox, requireWrite: false);
-                authorized.Add(ToDto(mailbox));
+                authorized.Add(ToDto(tenantId, userId, mailbox));
             }
             catch (ResourceNotFoundException)
             {
@@ -144,7 +146,7 @@ public sealed class MailboxService : IMailboxService
         }
 
         _auth.AssertMailboxAccess(tenantId, userId, mailbox, requireWrite: false);
-        return ToDto(mailbox);
+        return ToDto(tenantId, userId, mailbox);
     }
 
     public async Task<MailboxDto?> GetPrimaryMailboxAsync(
@@ -169,7 +171,7 @@ public sealed class MailboxService : IMailboxService
         }
 
         _auth.AssertMailboxAccess(tenantId, userId, mailbox, requireWrite: false);
-        return ToDto(mailbox);
+        return ToDto(tenantId, userId, mailbox);
     }
 
     public async Task<IReadOnlyList<FolderDto>> GetFoldersAsync(
@@ -323,7 +325,7 @@ public sealed class MailboxService : IMailboxService
         }
     }
 
-    private static MailboxDto ToDto(Mailbox m) => new(
+    private MailboxDto ToDto(Guid tenantId, Guid userId, Mailbox m) => new(
         m.Id,
         m.TenantId,
         m.DomainId,
@@ -331,5 +333,7 @@ public sealed class MailboxService : IMailboxService
         m.QuotaBytes,
         m.UsedBytes,
         m.IsActive,
-        m.CreatedAt);
+        m.CreatedAt,
+        m.Kind,
+        _permissionRepo.GetMailboxEffectiveAccess(tenantId, userId, m));
 }

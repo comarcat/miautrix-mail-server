@@ -22,6 +22,8 @@ public class IsolationTests
         public bool IsMailboxOwner(Guid tenantId, Guid userId, Guid mailboxId) => false;
 
         public string? GetMailboxDelegateAccess(Guid tenantId, Guid userId, Guid mailboxId) => null;
+
+        public string GetMailboxEffectiveAccess(Guid tenantId, Guid userId, Mailbox mailbox) => "write";
     }
 
     [Fact]

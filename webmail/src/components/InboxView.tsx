@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 
-import type { Mailbox, EmailMessage } from '../types';
+import type { Mailbox, SharedMailboxGroup, EmailMessage } from '../types';
 import { SanitizedMessageBody } from './SanitizedMessageBody';
 import { webmailClient } from './WebmailApiClient';
 
@@ -8,6 +8,19 @@ import { webmailClient } from './WebmailApiClient';
 const clampSnippet = (text: string, max = 120) => {
   if (!text) return '';
   return text.length > max ? `${text.slice(0, max)}…` : text;
+};
+
+const formatBytes = (bytes: number): string => {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let value = bytes;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  const decimals = value >= 10 || unitIndex === 0 ? 0 : 1;
+  return `${value.toFixed(decimals)} ${units[unitIndex]}`;
 };
 
 const formatReceivedAt = (iso: string): string => {
@@ -42,11 +55,13 @@ const buildBodyFallbackHtml = (text?: string) => {
 
 interface InboxViewProps {
   mailboxes: Mailbox[];
+  sharedMailboxGroups: SharedMailboxGroup[];
   messages: EmailMessage[];
-  onFolderChange: (folderId: string) => void;
+  onFolderChange: (mailboxId: string, folderId: string) => void;
   onComposeClick: () => void;
   onOpenRulesClick: () => void;
   currentFolderId: string;
+  currentMailboxId: string;
 
   onMarkRead: (messageId: string, isRead: boolean) => void;
   onDeleteMessage: (messageId: string, permanent?: boolean) => void;
@@ -60,7 +75,22 @@ interface InboxViewProps {
   onMarkReadMany: (messageIds: string[], isRead: boolean) => Promise<void>;
   onMoveMessages: (messageIds: string[], targetFolderId: string) => Promise<void>;
   onDeleteMessages: (messageIds: string[], permanent?: boolean) => Promise<void>;
+  onFlagMessage: (messageId: string, color: string | null) => Promise<void>;
+  canWriteCurrentMailbox: boolean;
+  quotaUsedBytes?: number;
+  quotaBytes?: number;
 }
+
+const FLAG_COLORS = ['red', 'blue', 'green', 'orange', 'purple'] as const;
+type FlagColor = (typeof FLAG_COLORS)[number];
+
+const FLAG_LABELS: Record<FlagColor, string> = {
+  red: 'Red',
+  blue: 'Blue',
+  green: 'Green',
+  orange: 'Orange',
+  purple: 'Purple',
+};
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
@@ -114,11 +144,13 @@ void _unused;
 
 export const InboxView: React.FC<InboxViewProps> = ({
   mailboxes,
+  sharedMailboxGroups,
   messages,
   onFolderChange,
   onComposeClick,
   onOpenRulesClick,
   currentFolderId,
+  currentMailboxId,
   onMarkRead,
   onDeleteMessage,
   onArchiveSelected,
@@ -129,6 +161,10 @@ export const InboxView: React.FC<InboxViewProps> = ({
   onMarkReadMany,
   onMoveMessages,
   onDeleteMessages,
+  onFlagMessage,
+  canWriteCurrentMailbox,
+  quotaUsedBytes = 0,
+  quotaBytes = 0,
 }) => {
   const [selectedMessageId, setSelectedMessageId] = useState<string>(messages[0]?.id || '');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -146,6 +182,13 @@ export const InboxView: React.FC<InboxViewProps> = ({
     messageId: string;
     isUnread: boolean;
   } | null>(null);
+
+  const [flagMenu, setFlagMenu] = useState<{
+    x: number;
+    y: number;
+    messageIds: string[];
+  } | null>(null);
+  const [groupByFlag, setGroupByFlag] = useState(false);
 
   const contextMenuRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -211,7 +254,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
     });
   };
 
-  const groupedMessages = filteredMessages.reduce<
+  const dateGroupedMessages = filteredMessages.reduce<
     Array<{ key: string; label: string; items: EmailMessage[] }>
   >((acc, msg) => {
     const key = getLocalDayKey(msg.receivedAt);
@@ -229,6 +272,21 @@ export const InboxView: React.FC<InboxViewProps> = ({
     }
     return acc;
   }, []);
+
+  const flagGroupedMessages = [
+    ...FLAG_COLORS.map((color) => ({
+      key: `flag-${color}`,
+      label: `${FLAG_LABELS[color]} Flag`,
+      items: filteredMessages.filter((msg) => msg.flagColor === color),
+    })).filter((group) => group.items.length > 0),
+    {
+      key: 'flag-none',
+      label: 'No Flag',
+      items: filteredMessages.filter((msg) => !msg.flagColor),
+    },
+  ].filter((group) => group.items.length > 0);
+
+  const groupedMessages = groupByFlag ? flagGroupedMessages : dateGroupedMessages;
 
 
   const toggleSelected = (id: string) => {
@@ -312,21 +370,51 @@ export const InboxView: React.FC<InboxViewProps> = ({
   };
 
   const handleBulkMarkRead = async (isRead: boolean) => {
-    if (selectedIds.length === 0) return;
+    if (!canWriteCurrentMailbox || selectedIds.length === 0) return;
     await onMarkReadMany(selectedIds, isRead);
     clearSelection();
   };
 
   const handleBulkMove = async (targetFolderId: string) => {
-    if (!targetFolderId || selectedIds.length === 0) return;
+    if (!canWriteCurrentMailbox || !targetFolderId || selectedIds.length === 0) return;
     await onMoveMessages(selectedIds, targetFolderId);
     clearSelection();
   };
 
   const handleBulkDelete = async (permanent: boolean) => {
-    if (selectedIds.length === 0) return;
+    if (!canWriteCurrentMailbox || selectedIds.length === 0) return;
     await onDeleteMessages(selectedIds, permanent);
     clearSelection();
+  };
+
+  const openFlagMenu = (messageIds: string[], x?: number, y?: number) => {
+    if (!canWriteCurrentMailbox || messageIds.length === 0) return;
+    setFlagMenu({
+      messageIds,
+      x: x ?? 180,
+      y: y ?? 96,
+    });
+  };
+
+  const applyFlag = async (color: FlagColor | null) => {
+    if (!canWriteCurrentMailbox || !flagMenu) return;
+    const ids = flagMenu.messageIds;
+    setFlagMenu(null);
+    await Promise.all(ids.map((id) => onFlagMessage(id, color)));
+    clearSelection();
+  };
+
+  const getContextMenuTop = (y: number) => {
+    const menuHeight = 330;
+    return clamp(y, 8, Math.max(8, window.innerHeight - menuHeight - 8));
+  };
+
+  const getContextMenuStyle = (x: number, y: number): React.CSSProperties => {
+    const menuWidth = 220;
+    return {
+      top: getContextMenuTop(y),
+      left: clamp(x, 8, Math.max(8, window.innerWidth - menuWidth - 8)),
+    };
   };
 
   useEffect(() => {
@@ -336,6 +424,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
     setDetailMessage(null);
     setIsLoadingDetail(false);
     setContextMenu(null);
+    setFlagMenu(null);
   }, [currentFolderId, messages]);
 
   // If context menu is open, keep UX stable: don't accidentally show bulk UI
@@ -359,9 +448,12 @@ export const InboxView: React.FC<InboxViewProps> = ({
 
   // Dismiss the context menu on Escape, any outside click, or scroll/resize.
   useEffect(() => {
-    if (!contextMenu) return;
+    if (!contextMenu && !flagMenu) return;
 
-    const close = () => setContextMenu(null);
+    const close = () => {
+      setContextMenu(null);
+      setFlagMenu(null);
+    };
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') close();
     };
@@ -389,7 +481,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
       window.removeEventListener('scroll', onScroll, true);
       window.removeEventListener('resize', close);
     };
-  }, [contextMenu]);
+  }, [contextMenu, flagMenu]);
 
   useEffect(() => {
     let cancelled = false;
@@ -424,6 +516,35 @@ export const InboxView: React.FC<InboxViewProps> = ({
 
   const displayedMessage = detailMessage ?? currentMessage;
 
+  const renderCustomFolderLinks = (folders: Mailbox[], mailboxId: string, parentId: string | null = null, level = 0): React.ReactNode =>
+    folders
+      .filter((folder) => folder.role === 'custom' && (folder.parentId ?? null) === parentId)
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((folder) => (
+        <React.Fragment key={folder.id}>
+          <a
+            className={`wm-nav-item ${currentMailboxId === mailboxId && currentFolderId === folder.id ? 'active' : ''}`}
+            href={`#${folder.id}`}
+            onClick={(e) => {
+              e.preventDefault();
+              onFolderChange(mailboxId, folder.id);
+            }}
+          >
+            <div className="wm-nav-icon" style={{ paddingLeft: `${20 + level * 14}px` }}>
+              <img src="/images/icons/webmail/inbox.png" alt="" />
+              <span>{folder.name}</span>
+            </div>
+          </a>
+          {renderCustomFolderLinks(folders, mailboxId, folder.id, level + 1)}
+        </React.Fragment>
+      ));
+
+  const handlePrint = () => {
+    // Context-menu sets selectedMessageId + displayedMessage; scoped CSS in print mode
+    // will ensure only the reading pane content is visible/printed.
+    window.print();
+  };
+
   return (
     <div className={`webmail-layout ${isResizingList ? 'is-resizing-col' : ''}`}>
       {/* Ribbon Action Bar for Inbox */}
@@ -448,6 +569,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
           <button
             type="button"
             className="wm-tool-btn"
+            disabled={!canWriteCurrentMailbox}
             title="Delete"
             aria-label="Delete"
             onClick={() => {
@@ -463,6 +585,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
           <button
             type="button"
             className="wm-tool-btn"
+            disabled={!canWriteCurrentMailbox}
             title="Archive"
             aria-label="Archive"
             onClick={() => displayedMessage && onArchiveSelected(displayedMessage.id)}
@@ -472,6 +595,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
           <button
             type="button"
             className="wm-tool-btn"
+            disabled={!canWriteCurrentMailbox}
             title="Mark as Junk"
             aria-label="Junk"
             onClick={() => displayedMessage && onJunkSelected(displayedMessage.id)}
@@ -481,11 +605,18 @@ export const InboxView: React.FC<InboxViewProps> = ({
           <button
             type="button"
             className="wm-tool-btn"
+            disabled={!canWriteCurrentMailbox}
             title="Flag"
             aria-label="Flag"
-            onClick={() => {
-              // TODO: flag/unflag wiring when backend + DTO expose it in webmail UI.
-              // Keeping handler present to avoid dead UI.
+            onClick={(e) => {
+              e.stopPropagation();
+              const rect = e.currentTarget.getBoundingClientRect();
+              const ids = selectedIds.length > 0
+                ? selectedIds
+                : displayedMessage
+                  ? [displayedMessage.id]
+                  : [];
+              openFlagMenu(ids, rect.left, rect.bottom + 6);
             }}
           >
             <img src="/images/icons/webmail/flag.png" alt="Flag" />
@@ -493,7 +624,15 @@ export const InboxView: React.FC<InboxViewProps> = ({
         </div>
 
         <div className="wm-ribbon-group">
-          <button type="button" className="wm-tool-btn" title="Print" aria-label="Print">
+          <button
+            type="button"
+            className="wm-tool-btn"
+            title="Print"
+            aria-label="Print"
+            onClick={() => {
+              void handlePrint();
+            }}
+          >
             <img src="/images/icons/webmail/print.png" alt="Print" />
           </button>
           <button
@@ -529,9 +668,10 @@ export const InboxView: React.FC<InboxViewProps> = ({
                   href={`#${mb.id}`}
                   onClick={(e) => {
                     e.preventDefault();
-                    onFolderChange(mb.id);
+                    onFolderChange(mb.mailboxId ?? currentMailboxId, mb.id);
                   }}
                   onDragOver={(e) => {
+                    if (!canWriteCurrentMailbox) return;
                     e.preventDefault();
                     e.currentTarget.classList.add('drag-over');
                   }}
@@ -539,6 +679,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
                     e.currentTarget.classList.remove('drag-over');
                   }}
                   onDrop={(e) => {
+                    if (!canWriteCurrentMailbox) return;
                     e.preventDefault();
                     e.currentTarget.classList.remove('drag-over');
                     const movedFolderId = e.dataTransfer.getData('application/x-miautrix-folder-id');
@@ -581,9 +722,11 @@ export const InboxView: React.FC<InboxViewProps> = ({
               <button
                 type="button"
                 className="btn btn-ghost"
+                disabled={!canWriteCurrentMailbox}
                 style={{ padding: '0 4px', cursor: 'pointer' }}
                 onClick={async (e) => {
                   e.stopPropagation();
+                  if (!canWriteCurrentMailbox) return;
 
                   const name = prompt('Enter folder name:');
                   if (!name) return;
@@ -618,18 +761,20 @@ export const InboxView: React.FC<InboxViewProps> = ({
                   key={mb.id}
                   className={`wm-nav-item ${currentFolderId === mb.id ? 'active' : ''}`}
                   href={`#${mb.id}`}
-                  draggable={true}
+                  draggable={canWriteCurrentMailbox}
                   onDragStart={(e) => {
+                    if (!canWriteCurrentMailbox) return;
                     e.dataTransfer.setData('application/x-miautrix-folder-id', mb.id);
                     e.dataTransfer.effectAllowed = 'move';
                   }}
                   onClick={(e) => {
                     e.preventDefault();
-                    onFolderChange(mb.id);
+                    onFolderChange(mb.mailboxId ?? currentMailboxId, mb.id);
                   }}
                   onContextMenu={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
+                    if (!canWriteCurrentMailbox) return;
 
                     const personalFolders = mailboxes.filter((f) => f.role === 'custom');
                     const parentName = prompt(
@@ -660,6 +805,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
                     });
                   }}
                   onDragOver={(e) => {
+                    if (!canWriteCurrentMailbox) return;
                     e.preventDefault();
                     e.currentTarget.classList.add('drag-over');
                   }}
@@ -667,6 +813,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
                     e.currentTarget.classList.remove('drag-over');
                   }}
                   onDrop={(e) => {
+                    if (!canWriteCurrentMailbox) return;
                     e.preventDefault();
                     e.currentTarget.classList.remove('drag-over');
                     const movedFolderId = e.dataTransfer.getData('application/x-miautrix-folder-id');
@@ -699,12 +846,61 @@ export const InboxView: React.FC<InboxViewProps> = ({
               ))}
           </div>
 
+          {sharedMailboxGroups.length > 0 && (
+            <div className="wm-nav-section">
+              <div className="wm-nav-head">Shared Mailboxes</div>
+              {sharedMailboxGroups.map((group) => {
+                const systemFolders = group.folders.filter((f) => f.role !== 'custom');
+                const customFolders = group.folders.filter((f) => f.role === 'custom');
+                return (
+                  <div key={group.account.id}>
+                    <div className="wm-nav-head" style={{ paddingLeft: '16px', fontSize: '13px' }}>
+                      {group.account.address || group.account.name}
+                    </div>
+                    {systemFolders
+                      .sort((a, b) => ['inbox', 'junk', 'archive', 'sent', 'drafts'].indexOf(a.role) - ['inbox', 'junk', 'archive', 'sent', 'drafts'].indexOf(b.role))
+                      .map((folder) => (
+                        <a
+                          key={folder.id}
+                          className={`wm-nav-item ${currentMailboxId === group.account.id && currentFolderId === folder.id ? 'active' : ''}`}
+                          href={`#${folder.id}`}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            onFolderChange(group.account.id, folder.id);
+                          }}
+                        >
+                          <div className="wm-nav-icon">
+                            <img src={`/images/icons/webmail/${folder.icon}`} alt="" />
+                            <span>{folder.name}</span>
+                          </div>
+                          {folder.unreadEmails > 0 && <span className="badge">{folder.unreadEmails}</span>}
+                        </a>
+                      ))}
+                    {customFolders.length > 0 && (
+                      <>
+                        <div className="wm-context-separator" />
+                        <div className="wm-nav-head" style={{ paddingLeft: '38px', fontSize: '13px' }}>Folders</div>
+                        {renderCustomFolderLinks(group.folders, group.account.id)}
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           <div className="wm-nav-section" style={{ marginTop: 'auto', padding: '16px' }}>
             <div style={{ fontSize: '12px', color: 'var(--neutral-body)', marginBottom: '6px' }}>
-              Mailbox Quota (1.2 GB / 5 GB)
+              Mailbox Quota ({formatBytes(quotaUsedBytes)} / {quotaBytes > 0 ? formatBytes(quotaBytes) : 'Unlimited'})
             </div>
             <div style={{ height: '6px', background: '#e2e8f0', borderRadius: '3px', overflow: 'hidden' }}>
-              <div style={{ width: '24%', height: '100%', background: 'var(--iris-violet)' }}></div>
+              <div
+                style={{
+                  width: quotaBytes > 0 ? `${Math.min(100, Math.max(0, (quotaUsedBytes / quotaBytes) * 100))}%` : '0%',
+                  height: '100%',
+                  background: 'var(--iris-violet)',
+                }}
+              ></div>
             </div>
           </div>
         </aside>
@@ -716,6 +912,15 @@ export const InboxView: React.FC<InboxViewProps> = ({
           style={{ width: listWidth, flex: `0 0 ${listWidth}px` }}
         >
           <div className="msg-search-bar">
+            <button
+              type="button"
+              className={`btn ${groupByFlag ? 'btn-primary' : 'btn-secondary'}`}
+              style={{ padding: '6px 10px', fontSize: '12px', whiteSpace: 'nowrap' }}
+              onClick={() => setGroupByFlag((value) => !value)}
+              title="Group messages by flag color"
+            >
+              Flags
+            </button>
             <input
               type="checkbox"
               className="msg-select-box"
@@ -805,13 +1010,14 @@ export const InboxView: React.FC<InboxViewProps> = ({
                     className={`msg-item ${selectedMessageId === msg.id ? 'active' : ''} ${
                       msg.isUnread ? 'unread' : ''
                     }`}
-                    draggable={true}
+                    draggable={canWriteCurrentMailbox}
                     onDragStart={(e) => {
+                      if (!canWriteCurrentMailbox) return;
                       e.dataTransfer.setData('text/plain', msg.id);
                     }}
                     onClick={() => {
                       setSelectedMessageId(msg.id);
-                      if (msg.isUnread) onMarkRead(msg.id, true);
+                      if (canWriteCurrentMailbox && msg.isUnread) onMarkRead(msg.id, true);
                     }}
                     onContextMenu={(e) => {
                       e.preventDefault();
@@ -828,6 +1034,19 @@ export const InboxView: React.FC<InboxViewProps> = ({
                     <div className="msg-from">
                       <span>
                         {msg.isUnread ? '● ' : ''}
+                        {msg.flagColor && (
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              width: '8px',
+                              height: '8px',
+                              borderRadius: '50%',
+                              backgroundColor: `var(--flag-${msg.flagColor})`,
+                              marginRight: '6px',
+                            }}
+                            title={`Flag: ${msg.flagColor}`}
+                          />
+                        )}
                         {msg.from.email}
                       </span>
                       <span className="msg-time">{formatReceivedAt(msg.receivedAt)}</span>
@@ -872,7 +1091,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
         />
 
         {/* Right Reading Pane */}
-        <main className="reading-col" aria-label="Reading Pane">
+        <main id="wm-print-email" className="reading-col" aria-label="Reading Pane">
           {displayedMessage ? (
             <>
               <div className="reading-header">
@@ -978,10 +1197,11 @@ export const InboxView: React.FC<InboxViewProps> = ({
               {isLoadingDetail ? (
                 <div className="reading-body">Loading message content…</div>
               ) : displayedMessage.bodyHtml ? (
-                <SanitizedMessageBody htmlContent={displayedMessage.bodyHtml} />
+                <div className="reading-body">
+                  <SanitizedMessageBody htmlContent={displayedMessage.bodyHtml} />
+                </div>
               ) : (
-                <div
-                  className="reading-body"
+                <div className="reading-body"
                   dangerouslySetInnerHTML={{
                     __html: buildBodyFallbackHtml(displayedMessage.bodyText),
                   }}
@@ -997,15 +1217,49 @@ export const InboxView: React.FC<InboxViewProps> = ({
         </main>
       </div>
 
+      {flagMenu && (
+        <div
+          className="wm-context-menu"
+          role="menu"
+          style={getContextMenuStyle(flagMenu.x, flagMenu.y)}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="wm-context-empty">
+            Flag {flagMenu.messageIds.length > 1 ? `${flagMenu.messageIds.length} messages` : 'message'}
+          </div>
+          {FLAG_COLORS.map((color) => (
+            <div
+              key={color}
+              className="wm-context-item"
+              role="menuitem"
+              onClick={() => void applyFlag(color)}
+            >
+              <span
+                style={{
+                  display: 'inline-block',
+                  width: '10px',
+                  height: '10px',
+                  borderRadius: '50%',
+                  backgroundColor: `var(--flag-${color})`,
+                  marginRight: '8px',
+                }}
+              />
+              {FLAG_LABELS[color]}
+            </div>
+          ))}
+          <div className="wm-context-separator" />
+          <div className="wm-context-item" role="menuitem" onClick={() => void applyFlag(null)}>
+            Clear Flag
+          </div>
+        </div>
+      )}
+
       {contextMenu && (
         <div
           ref={contextMenuRef}
-          className="wm-context-menu"
+          className={`wm-context-menu ${getContextMenuTop(contextMenu.y) > window.innerHeight - 420 ? 'submenu-up' : ''}`}
           role="menu"
-          style={{
-            top: Math.min(contextMenu.y, window.innerHeight - 280),
-            left: Math.min(contextMenu.x, window.innerWidth - 220),
-          }}
+          style={getContextMenuStyle(contextMenu.x, contextMenu.y)}
           onClick={(e) => e.stopPropagation()}
         >
           <div
@@ -1019,27 +1273,33 @@ export const InboxView: React.FC<InboxViewProps> = ({
             Open
           </div>
 
-          <div className="wm-context-separator" />
+          {canWriteCurrentMailbox && (
+            <>
+              <div className="wm-context-separator" />
 
-          <div
-            className="wm-context-item"
-            role="menuitem"
-            onClick={() => {
-              const ids = actionTargetIds(contextMenu.messageId);
-              const isRead = contextMenu.isUnread;
-              setContextMenu(null);
-              onMarkReadMany(ids, isRead);
-            }}
-          >
-            Mark as {contextMenu.isUnread ? 'Read' : 'Unread'}
-            {selectedIds.length > 1 && selectedIds.includes(contextMenu.messageId)
-              ? ` (${selectedIds.length})`
-              : ''}
-          </div>
+              <div
+                className="wm-context-item"
+                role="menuitem"
+                onClick={() => {
+                  const ids = actionTargetIds(contextMenu.messageId);
+                  const isRead = contextMenu.isUnread;
+                  setContextMenu(null);
+                  onMarkReadMany(ids, isRead);
+                }}
+              >
+                Mark as {contextMenu.isUnread ? 'Read' : 'Unread'}
+                {selectedIds.length > 1 && selectedIds.includes(contextMenu.messageId)
+                  ? ` (${selectedIds.length})`
+                  : ''}
+              </div>
+            </>
+          )}
 
-          <div className="wm-context-separator" />
+          {canWriteCurrentMailbox && (
+            <>
+              <div className="wm-context-separator" />
 
-          <div className="wm-context-submenu-wrap">
+              <div className="wm-context-submenu-wrap">
             <div className="wm-context-item" role="menuitem">
               Move to Folder
             </div>
@@ -1154,12 +1414,75 @@ export const InboxView: React.FC<InboxViewProps> = ({
 
           <div className="wm-context-separator" />
 
+          <div className="wm-context-submenu-wrap">
+            <div className="wm-context-item" role="menuitem">
+              Flag
+              {selectedIds.length > 1 && selectedIds.includes(contextMenu.messageId)
+                ? ` (${selectedIds.length})`
+                : ''}
+            </div>
+            <div className="wm-context-submenu" role="menu">
+              {FLAG_COLORS.map((color) => (
+                <div
+                  key={color}
+                  className="wm-context-item"
+                  role="menuitem"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const ids = actionTargetIds(contextMenu.messageId);
+                    setContextMenu(null);
+                    void Promise.all(ids.map((id) => onFlagMessage(id, color))).then(clearSelection);
+                  }}
+                >
+                  <span
+                    style={{
+                      display: 'inline-block',
+                      width: '10px',
+                      height: '10px',
+                      borderRadius: '50%',
+                      backgroundColor: `var(--flag-${color})`,
+                      marginRight: '8px',
+                    }}
+                  />
+                  {FLAG_LABELS[color]}
+                </div>
+              ))}
+              <div className="wm-context-separator" />
+              <div
+                className="wm-context-item"
+                role="menuitem"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const ids = actionTargetIds(contextMenu.messageId);
+                  setContextMenu(null);
+                  void Promise.all(ids.map((id) => onFlagMessage(id, null))).then(clearSelection);
+                }}
+              >
+                Clear Flag
+              </div>
+            </div>
+              </div>
+            </>
+          )}
+
+          <div className="wm-context-separator" />
+
           <div
             className="wm-context-item"
             role="menuitem"
             onClick={() => {
               setContextMenu(null);
-              window.print();
+              void handlePrint();
             }}
           >
             Print

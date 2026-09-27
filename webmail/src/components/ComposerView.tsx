@@ -1,17 +1,36 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
-interface ComposerViewProps {
-  onDiscardClick: () => void;
-  onSendClick: (message: { to: string; subject: string; body: string }) => void;
+interface ComposerAccount {
+  id: string;
+  address: string;
+  name?: string;
 }
 
-export const ComposerView: React.FC<ComposerViewProps> = ({ onDiscardClick, onSendClick }) => {
+interface ComposerViewProps {
+  accounts: ComposerAccount[];
+  defaultAccountId: string;
+  onDiscardClick: () => void;
+  onSendClick: (message: { mailboxId: string; from: string; to: string; subject: string; body: string }) => void;
+}
+
+export const ComposerView: React.FC<ComposerViewProps> = ({ accounts, defaultAccountId, onDiscardClick, onSendClick }) => {
+  const [fromMailboxId, setFromMailboxId] = useState(defaultAccountId);
   const [to, setTo] = useState('');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
 
+  useEffect(() => {
+    if (accounts.length === 0) return;
+    if (!accounts.some((account) => account.id === fromMailboxId)) {
+      setFromMailboxId(defaultAccountId || accounts[0].id);
+    }
+  }, [accounts, defaultAccountId, fromMailboxId]);
+
+  const selectedAccount = accounts.find((account) => account.id === fromMailboxId) ?? accounts[0];
+
   const handleSend = () => {
-    onSendClick({ to, subject, body });
+    if (!selectedAccount) return;
+    onSendClick({ mailboxId: selectedAccount.id, from: selectedAccount.address, to, subject, body });
   };
 
   return (
@@ -47,12 +66,18 @@ export const ComposerView: React.FC<ComposerViewProps> = ({ onDiscardClick, onSe
             <div className="compose-header">
               <div className="from-selector">
                 <span style={{ color: 'var(--neutral-body)' }}>From:</span>
-                <div style={{ padding: '4px 8px', borderRadius: '4px', background: 'var(--surface-canvas)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                  Alex Vance &lt;alex.vance@miautrix.org&gt;
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <polyline points="6 9 12 15 18 9"></polyline>
-                  </svg>
-                </div>
+                <select
+                  className="input-base"
+                  value={fromMailboxId}
+                  onChange={(e) => setFromMailboxId(e.target.value)}
+                  style={{ maxWidth: '320px' }}
+                >
+                  {accounts.map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {account.name && account.name !== account.address ? `${account.name} <${account.address}>` : account.address}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="compose-row">

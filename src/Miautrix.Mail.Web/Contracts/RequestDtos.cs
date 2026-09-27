@@ -11,3 +11,13 @@ public sealed class RetryQueueItemRequest
     [Required]
     public string? Reason { get; set; }
 }
+
+public sealed class SetFlagRequest
+{
+    public string? Color { get; set; }
+}
+
+public sealed class SetAlertConfigRequest
+{
+    public string? AlertConfigurationJson { get; set; }
+}

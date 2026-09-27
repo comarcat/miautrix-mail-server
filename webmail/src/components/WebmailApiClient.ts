@@ -262,6 +262,7 @@ export class WebmailApiClient {
       bodyHtml: '', // fetched on demand via getMessageDetail
       receivedAt: msg.date ?? '',
       isUnread: !msg.is_read,
+      flagColor: msg.flag_color ?? msg.flagColor ?? undefined,
       securityChecks: { spfPass: true, dkimPass: true, dmarcPass: true },
       attachments: [],
     }));
@@ -293,6 +294,7 @@ export class WebmailApiClient {
       bodyText: d.body_text ?? d.bodyText ?? undefined,
       receivedAt: d.date,
       isUnread: !d.is_read,
+      flagColor: d.flag_color ?? d.flagColor ?? undefined,
       securityChecks: { spfPass: true, dkimPass: true, dmarcPass: true },
       attachments,
     };
@@ -305,6 +307,31 @@ export class WebmailApiClient {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ is_read: isRead }),
+    });
+
+    return { data: true };
+  }
+
+  async setFlag(mailboxId: string, messageId: string, color: string | null): Promise<{ data: boolean }> {
+    await this.request<any>(`/mailboxes/${mailboxId}/messages/${messageId}/flag`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ color }),
+    });
+
+    return { data: true };
+  }
+
+  async getFlagAlerts(mailboxId: string): Promise<{ data: any[] }> {
+    const res = await this.request<any>(`/mailboxes/${mailboxId}/settings/flags/alerts`);
+    return this.normalizeArray<any>(res);
+  }
+
+  async setFlagAlert(mailboxId: string, color: string, alertConfigurationJson: string): Promise<{ data: boolean }> {
+    await this.request<any>(`/mailboxes/${mailboxId}/settings/flags/${color}/alert`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ alertConfigurationJson }),
     });
 
     return { data: true };
@@ -353,11 +380,17 @@ export class WebmailApiClient {
     return { data: res?.data ?? res };
   }
 
-  async sendMessage(mailboxId: string, payload: { to: string; subject: string; body: string }): Promise<{ data: EmailMessage }> {
+  async sendMessage(mailboxId: string, payload: { from: string; to: string; subject: string; body: string }): Promise<{ data: EmailMessage }> {
     return this.request<{ data: EmailMessage }>(`/mailboxes/${mailboxId}/messages/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        from: payload.from,
+        to: payload.to.split(',').map((item) => item.trim()).filter(Boolean),
+        subject: payload.subject,
+        bodyText: payload.body,
+        bodyHtml: `<p>${payload.body.replace(/\n/g, '<br/>')}</p>`,
+      }),
     });
   }
 

@@ -6,6 +6,24 @@ export interface Mailbox {
   totalEmails: number;
   icon: string;
   parentId?: string | null;
+  mailboxId?: string;
+  quotaBytes?: number;
+  usedBytes?: number;
+}
+
+export interface MailboxAccount {
+  id: string;
+  address: string;
+  name?: string;
+  kind?: 'user' | 'shared';
+  accessLevel?: 'read' | 'write';
+  quotaBytes?: number;
+  usedBytes?: number;
+}
+
+export interface SharedMailboxGroup {
+  account: MailboxAccount;
+  folders: Mailbox[];
 }
 
 // Folder/group DTOs use the same shape as Mailbox in the current webmail UI.
@@ -42,6 +60,7 @@ export interface EmailMessage {
   receivedAt: string;
   isUnread: boolean;
   isFlagged?: boolean;
+  flagColor?: 'red' | 'blue' | 'green' | 'orange' | 'purple';
   securityChecks: {
     spfPass: boolean;
     dkimPass: boolean;
@@ -63,6 +82,8 @@ export interface RawEmailMessage {
   date: string;
   is_read: boolean;
   size_bytes: number;
+  flag_color?: 'red' | 'blue' | 'green' | 'orange' | 'purple' | null;
+  flagColor?: 'red' | 'blue' | 'green' | 'orange' | 'purple' | null;
 }
 
 export interface Contact {

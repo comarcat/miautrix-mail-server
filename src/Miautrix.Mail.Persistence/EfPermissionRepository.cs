@@ -54,6 +54,21 @@ public sealed class EfPermissionRepository : IPermissionRepository
             .FirstOrDefault();
     }
 
+    public string GetMailboxEffectiveAccess(Guid tenantId, Guid userId, Mailbox mailbox)
+    {
+        if (IsMailboxOwner(tenantId, userId, mailbox.Id) || HasPermission(tenantId, userId, "mailbox.update"))
+        {
+            return "write";
+        }
+
+        if (mailbox.Kind.Equals("shared", StringComparison.OrdinalIgnoreCase))
+        {
+            return GetMailboxDelegateAccess(tenantId, userId, mailbox.Id) ?? "read";
+        }
+
+        return "write";
+    }
+
     public int GetTenantOwnerCount(Guid tenantId)
     {
         var ownerRoleIds = _db.Roles

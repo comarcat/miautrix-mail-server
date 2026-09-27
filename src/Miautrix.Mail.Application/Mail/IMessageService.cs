@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Miautrix.Mail.Domain;
 
 namespace Miautrix.Mail.Application.Mail;
 
@@ -57,5 +58,27 @@ public interface IMessageService
         Guid userId,
         Guid mailboxId,
         SendMessageRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> SetFlagAsync(
+        Guid tenantId,
+        Guid userId,
+        Guid mailboxId,
+        Guid messageId,
+        string? flagColor,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> SetFlagAlertConfigAsync(
+        Guid tenantId,
+        Guid userId,
+        Guid mailboxId,
+        string flagColor,
+        string alertConfigurationJson,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<FlagAlertConfiguration>> GetFlagAlertConfigsAsync(
+        Guid tenantId,
+        Guid userId,
+        Guid mailboxId,
         CancellationToken cancellationToken = default);
 }

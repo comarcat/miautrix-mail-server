@@ -20,6 +20,7 @@ public interface IPermissionRepository
     bool IsUserTenantOwner(Guid tenantId, Guid userId);
     bool IsMailboxOwner(Guid tenantId, Guid userId, Guid mailboxId);
     string? GetMailboxDelegateAccess(Guid tenantId, Guid userId, Guid mailboxId);
+    string GetMailboxEffectiveAccess(Guid tenantId, Guid userId, Mailbox mailbox);
 }
 
 public interface ITenantAuthorizationHelper

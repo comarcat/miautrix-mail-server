@@ -185,7 +185,14 @@ public class MessageRecipient : TenantScopedEntityBase
 public class MessageFlag : TenantScopedEntityBase
 {
     public Guid MessageId { get; set; }
-    public string Flag { get; set; } = string.Empty;
+    public string Flag { get; set; } = string.Empty; // e.g., "red", "blue", "green", "orange", "purple"
+}
+
+public class FlagAlertConfiguration : TenantScopedEntityBase
+{
+    public Guid MailboxId { get; set; }
+    public string Flag { get; set; } = string.Empty; // e.g., "red", "blue", "green", "orange", "purple"
+    public string AlertConfigurationJson { get; set; } = string.Empty; // Alert settings for this flag
 }
 
 public class Attachment : TenantScopedEntityBase

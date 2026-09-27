@@ -1,17 +1,88 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import type { SieveFilterRule } from '../types';
+import { webmailClient } from './WebmailApiClient';
+
+const FLAG_COLORS = ['red', 'blue', 'green', 'orange', 'purple'] as const;
+type FlagColor = (typeof FLAG_COLORS)[number];
+
+const FLAG_LABELS: Record<FlagColor, string> = {
+  red: 'Red',
+  blue: 'Blue',
+  green: 'Green',
+  orange: 'Orange',
+  purple: 'Purple',
+};
+
+interface FlagAlertConfig {
+  enabled: boolean;
+  title: string;
+  message: string;
+}
 
 interface SieveRulesViewProps {
   initialRules: SieveFilterRule[];
+  mailboxId: string;
 }
 
-export const SieveRulesView: React.FC<SieveRulesViewProps> = ({ initialRules }) => {
+export const SieveRulesView: React.FC<SieveRulesViewProps> = ({ initialRules, mailboxId }) => {
   const [rules, setRules] = useState<SieveFilterRule[]>(initialRules);
   const [newRuleName, setNewRuleName] = useState('');
   const [newRuleField, setNewRuleField] = useState<'from' | 'subject' | 'to' | 'header'>('subject');
   const [newRuleValue, setNewRuleValue] = useState('');
   const [newRuleAction, setNewRuleAction] = useState<'fileinto' | 'redirect' | 'reject' | 'addflag' | 'discard'>('fileinto');
   const [newRuleTarget, setNewRuleTarget] = useState('Archive');
+  const [flagAlerts, setFlagAlerts] = useState<Record<FlagColor, FlagAlertConfig>>(() =>
+    FLAG_COLORS.reduce((acc, color) => {
+      acc[color] = { enabled: false, title: `${FLAG_LABELS[color]} flagged email`, message: '' };
+      return acc;
+    }, {} as Record<FlagColor, FlagAlertConfig>),
+  );
+  const [isSavingFlagAlerts, setIsSavingFlagAlerts] = useState(false);
+
+  useEffect(() => {
+    if (!mailboxId) return;
+
+    let cancelled = false;
+    webmailClient.getFlagAlerts(mailboxId).then((res) => {
+      if (cancelled) return;
+
+      setFlagAlerts((prev) => {
+        const next = { ...prev };
+        for (const item of res.data) {
+          const color = (item.color ?? item.flagColor) as FlagColor | undefined;
+          if (!color || !FLAG_COLORS.includes(color)) continue;
+
+          const raw = item.alertConfigurationJson ?? item.alert_configuration_json ?? '{}';
+          try {
+            next[color] = { ...next[color], ...JSON.parse(raw) };
+          } catch {
+            next[color] = { ...next[color], message: String(raw) };
+          }
+        }
+        return next;
+      });
+    }).catch(() => {
+      // Alert configuration is optional UI state; keep defaults if the endpoint is unavailable.
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mailboxId]);
+
+  const saveFlagAlerts = async () => {
+    if (!mailboxId) return;
+    setIsSavingFlagAlerts(true);
+    try {
+      await Promise.all(
+        FLAG_COLORS.map((color) =>
+          webmailClient.setFlagAlert(mailboxId, color, JSON.stringify(flagAlerts[color])),
+        ),
+      );
+    } finally {
+      setIsSavingFlagAlerts(false);
+    }
+  };
 
   const handleAddRule = (e: React.FormEvent) => {
     e.preventDefault();
@@ -137,6 +208,82 @@ export const SieveRulesView: React.FC<SieveRulesViewProps> = ({ initialRules }) 
                 Add Filter Rule
               </button>
             </form>
+          </div>
+
+          <div className="card" style={{ marginBottom: '32px' }}>
+            <h3 style={{ fontSize: '1.25rem', marginBottom: '8px' }}>Flag Alert Configuration</h3>
+            <p style={{ color: 'var(--neutral-body)', marginTop: 0 }}>
+              Configure alerts for Outlook-style message flags.
+            </p>
+            <div style={{ display: 'grid', gap: '16px' }}>
+              {FLAG_COLORS.map((color) => (
+                <div
+                  key={color}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '140px 1fr 1fr',
+                    gap: '12px',
+                    alignItems: 'center',
+                    padding: '12px',
+                    border: '1px solid var(--neutral-border)',
+                    borderRadius: 'var(--radius-sm)',
+                  }}
+                >
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
+                    <input
+                      type="checkbox"
+                      checked={flagAlerts[color].enabled}
+                      onChange={(e) =>
+                        setFlagAlerts((prev) => ({
+                          ...prev,
+                          [color]: { ...prev[color], enabled: e.target.checked },
+                        }))
+                      }
+                    />
+                    <span
+                      style={{
+                        width: '10px',
+                        height: '10px',
+                        borderRadius: '50%',
+                        backgroundColor: `var(--flag-${color})`,
+                      }}
+                    />
+                    {FLAG_LABELS[color]}
+                  </label>
+                  <input
+                    className="input-base"
+                    value={flagAlerts[color].title}
+                    placeholder="Alert title"
+                    onChange={(e) =>
+                      setFlagAlerts((prev) => ({
+                        ...prev,
+                        [color]: { ...prev[color], title: e.target.value },
+                      }))
+                    }
+                  />
+                  <input
+                    className="input-base"
+                    value={flagAlerts[color].message}
+                    placeholder="Alert notes or reminder text"
+                    onChange={(e) =>
+                      setFlagAlerts((prev) => ({
+                        ...prev,
+                        [color]: { ...prev[color], message: e.target.value },
+                      }))
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              className="btn btn-primary"
+              style={{ padding: '8px 16px', marginTop: '16px' }}
+              disabled={isSavingFlagAlerts || !mailboxId}
+              onClick={() => void saveFlagAlerts()}
+            >
+              {isSavingFlagAlerts ? 'Saving…' : 'Save Flag Alerts'}
+            </button>
           </div>
 
           {/* Active Rules List */}

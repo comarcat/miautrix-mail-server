@@ -35,6 +35,7 @@ public class AppDbContext : DbContext
     public DbSet<Message> Messages => Set<Message>();
     public DbSet<MessageRecipient> MessageRecipients => Set<MessageRecipient>();
     public DbSet<MessageFlag> MessageFlags => Set<MessageFlag>();
+    public DbSet<FlagAlertConfiguration> FlagAlertConfigurations => Set<FlagAlertConfiguration>();
     public DbSet<Attachment> Attachments => Set<Attachment>();
     public DbSet<Alias> Aliases => Set<Alias>();
     public DbSet<Group> Groups => Set<Group>();
@@ -259,6 +260,14 @@ public class AppDbContext : DbContext
         {
             entity.Property(e => e.MessageId).HasColumnName("message_id");
             entity.Property(e => e.Flag).HasColumnName("flag");
+        });
+
+        ConfigureTenantScoped<FlagAlertConfiguration>(modelBuilder, "flag_alert_configurations");
+        modelBuilder.Entity<FlagAlertConfiguration>(entity =>
+        {
+            entity.Property(e => e.MailboxId).HasColumnName("mailbox_id");
+            entity.Property(e => e.Flag).HasColumnName("flag");
+            entity.Property(e => e.AlertConfigurationJson).HasColumnName("alert_configuration_json");
         });
 
         ConfigureTenantScoped<Attachment>(modelBuilder, "attachments");
