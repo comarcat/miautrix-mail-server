@@ -339,12 +339,6 @@ export const QuarantineScreen: React.FC<QuarantineScreenProps> = ({ client = def
                               >
                                 Release
                               </button>
-                              <button
-                                className="btn-link text-error"
-                                onClick={(e) => { e.stopPropagation(); handleDelete(item); }}
-                              >
-                                Discard
-                              </button>
                             </>
                           )}
                         </div>

@@ -200,7 +200,7 @@ public sealed class MailQueueController : ControllerBase
 
     private static string ToWireStatus(string domainStatus) => domainStatus switch
     {
-        "Pending" => "queued",
+        "Pending" or "Queued" => "queued",
         "Failed" or "Retrying" => "retrying",
         "DeadLetter" => "dead_letter",
         "Delivered" => "delivered",

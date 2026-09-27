@@ -18,8 +18,16 @@ public sealed record FolderDto(
     Guid MailboxId,
     string Name,
     string Role,
+    Guid? ParentId,
     int UnreadCount,
     int TotalCount);
+
+public sealed record CreateFolderRequest(
+    string Name,
+    Guid? ParentId);
+
+public sealed record UpdateFolderParentRequest(
+    Guid? ParentId);
 
 public sealed record MessageSummaryDto(
     Guid Id,
@@ -41,6 +49,13 @@ public sealed record AttachmentDto(
     string ContentType,
     long SizeBytes,
     string? DownloadUrl = null);
+
+// Internal DTO for streaming attachment bytes to the web API.
+// Intentionally not used as an API response envelope.
+public sealed record AttachmentDownloadDto(
+    string FileName,
+    string ContentType,
+    System.IO.Stream ContentStream);
 
 public sealed record MessageDetailDto(
     Guid Id,

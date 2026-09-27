@@ -289,6 +289,59 @@ namespace Miautrix.Mail.Persistence.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("lockout_max_failed_attempts");
 
+                    b.Property<int>("MalwareArchiveRecursionLimit")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(8)
+                        .HasColumnName("malware_archive_recursion_limit");
+
+                    b.Property<bool>("MalwareBlockEncryptedArchives")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("malware_block_encrypted_archives");
+
+                    b.Property<bool>("MalwareBlockExecutables")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("malware_block_executables");
+
+                    b.Property<bool>("MalwareBlockMacros")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("malware_block_macros");
+
+                    b.Property<string>("MalwareDetectedAction")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long>("MalwareMaxFileSizeBytes")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(52428800L)
+                        .HasColumnName("malware_max_file_size_bytes");
+
+                    b.Property<int>("MalwareScanTimeoutSeconds")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(15)
+                        .HasColumnName("malware_scan_timeout_seconds");
+
+                    b.Property<bool>("MalwareScanningEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("malware_scanning_enabled");
+
+                    b.Property<string>("MalwareTimeoutAction")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("quarantine")
+                        .HasColumnName("malware_timeout_action");
+
                     b.Property<bool>("MfaEnforced")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -374,6 +427,10 @@ namespace Miautrix.Mail.Persistence.Migrations
                         .HasColumnType("text")
                         .HasColumnName("name");
 
+                    b.Property<Guid?>("ParentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("parent_id");
+
                     b.Property<string>("Role")
                         .IsRequired()
                         .HasColumnType("text")
@@ -386,6 +443,8 @@ namespace Miautrix.Mail.Persistence.Migrations
                     b.Property<long>("UidValidity")
                         .HasColumnType("bigint")
                         .HasColumnName("uid_validity");
+
+                    b.HasIndex("ParentId");
 
                     b.ToTable("folders", (string)null);
                 });
@@ -1119,6 +1178,14 @@ namespace Miautrix.Mail.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("Miautrix.Mail.Domain.Folder", b =>
+                {
+                    b.HasOne("Miautrix.Mail.Domain.Folder", null)
+                        .WithMany()
+                        .HasForeignKey("ParentId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 #pragma warning restore 612, 618
         }

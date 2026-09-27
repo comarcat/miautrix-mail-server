@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Miautrix.Mail.AntiMalware;
 using Miautrix.Mail.AntiSpam;
 using Miautrix.Mail.Application.Transport;
 using Miautrix.Mail.Identity;
@@ -20,6 +21,7 @@ var environment = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
                   ?? "Production";
 
 var isDevelopment = environment.Equals("Development", StringComparison.OrdinalIgnoreCase);
+var antiMalwareOptions = AntiMalwareOptions.FromEnvironment(isDevelopment);
 
 // ── Required configuration — crash on missing in production ───────────────────
 
@@ -115,6 +117,8 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddScoped<ISmtpQueueManager, SmtpQueueManager>();
 
         // Inbound filtering
+        services.AddSingleton(antiMalwareOptions);
+        services.AddSingleton<IAntiMalwareScanner, ClamAvScanner>();
         services.AddScoped<ISpamProvider, RuleBasedSpamProvider>();
         services.AddScoped<IQuarantineService, QuarantineService>();
 

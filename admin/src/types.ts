@@ -286,6 +286,31 @@ export interface AntiSpamSettings {
   spf_dmarc_enforcement_enabled: boolean;
 }
 
+export interface AntiMalwareSettings {
+  scanning_enabled: boolean;
+  block_executables: boolean;
+  block_macros: boolean;
+  block_encrypted_archives: boolean;
+  max_file_size_bytes: number;
+  archive_recursion_limit: number;
+  scan_timeout_seconds: number;
+  timeout_action: string;
+  detected_action: 'quarantine' | 'discard';
+}
+
+export interface AntiMalwareStatus {
+  scanner_configured: boolean;
+  scanner_available: boolean;
+  engine: string;
+  version?: string;
+  socket_path?: string;
+  clean24h: number;
+  threats24h: number;
+  errors24h: number;
+  last_scan_at?: string;
+  last_error?: string;
+}
+
 export interface TenantInfo {
   id: string;
   slug: string;

@@ -321,6 +321,40 @@ public sealed record UpdateAntiSpamSettingsRequest(
     bool? GreylistingEnabled = null,
     bool? SpfDmarcEnforcementEnabled = null);
 
+public sealed record AntiMalwareSettingsDto(
+    bool ScanningEnabled,
+    bool BlockExecutables,
+    bool BlockMacros,
+    bool BlockEncryptedArchives,
+    long MaxFileSizeBytes,
+    int ArchiveRecursionLimit,
+    int ScanTimeoutSeconds,
+    string TimeoutAction,
+    string DetectedAction);
+
+public sealed record UpdateAntiMalwareSettingsRequest(
+    bool? ScanningEnabled = null,
+    bool? BlockExecutables = null,
+    bool? BlockMacros = null,
+    bool? BlockEncryptedArchives = null,
+    long? MaxFileSizeBytes = null,
+    int? ArchiveRecursionLimit = null,
+    int? ScanTimeoutSeconds = null,
+    string? TimeoutAction = null,
+    string? DetectedAction = null);
+
+public sealed record AntiMalwareStatusDto(
+    bool ScannerConfigured,
+    bool ScannerAvailable,
+    string Engine,
+    string? Version,
+    string? SocketPath,
+    int Clean24h,
+    int Threats24h,
+    int Errors24h,
+    DateTimeOffset? LastScanAt,
+    string? LastError);
+
 public sealed record TenantDto(
     Guid Id,
     string Slug);

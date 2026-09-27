@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Miautrix.Mail.AntiMalware;
 using Miautrix.Mail.AntiSpam;
 using Miautrix.Mail.Domain;
 using Miautrix.Mail.Persistence;
@@ -61,6 +62,7 @@ public sealed class InboundQueueDispatcher : BackgroundService
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var quarantineService = scope.ServiceProvider.GetRequiredService<IQuarantineService>();
+        var antiMalwareScanner = scope.ServiceProvider.GetRequiredService<IAntiMalwareScanner>();
         var storage = scope.ServiceProvider.GetRequiredService<IMailStorage>();
 
         var pendingItems = await db.SmtpQueue
@@ -75,7 +77,7 @@ public sealed class InboundQueueDispatcher : BackgroundService
         {
             try
             {
-                await ProcessItemAsync(db, quarantineService, storage, item, ct);
+                await ProcessItemAsync(db, quarantineService, antiMalwareScanner, storage, item, ct);
             }
             catch (Exception ex)
             {
@@ -89,10 +91,88 @@ public sealed class InboundQueueDispatcher : BackgroundService
         await db.SaveChangesAsync(ct);
     }
 
-    private async Task ProcessItemAsync(AppDbContext db, IQuarantineService quarantineService, IMailStorage storage, SmtpQueueItem item, CancellationToken ct)
+    private async Task ProcessItemAsync(AppDbContext db, IQuarantineService quarantineService, IAntiMalwareScanner antiMalwareScanner, IMailStorage storage, SmtpQueueItem item, CancellationToken ct)
     {
         var parsed = ParsedInboundMessage.Parse(item.RawMessage);
         var subject = item.Subject ?? parsed.Subject ?? "No Subject";
+
+        var recipientDomain = item.Recipient.Split('@').LastOrDefault()?.Trim().ToLowerInvariant();
+        var domain = recipientDomain is null
+            ? null
+            : await db.Domains.FirstOrDefaultAsync(d => d.TenantId == item.TenantId && d.Name.ToLower() == recipientDomain, ct);
+
+        if (domain?.MalwareScanningEnabled == true && parsed.Attachments.Count > 0)
+        {
+            foreach (var attachment in parsed.Attachments)
+            {
+                var policyReason = AttachmentPolicy.GetPolicyBlockReason(
+                    attachment.FileName,
+                    attachment.Content.LongLength,
+                    domain.MalwareBlockExecutables,
+                    domain.MalwareBlockMacros,
+                    domain.MalwareBlockEncryptedArchives,
+                    domain.MalwareMaxFileSizeBytes);
+
+                var scan = policyReason is null
+                    ? await antiMalwareScanner.ScanAsync(attachment.Content, ct)
+                    : new AntiMalwareScanResult(true, true, policyReason, "policy", "blocked", policyReason, 0);
+
+                db.MalwareVerdicts.Add(new MalwareVerdict
+                {
+                    Id = Guid.NewGuid(),
+                    TenantId = item.TenantId,
+                    Sender = item.Sender,
+                    Recipient = item.Recipient,
+                    IsMalware = scan.IsMalware,
+                    ThreatName = scan.ThreatName,
+                    Engine = scan.Engine,
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    UpdatedAt = DateTimeOffset.UtcNow
+                });
+
+                if (scan.IsMalware)
+                {
+                    var detectedAction = domain.MalwareDetectedAction ?? "quarantine";
+
+                    if (string.Equals(detectedAction, "discard", StringComparison.OrdinalIgnoreCase))
+                    {
+                        _logger.LogInformation(
+                            "Discarding malware-detected message {QueueItemId} for {Recipient} (action={DetectedAction}).",
+                            item.Id,
+                            item.Recipient,
+                            detectedAction);
+
+                        // Discard means remove from the SMTP queue so it does not remain locked in
+                        // Pending/Retry buckets.
+                        db.SmtpQueue.Remove(item);
+                        return;
+                    }
+
+                    var quarantine = new QuarantineItem
+                    {
+                        Id = Guid.NewGuid(),
+                        TenantId = item.TenantId,
+                        Sender = item.Sender,
+                        Recipient = item.Recipient,
+                        Subject = subject,
+                        RawMessage = item.RawMessage,
+                        SpamScore = 0,
+                        Threshold = 0,
+                        ReasonsJson = $"[{{\"RuleName\":\"{scan.ThreatName ?? scan.ErrorCode ?? "MALWARE_DETECTED"}\",\"Score\":0,\"Reason\":\"Attachment blocked by anti-malware policy\"}}]",
+                        Status = "Quarantined",
+                        QuarantinedAt = DateTimeOffset.UtcNow,
+                        IsDelivered = false,
+                        CreatedAt = DateTimeOffset.UtcNow,
+                        UpdatedAt = DateTimeOffset.UtcNow
+                    };
+                    db.Quarantine.Add(quarantine);
+                    item.Status = "Quarantined";
+                    item.LastError = scan.ThreatName ?? scan.ErrorCode ?? "Malware detected.";
+                    item.UpdatedAt = DateTimeOffset.UtcNow;
+                    return;
+                }
+            }
+        }
 
         var mailContext = new InboundMailContext(
             Sender: item.Sender,
@@ -101,16 +181,25 @@ public sealed class InboundQueueDispatcher : BackgroundService
             Subject: subject,
             RawMessage: item.RawMessage);
 
+        // Spam routing:
+        // - If high-confidence: quarantine (existing flow)
+        // - If suspicious: deliver into the mailbox Junk folder
+        // - Else: deliver into Inbox
+        //
+        // Thresholds are domain-configurable.
+        var junkThreshold = domain?.SpamHeaderScore ?? 6.0;
+        var quarantineThreshold = domain?.SpamQuarantineScore ?? 10.0;
+
         // If the admin explicitly released a quarantined spam message, prevent it from being re-quarantined.
         // AdminService tags the subject with the exact prefix below before enqueuing.
-        var threshold = item.Subject != null && item.Subject.Contains(SpamSupectedReleasedTag, StringComparison.OrdinalIgnoreCase)
+        var quarantineEvalThreshold = item.Subject != null && item.Subject.Contains(SpamSupectedReleasedTag, StringComparison.OrdinalIgnoreCase)
             ? 1000.0
-            : 5.0;
+            : quarantineThreshold;
 
         var result = await quarantineService.ProcessInboundMessageAsync(
             item.TenantId,
             mailContext,
-            threshold: threshold,
+            threshold: quarantineEvalThreshold,
             cancellationToken: ct);
 
         if (!result.Delivered)
@@ -119,6 +208,19 @@ public sealed class InboundQueueDispatcher : BackgroundService
             item.UpdatedAt = DateTimeOffset.UtcNow;
             return;
         }
+
+        var deliveredRole = result.Score >= junkThreshold ? "junk" : "inbox";
+        var _ = result; // keep result in scope for the following role decision
+
+        // Continue with folder selection using deliveredRole
+
+        // NOTE: folder creation is handled below.
+
+        // (result variable is kept above; this is a no-op to avoid accidental scoping edits)
+
+        // ReSharper disable once UnusedVariable
+
+
 
         var recipient = item.Recipient.Trim().ToLowerInvariant();
         var mailbox = await db.Mailboxes
@@ -156,23 +258,35 @@ public sealed class InboundQueueDispatcher : BackgroundService
             return;
         }
 
+        var desiredRole = deliveredRole;
+
         var folder = await db.Folders
-            .FirstOrDefaultAsync(f => f.TenantId == item.TenantId && f.MailboxId == mailbox.Id && f.Role == "inbox", ct);
+            .FirstOrDefaultAsync(f => f.TenantId == item.TenantId && f.MailboxId == mailbox.Id && f.Role == desiredRole, ct);
 
         if (folder == null)
         {
+            var folderName = desiredRole.ToLowerInvariant() switch
+            {
+                "inbox" => "Inbox",
+                "junk" => "Junk",
+                _ => desiredRole
+            };
+
             folder = new Folder
             {
                 Id = Guid.NewGuid(),
                 TenantId = item.TenantId,
                 MailboxId = mailbox.Id,
-                Name = "Inbox",
-                Role = "inbox",
+                Name = folderName,
+                Role = desiredRole,
                 CreatedAt = DateTimeOffset.UtcNow,
                 UpdatedAt = DateTimeOffset.UtcNow
             };
             db.Folders.Add(folder);
         }
+
+
+
 
         using var contentStream = new MemoryStream(rawMessageBytes);
         var storageResult = await storage.StoreAsync(contentStream, ct);
@@ -193,6 +307,7 @@ public sealed class InboundQueueDispatcher : BackgroundService
             IsRead = false,
             RawHeaders = parsed.RawHeaders,
             BodyText = parsed.BodyText,
+            BodyHtml = parsed.BodyHtml,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow
         };
@@ -232,6 +347,7 @@ public sealed class InboundQueueDispatcher : BackgroundService
         public string? Subject { get; private init; }
         public DateTimeOffset? Date { get; private init; }
         public string? BodyText { get; private init; }
+        public string? BodyHtml { get; private init; }
         public IReadOnlyList<ParsedAttachment> Attachments { get; private init; } = [];
 
         public static ParsedInboundMessage Parse(string rawMessage)
@@ -244,12 +360,18 @@ public sealed class InboundQueueDispatcher : BackgroundService
 
             var attachments = ParseAttachments(headers, body);
 
+            // Extract first text/plain body and first text/html body for multipart emails.
+            // Fallback: ExtractTextBody for messages we can't parse as multipart.
+            var bodyText = ExtractTextBody(body);
+            var bodyHtml = ExtractHtmlBody(body);
+
             return new ParsedInboundMessage
             {
                 RawHeaders = rawHeaders.Replace("\n", "\r\n"),
                 Subject = headers.TryGetValue("subject", out var subject) ? subject : null,
                 Date = headers.TryGetValue("date", out var date) && DateTimeOffset.TryParse(date, out var parsedDate) ? parsedDate : null,
-                BodyText = ExtractTextBody(body),
+                BodyText = bodyText,
+                BodyHtml = bodyHtml,
                 Attachments = attachments
             };
         }
@@ -321,11 +443,163 @@ public sealed class InboundQueueDispatcher : BackgroundService
             return attachments;
         }
 
-        private static string? ExtractTextBody(string body)
+        // NOTE: same parsing assumptions as ExtractHtmlBody below.
+        private static string? ExtractTextBody(string body) => ExtractTextBody(body, 0);
+
+        private static string? ExtractHtmlBody(string body, int depth)
         {
-            var split = body.IndexOf("\n--", StringComparison.Ordinal);
-            var candidate = split >= 0 ? body[..split] : body;
-            return string.IsNullOrWhiteSpace(candidate) ? null : candidate.Trim();
+            if (string.IsNullOrWhiteSpace(body)) return null;
+            if (depth > 5) return null;
+
+            var split = body.StartsWith("--", StringComparison.Ordinal)
+                ? 0
+                : body.IndexOf("\n--", StringComparison.Ordinal);
+
+            if (split > 0)
+            {
+                // IndexOf("\n--") points at the leading newline; shift to the boundary marker.
+                split += 1;
+            }
+
+            if (split < 0)
+            {
+                var candidate = body.Trim();
+                if (candidate.StartsWith("<", StringComparison.OrdinalIgnoreCase) && candidate.Contains("</", StringComparison.OrdinalIgnoreCase))
+                    return candidate;
+                return null;
+            }
+
+            var firstDelim = body[split..];
+            var delimLineEnd = firstDelim.IndexOf('\n');
+            if (delimLineEnd < 0) return null;
+
+            var delimLine = firstDelim[..delimLineEnd].Trim(); // "--boundary" or "--boundary--"
+            if (!delimLine.StartsWith("--")) return null;
+
+            var boundary = delimLine.Substring(2);
+            if (string.IsNullOrWhiteSpace(boundary)) return null;
+
+            var delimiter = "--" + boundary;
+            foreach (var rawPart in body.Split(delimiter, StringSplitOptions.None))
+            {
+                var part = rawPart.Trim('\n');
+                if (part.Length == 0 || part.StartsWith("--", StringComparison.Ordinal)) continue;
+
+                var partSplit = part.IndexOf("\n\n", StringComparison.Ordinal);
+                if (partSplit < 0) continue;
+
+                var partHeaders = ParseHeaders(part[..partSplit]);
+                var partBody = part[(partSplit + 2)..].Trim('\n');
+
+                if (!partHeaders.TryGetValue("content-type", out var contentType)) continue;
+
+                // Direct text/html.
+                if (contentType.Contains("text/html", StringComparison.OrdinalIgnoreCase))
+                {
+                    var transferEncoding = partHeaders.TryGetValue("content-transfer-encoding", out var cte) ? cte : string.Empty;
+                    var html = transferEncoding.Equals("base64", StringComparison.OrdinalIgnoreCase)
+                        ? Encoding.UTF8.GetString(DecodeBase64(partBody))
+                        : partBody;
+
+                    var trimmed = html.Trim();
+                    return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
+                }
+
+                // Nested multipart.
+                if (contentType.Contains("multipart/", StringComparison.OrdinalIgnoreCase))
+                {
+                    var transferEncoding = partHeaders.TryGetValue("content-transfer-encoding", out var cte) ? cte : string.Empty;
+                    var nested = transferEncoding.Equals("base64", StringComparison.OrdinalIgnoreCase)
+                        ? Encoding.UTF8.GetString(DecodeBase64(partBody))
+                        : partBody;
+
+                    var extracted = ExtractHtmlBody(nested, depth + 1);
+                    if (extracted is not null) return extracted;
+                }
+            }
+
+            return null;
+        }
+
+        private static string? ExtractHtmlBody(string body)
+        {
+            if (string.IsNullOrWhiteSpace(body)) return null;
+            return ExtractHtmlBody(body, 0);
+        }
+
+        private static string? ExtractTextBody(string body, int depth)
+        {
+            if (string.IsNullOrWhiteSpace(body)) return null;
+            if (depth > 5) return null;
+
+            // Best-effort extraction:
+            // - multipart/*: find the first direct text/plain part and decode it (recursing into nested multiparts).
+            // - non-multipart: treat everything after headers as text.
+            // Some emails may start multipart boundaries immediately after the initial headers,
+            // so handle both "--boundary" at position 0 and the more common "\n--boundary" case.
+            var split = body.StartsWith("--", StringComparison.Ordinal)
+                ? 0
+                : body.IndexOf("\n--", StringComparison.Ordinal);
+
+            // Non-multipart fallback.
+            if (split < 0)
+            {
+                var candidate = body.Trim();
+                return string.IsNullOrWhiteSpace(candidate) ? null : candidate;
+            }
+
+            // multipart: infer boundary from the first delimiter.
+            var firstDelim = body[split..];
+            var delimLineEnd = firstDelim.IndexOf('\n');
+            if (delimLineEnd < 0) return null;
+
+            var delimLine = firstDelim[..delimLineEnd].Trim(); // "--boundary" or "--boundary--"
+            if (!delimLine.StartsWith("--")) return null;
+
+            var boundary = delimLine.Substring(2);
+            if (string.IsNullOrWhiteSpace(boundary)) return null;
+
+            var delimiter = "--" + boundary;
+            foreach (var rawPart in body.Split(delimiter, StringSplitOptions.None))
+            {
+                var part = rawPart.Trim('\n');
+                if (part.Length == 0 || part.StartsWith("--", StringComparison.Ordinal)) continue;
+
+                var partSplit = part.IndexOf("\n\n", StringComparison.Ordinal);
+                if (partSplit < 0) continue;
+
+                var partHeaders = ParseHeaders(part[..partSplit]);
+                var partBody = part[(partSplit + 2)..].Trim('\n');
+
+                if (!partHeaders.TryGetValue("content-type", out var contentType)) continue;
+
+                // Direct text/plain.
+                if (contentType.Contains("text/plain", StringComparison.OrdinalIgnoreCase))
+                {
+                    var transferEncoding = partHeaders.TryGetValue("content-transfer-encoding", out var cte) ? cte : string.Empty;
+
+                    var text = transferEncoding.Equals("base64", StringComparison.OrdinalIgnoreCase)
+                        ? Encoding.UTF8.GetString(DecodeBase64(partBody))
+                        : partBody;
+
+                    var trimmed = text.Trim();
+                    return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
+                }
+
+                // Nested multipart (e.g. multipart/mixed -> multipart/alternative -> text/plain).
+                if (contentType.Contains("multipart/", StringComparison.OrdinalIgnoreCase))
+                {
+                    var transferEncoding = partHeaders.TryGetValue("content-transfer-encoding", out var cte) ? cte : string.Empty;
+                    var nested = transferEncoding.Equals("base64", StringComparison.OrdinalIgnoreCase)
+                        ? Encoding.UTF8.GetString(DecodeBase64(partBody))
+                        : partBody;
+
+                    var extracted = ExtractTextBody(nested, depth + 1);
+                    if (extracted is not null) return extracted;
+                }
+            }
+
+            return null;
         }
 
         private static string? GetParameter(string headerValue, string name)

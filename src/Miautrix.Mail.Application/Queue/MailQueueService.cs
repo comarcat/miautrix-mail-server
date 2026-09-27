@@ -39,8 +39,19 @@ public sealed class MailQueueService : IMailQueueService
 
         if (filter.Status is { } status)
         {
-            var domainStatuses = ToDomainStatuses(status);
-            query = query.Where(q => domainStatuses.Contains(q.Status));
+            if (status == QueueStatusFilter.Queued)
+            {
+                query = query.Where(q =>
+                    q.Status != "Failed" &&
+                    q.Status != "Retrying" &&
+                    q.Status != "DeadLetter" &&
+                    q.Status != "Delivered");
+            }
+            else
+            {
+                var domainStatuses = ToDomainStatuses(status);
+                query = query.Where(q => domainStatuses.Contains(q.Status));
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(filter.Search))
@@ -200,7 +211,7 @@ public sealed class MailQueueService : IMailQueueService
 
     private static string[] ToDomainStatuses(QueueStatusFilter status) => status switch
     {
-        QueueStatusFilter.Queued => ["Pending"],
+        QueueStatusFilter.Queued => ["Pending", "Queued"],
         QueueStatusFilter.Retrying => ["Failed", "Retrying"],
         QueueStatusFilter.DeadLetter => ["DeadLetter"],
         QueueStatusFilter.Delivered => ["Delivered"],

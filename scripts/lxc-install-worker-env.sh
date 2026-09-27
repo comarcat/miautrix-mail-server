@@ -14,6 +14,13 @@
 # Worker's outbound path and the Web app's inbound webhook. Values are read from that file,
 # never from argv — argv is world-readable via ps and lands in shell history.
 #
+# Anti-malware (ClamAV) variables are written from environment defaults:
+#   MIAUTRIX_CLAMAV_SOCKET      — clamd Unix socket path (default /run/clamav/clamd.ctl)
+#   MIAUTRIX_CLAMAV_REQUIRED    — fail-safe quarantine when scanner is down (default true)
+#   MIAUTRIX_CLAMAV_SCAN_TIMEOUT_SECONDS — per-attachment scan timeout (default 15)
+#
+# Install ClamAV first with scripts/lxc-install-antimalware.sh.
+#
 # Idempotent: re-running replaces the TLS pair and rewrites the managed block of the
 # environment file while preserving any variables already defined above it.
 
@@ -219,7 +226,7 @@ chmod 0600 "$tmp_env"
 
 # Preserve any variable the operator added that we do not manage.
 if [[ -f "$ENV_FILE" ]]; then
-    grep -v -E '^(MIAUTRIX_DB_CONNECTION|MIAUTRIX_STORAGE_DIR|MIAUTRIX_HOSTNAME|MIAUTRIX_TLS_CERT_PATH|MIAUTRIX_TLS_KEY_PATH|CLOUDFLARE_API_TOKEN|CLOUDFLARE_API_BASE)=' "$ENV_FILE" \
+    grep -v -E '^(MIAUTRIX_DB_CONNECTION|MIAUTRIX_STORAGE_DIR|MIAUTRIX_HOSTNAME|MIAUTRIX_TLS_CERT_PATH|MIAUTRIX_TLS_KEY_PATH|MIAUTRIX_CLAMAV_SOCKET|MIAUTRIX_CLAMAV_REQUIRED|MIAUTRIX_CLAMAV_SCAN_TIMEOUT_SECONDS|CLOUDFLARE_API_TOKEN|CLOUDFLARE_API_BASE)=' "$ENV_FILE" \
         | grep -v -E '^# Managed by lxc-install-worker-env.sh' \
         >> "$tmp_env" || true
 fi
@@ -236,6 +243,9 @@ fi
     echo "MIAUTRIX_HOSTNAME=$HOSTNAME_VALUE"
     echo "MIAUTRIX_TLS_CERT_PATH=$CERT_DEST"
     echo "MIAUTRIX_TLS_KEY_PATH=$KEY_DEST"
+    echo "MIAUTRIX_CLAMAV_SOCKET=${MIAUTRIX_CLAMAV_SOCKET:-/run/clamav/clamd.ctl}"
+    echo "MIAUTRIX_CLAMAV_REQUIRED=${MIAUTRIX_CLAMAV_REQUIRED:-true}"
+    echo "MIAUTRIX_CLAMAV_SCAN_TIMEOUT_SECONDS=${MIAUTRIX_CLAMAV_SCAN_TIMEOUT_SECONDS:-15}"
     if [[ -n "$cf_api_token" ]]; then
         echo "CLOUDFLARE_API_TOKEN=$cf_api_token"
         echo "CLOUDFLARE_API_BASE=${cf_api_base:-$CF_API_BASE_DEFAULT}"

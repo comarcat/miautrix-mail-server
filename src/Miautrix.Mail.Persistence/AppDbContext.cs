@@ -111,6 +111,14 @@ public class AppDbContext : DbContext
             entity.Property(e => e.SpamGreylistScore).HasColumnName("spam_greylist_score").HasDefaultValue(4.0).IsRequired();
             entity.Property(e => e.SpamGreylistingEnabled).HasColumnName("spam_greylisting_enabled").HasDefaultValue(true).IsRequired();
             entity.Property(e => e.SpamSpfDmarcEnforcementEnabled).HasColumnName("spam_spf_dmarc_enforcement_enabled").HasDefaultValue(true).IsRequired();
+            entity.Property(e => e.MalwareScanningEnabled).HasColumnName("malware_scanning_enabled").HasDefaultValue(true).IsRequired();
+            entity.Property(e => e.MalwareBlockExecutables).HasColumnName("malware_block_executables").HasDefaultValue(true).IsRequired();
+            entity.Property(e => e.MalwareBlockMacros).HasColumnName("malware_block_macros").HasDefaultValue(true).IsRequired();
+            entity.Property(e => e.MalwareBlockEncryptedArchives).HasColumnName("malware_block_encrypted_archives").HasDefaultValue(true).IsRequired();
+            entity.Property(e => e.MalwareMaxFileSizeBytes).HasColumnName("malware_max_file_size_bytes").HasDefaultValue(52_428_800L).IsRequired();
+            entity.Property(e => e.MalwareArchiveRecursionLimit).HasColumnName("malware_archive_recursion_limit").HasDefaultValue(8).IsRequired();
+            entity.Property(e => e.MalwareScanTimeoutSeconds).HasColumnName("malware_scan_timeout_seconds").HasDefaultValue(15).IsRequired();
+            entity.Property(e => e.MalwareTimeoutAction).HasColumnName("malware_timeout_action").HasDefaultValue("quarantine").IsRequired();
             entity.Property(e => e.DkimSelector).HasColumnName("dkim_selector");
             entity.Property(e => e.DkimPublicKey).HasColumnName("dkim_public_key");
             entity.Property(e => e.SpfRecord).HasColumnName("spf_record");
@@ -207,8 +215,15 @@ public class AppDbContext : DbContext
             entity.Property(e => e.MailboxId).HasColumnName("mailbox_id");
             entity.Property(e => e.Name).HasColumnName("name").IsRequired();
             entity.Property(e => e.Role).HasColumnName("role").IsRequired();
+            entity.Property(e => e.ParentId).HasColumnName("parent_id");
             entity.Property(e => e.UidNext).HasColumnName("uid_next");
             entity.Property(e => e.UidValidity).HasColumnName("uid_validity");
+
+            entity
+                .HasOne<Folder>()
+                .WithMany()
+                .HasForeignKey(f => f.ParentId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         ConfigureTenantScoped<Message>(modelBuilder, "messages");

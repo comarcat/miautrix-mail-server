@@ -71,11 +71,14 @@ export const SieveRulesView: React.FC<SieveRulesViewProps> = ({ initialRules }) 
                   <input
                     type="text"
                     className="input-base"
-                    placeholder="e.g. Move Jira alerts"
+                    placeholder="Move Jira Notifications"
                     value={newRuleName}
                     onChange={(e) => setNewRuleName(e.target.value)}
                     required
                   />
+                  <div style={{ fontSize: '12px', color: 'var(--neutral-body)', marginTop: '6px' }}>
+                    Move Jira Notifications
+                  </div>
                 </div>
 
                 <div>

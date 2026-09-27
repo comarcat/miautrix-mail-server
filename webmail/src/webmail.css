@@ -447,11 +447,61 @@ h3 { font-size: 26px; line-height: 1.12; letter-spacing: -0.26px; }
 }
 
 .msg-list-col {
+  /* Width is driven by the splitter (inline style); this is the pre-hydration fallback. */
   width: 380px;
-  border-right: 1px solid var(--neutral-border);
+  min-width: 0;
   display: flex;
   flex-direction: column;
   background: var(--pure-white);
+}
+
+/* Column splitter: a 5px grab strip with a 1px visible line centred in it. */
+.wm-col-resizer {
+  flex: 0 0 5px;
+  position: relative;
+  cursor: col-resize;
+  background: transparent;
+  touch-action: none;
+  z-index: 5;
+}
+
+.wm-col-resizer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 1px;
+  background: var(--neutral-border);
+  transition: var(--transition-fast);
+}
+
+.wm-col-resizer:hover::before,
+.wm-col-resizer:focus-visible::before {
+  left: 1px;
+  width: 3px;
+  background: var(--iris-violet);
+}
+
+.wm-col-resizer:focus-visible {
+  outline: none;
+}
+
+/* While dragging: keep the cursor consistent and stop the reading pane
+   (including any sanitized-body iframe) from swallowing pointer events. */
+.webmail-layout.is-resizing-col {
+  cursor: col-resize;
+  user-select: none;
+}
+
+.webmail-layout.is-resizing-col .reading-col,
+.webmail-layout.is-resizing-col .reading-col iframe {
+  pointer-events: none;
+}
+
+/* The flex parent must allow children to shrink, or the width is ignored. */
+.inbox-grid > * {
+  min-width: 0;
 }
 
 .msg-search-bar {
@@ -462,6 +512,58 @@ h3 { font-size: 26px; line-height: 1.12; letter-spacing: -0.26px; }
   gap: 8px;
 }
 
+.msg-bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--neutral-border);
+  background: var(--surface-canvas);
+}
+
+.wm-date-group {
+  width: 100%;
+  padding: 10px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--neutral-body);
+  border-bottom: 1px solid var(--neutral-border);
+  background: var(--surface-canvas);
+}
+
+.msg-bulk-count {
+  font-size: 12px;
+  color: var(--neutral-body);
+  margin-right: 2px;
+}
+
+.msg-row {
+  display: flex;
+  align-items: flex-start;
+}
+
+/* The item must grow to fill the row, not shrink-wrap its text — otherwise
+   every row is as wide as its own content and the selection/hover highlight
+   stops short of the column edge. */
+.msg-row .msg-item {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.msg-select-box {
+  margin: 14px 10px 0 16px;
+}
+
+.msg-row.selected .msg-item {
+  background: rgba(83, 58, 253, 0.06);
+  border-left: 3px solid rgba(83, 58, 253, 0.6);
+}
+
+/* Keep selection highlight from fighting hover */
+.msg-row.selected .msg-item:hover {
+  background: rgba(83, 58, 253, 0.06);
+}
+
 .msg-item {
   padding: 14px 16px;
   border-bottom: 1px solid var(--neutral-border);
@@ -470,6 +572,16 @@ h3 { font-size: 26px; line-height: 1.12; letter-spacing: -0.26px; }
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+/* Uniform row height regardless of subject length, and allow children to
+   shrink so their truncation rules take effect. */
+.msg-item > * {
+  min-width: 0;
+}
+
+.msg-item {
+  min-height: 78px;
 }
 
 .msg-item:hover {
@@ -510,6 +622,27 @@ h3 { font-size: 26px; line-height: 1.12; letter-spacing: -0.26px; }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* .msg-subj is a flex row (icon + text), so `text-overflow` on the container
+   does nothing — the inner text node has to truncate. */
+.msg-subj > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.msg-from > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.msg-time {
+  flex: 0 0 auto;
+  margin-left: 8px;
 }
 
 .msg-snippet {
@@ -739,4 +872,79 @@ h3 { font-size: 26px; line-height: 1.12; letter-spacing: -0.26px; }
 }
 .compose-body p {
   margin: 0 0 16px 0;
+}
+
+/* Folder Tree and Context Menu Styles */
+.wm-nav-item.drag-over {
+  background: rgba(83, 58, 253, 0.1);
+  border-left: 2px solid var(--iris-violet);
+}
+
+.wm-context-menu {
+  position: fixed;
+  z-index: 1000;
+  background: var(--surface-card);
+  border: 1px solid var(--neutral-border);
+  box-shadow: var(--shadow-lvl3);
+  border-radius: var(--radius-sm);
+  padding: 8px 0;
+  width: 200px;
+}
+
+.wm-context-item {
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--deep-navy);
+}
+
+.wm-context-item:hover {
+  background: var(--surface-canvas);
+}
+
+.wm-context-separator {
+  height: 1px;
+  background: var(--neutral-border);
+  margin: 4px 0;
+}
+
+.wm-context-item.danger {
+  color: var(--accent-ruby);
+}
+
+.wm-context-submenu-wrap {
+  position: relative;
+}
+
+.wm-context-submenu-wrap > .wm-context-item::after {
+  content: '›';
+  float: right;
+  color: var(--neutral-label);
+}
+
+.wm-context-submenu {
+  display: none;
+  position: absolute;
+  left: 100%;
+  top: -8px;
+  min-width: 200px;
+  max-height: 320px;
+  overflow-y: auto;
+  background: var(--surface-card);
+  border: 1px solid var(--neutral-border);
+  box-shadow: var(--shadow-lvl3);
+  border-radius: var(--radius-sm);
+  padding: 8px 0;
+  z-index: 1001;
+}
+
+.wm-context-submenu-wrap:hover > .wm-context-submenu {
+  display: block;
+}
+
+.wm-context-empty {
+  padding: 8px 16px;
+  font-size: 13px;
+  color: var(--neutral-label);
+  font-style: italic;
 }

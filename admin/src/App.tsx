@@ -111,7 +111,7 @@ export const App: React.FC = () => {
       case 'anti-spam':
         return <AntiSpamScreen selectedDomain={selectedDomain} />;
       case 'anti-malware':
-        return <AntiMalwareScreen />;
+        return <AntiMalwareScreen selectedDomain={selectedDomain} />;
       case 'quarantine':
         return <QuarantineScreen domainFilter={selectedDomain} />;
       case 'logs':

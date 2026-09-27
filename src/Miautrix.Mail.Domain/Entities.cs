@@ -36,6 +36,15 @@ public class Domain : TenantScopedEntityBase
     public double SpamGreylistScore { get; set; } = 4.0;
     public bool SpamGreylistingEnabled { get; set; } = true;
     public bool SpamSpfDmarcEnforcementEnabled { get; set; } = true;
+    public bool MalwareScanningEnabled { get; set; } = true;
+    public bool MalwareBlockExecutables { get; set; } = true;
+    public bool MalwareBlockMacros { get; set; } = true;
+    public bool MalwareBlockEncryptedArchives { get; set; } = true;
+    public long MalwareMaxFileSizeBytes { get; set; } = 52_428_800;
+    public int MalwareArchiveRecursionLimit { get; set; } = 8;
+    public int MalwareScanTimeoutSeconds { get; set; } = 15;
+    public string MalwareTimeoutAction { get; set; } = "quarantine";
+    public string MalwareDetectedAction { get; set; } = "quarantine";
     public string? DkimSelector { get; set; }
     public string? DkimPublicKey { get; set; }
     public string? SpfRecord { get; set; }
@@ -140,6 +149,9 @@ public class Folder : TenantScopedEntityBase
     public Guid MailboxId { get; set; }
     public string Name { get; set; } = string.Empty;
     public string Role { get; set; } = "custom";
+
+    public Guid? ParentId { get; set; }
+
     public uint UidNext { get; set; } = 1;
     public uint UidValidity { get; set; } = 1;
 }

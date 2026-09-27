@@ -63,4 +63,7 @@ public interface IAdminService
     Task<SecuritySettingsDto> UpdateSecuritySettingsAsync(Guid domainId, Guid userId, UpdateSecuritySettingsRequest request, CancellationToken ct = default);
     Task<AntiSpamSettingsDto> GetAntiSpamSettingsAsync(Guid domainId, Guid userId, CancellationToken ct = default);
     Task<AntiSpamSettingsDto> UpdateAntiSpamSettingsAsync(Guid domainId, Guid userId, UpdateAntiSpamSettingsRequest request, CancellationToken ct = default);
+    Task<AntiMalwareSettingsDto> GetAntiMalwareSettingsAsync(Guid domainId, Guid userId, CancellationToken ct = default);
+    Task<AntiMalwareSettingsDto> UpdateAntiMalwareSettingsAsync(Guid domainId, Guid userId, UpdateAntiMalwareSettingsRequest request, CancellationToken ct = default);
+    Task<AntiMalwareStatusDto> GetAntiMalwareStatusAsync(Guid tenantId, Guid userId, CancellationToken ct = default);
 }

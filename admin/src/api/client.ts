@@ -27,8 +27,17 @@ import {
   BackupJobItem,
   SecuritySettings,
   AntiSpamSettings,
+  AntiMalwareSettings,
+  AntiMalwareStatus,
   TenantInfo,
 } from '../types';
+
+const guidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const normalizeGuid = (value: string | null): string | null => {
+  const trimmed = value?.trim();
+  return trimmed && guidPattern.test(trimmed) ? trimmed : null;
+};
 
 export class AdminApiClient {
   private baseUrl: string;
@@ -39,8 +48,8 @@ export class AdminApiClient {
   constructor(baseUrl: string = '/api/v1') {
     this.baseUrl = baseUrl;
     this.token = typeof window !== 'undefined' ? localStorage.getItem('miautrix_admin_token') : null;
-    this.tenantId = typeof window !== 'undefined' ? localStorage.getItem('miautrix_admin_tenant_id') : null;
-    this.userId = typeof window !== 'undefined' ? localStorage.getItem('miautrix_admin_user_id') : null;
+    this.tenantId = typeof window !== 'undefined' ? normalizeGuid(localStorage.getItem('miautrix_admin_tenant_id')) : null;
+    this.userId = typeof window !== 'undefined' ? normalizeGuid(localStorage.getItem('miautrix_admin_user_id')) : null;
   }
 
   setToken(token: string | null) {
@@ -55,10 +64,10 @@ export class AdminApiClient {
   }
 
   setTenantId(tenantId: string | null) {
-    this.tenantId = tenantId;
+    this.tenantId = normalizeGuid(tenantId);
     if (typeof window !== 'undefined') {
-      if (tenantId) {
-        localStorage.setItem('miautrix_admin_tenant_id', tenantId);
+      if (this.tenantId) {
+        localStorage.setItem('miautrix_admin_tenant_id', this.tenantId);
       } else {
         localStorage.removeItem('miautrix_admin_tenant_id');
       }
@@ -66,10 +75,10 @@ export class AdminApiClient {
   }
 
   setUserId(userId: string | null) {
-    this.userId = userId;
+    this.userId = normalizeGuid(userId);
     if (typeof window !== 'undefined') {
-      if (userId) {
-        localStorage.setItem('miautrix_admin_user_id', userId);
+      if (this.userId) {
+        localStorage.setItem('miautrix_admin_user_id', this.userId);
       } else {
         localStorage.removeItem('miautrix_admin_user_id');
       }
@@ -98,12 +107,15 @@ export class AdminApiClient {
       headers['Authorization'] = `Bearer ${this.token}`;
     }
 
-    if (this.tenantId) {
-      headers['X-Tenant-Id'] = this.tenantId;
+    const tenantId = normalizeGuid(this.tenantId);
+    const userId = normalizeGuid(this.userId);
+
+    if (tenantId) {
+      headers['X-Tenant-Id'] = tenantId;
     }
 
-    if (this.userId) {
-      headers['X-User-Id'] = this.userId;
+    if (userId) {
+      headers['X-User-Id'] = userId;
     }
 
     const method = options.method?.toUpperCase() || 'GET';
@@ -355,8 +367,10 @@ export class AdminApiClient {
   async exportMailbox(id: string): Promise<Blob> {
     const headers: Record<string, string> = { Accept: 'application/zip' };
     if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
-    if (this.tenantId) headers['X-Tenant-Id'] = this.tenantId;
-    if (this.userId) headers['X-User-Id'] = this.userId;
+    const tenantId = normalizeGuid(this.tenantId);
+    const userId = normalizeGuid(this.userId);
+    if (tenantId) headers['X-Tenant-Id'] = tenantId;
+    if (userId) headers['X-User-Id'] = userId;
 
     const res = await fetch(`${this.baseUrl}/mailboxes/${id}/export`, { headers });
     if (!res.ok) {
@@ -486,6 +500,25 @@ export class AdminApiClient {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
+  }
+
+  async getDomainAntiMalwareSettings(domainId: string): Promise<ApiResponse<AntiMalwareSettings>> {
+    return this.request<ApiResponse<AntiMalwareSettings>>(`/system/domains/${domainId}/anti-malware`);
+  }
+
+  async updateDomainAntiMalwareSettings(
+    domainId: string,
+    data: Partial<AntiMalwareSettings>
+  ): Promise<ApiResponse<AntiMalwareSettings>> {
+    return this.request<ApiResponse<AntiMalwareSettings>>(`/system/domains/${domainId}/anti-malware`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getAntiMalwareStatus(): Promise<ApiResponse<AntiMalwareStatus>> {
+    return this.request<ApiResponse<AntiMalwareStatus>>('/system/anti-malware/status');
   }
 
   async getBackups(): Promise<ApiResponse<BackupJobItem[]>> {

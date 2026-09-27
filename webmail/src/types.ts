@@ -5,7 +5,11 @@ export interface Mailbox {
   unreadEmails: number;
   totalEmails: number;
   icon: string;
+  parentId?: string | null;
 }
+
+// Folder/group DTOs use the same shape as Mailbox in the current webmail UI.
+// (Mailbox is misnamed historically in this repo.)
 
 export interface EmailAttachment {
   id: string;
@@ -18,6 +22,7 @@ export interface EmailAttachment {
 export interface EmailMessage {
   id: string;
   mailboxId: string;
+  folderId: string;
   from: {
     name: string;
     email: string;
@@ -45,6 +50,19 @@ export interface EmailMessage {
     spamScore?: number;
   };
   attachments: EmailAttachment[];
+}
+
+export interface RawEmailMessage {
+  id: string;
+  mailbox_id: string;
+  folder_id: string;
+  sender: string;
+  recipient: string;
+  subject: string;
+  preview: string;
+  date: string;
+  is_read: boolean;
+  size_bytes: number;
 }
 
 export interface Contact {

@@ -104,4 +104,46 @@ public sealed class MailboxController : ControllerBase
             ApiJson.Options,
             statusCode: StatusCodes.Status200OK);
     }
+
+    [HttpPost("{mailboxId:guid}/folders")]
+    [ProducesResponseType(typeof(ApiResponse<FolderDto>), StatusCodes.Status200OK)]
+    public async Task<IResult> CreateFolder(
+        Guid mailboxId,
+        [FromBody] CreateFolderRequest request,
+        CancellationToken cancellationToken)
+    {
+        var folder = await _mailboxService.CreateFolderAsync(
+            _context.CurrentTenantId,
+            _context.CurrentUserId,
+            mailboxId,
+            request,
+            cancellationToken);
+
+        return Results.Json(
+            new ApiResponse<FolderDto>(folder),
+            ApiJson.Options,
+            statusCode: StatusCodes.Status200OK);
+    }
+
+    [HttpPatch("{mailboxId:guid}/folders/{folderId:guid}/parent")]
+    [ProducesResponseType(typeof(ApiResponse<FolderDto>), StatusCodes.Status200OK)]
+    public async Task<IResult> UpdateFolderParent(
+        Guid mailboxId,
+        Guid folderId,
+        [FromBody] UpdateFolderParentRequest request,
+        CancellationToken cancellationToken)
+    {
+        var folder = await _mailboxService.UpdateFolderParentAsync(
+            _context.CurrentTenantId,
+            _context.CurrentUserId,
+            mailboxId,
+            folderId,
+            request,
+            cancellationToken);
+
+        return Results.Json(
+            new ApiResponse<FolderDto>(folder),
+            ApiJson.Options,
+            statusCode: StatusCodes.Status200OK);
+    }
 }

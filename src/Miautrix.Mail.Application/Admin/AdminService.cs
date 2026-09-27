@@ -29,6 +29,7 @@ public sealed class AdminService : IAdminService
 {
     private static readonly DateTimeOffset ProcessStartedAt = Process.GetCurrentProcess().StartTime.ToUniversalTime();
     private const string SpamSupectedReleasedTag = "[SPAM Supected-Released]";
+    private const string DefaultClamAvSocketPath = "/run/clamav/clamd.ctl";
 
     private readonly AppDbContext _db;
     private readonly ISmtpQueueManager _smtpQueueManager;
@@ -1464,6 +1465,72 @@ public sealed class AdminService : IAdminService
         return ToAntiSpamSettingsDto(domain);
     }
 
+    public async Task<AntiMalwareSettingsDto> GetAntiMalwareSettingsAsync(Guid domainId, Guid userId, CancellationToken ct = default)
+    {
+        var domain = await _db.Domains.FirstOrDefaultAsync(d => d.Id == domainId, ct)
+            ?? throw new InvalidOperationException("Domain not found.");
+
+        _auth.AssertPermission(domain.TenantId, userId, "system.view");
+        return ToAntiMalwareSettingsDto(domain);
+    }
+
+    public async Task<AntiMalwareSettingsDto> UpdateAntiMalwareSettingsAsync(Guid domainId, Guid userId, UpdateAntiMalwareSettingsRequest request, CancellationToken ct = default)
+    {
+        var domain = await _db.Domains.FirstOrDefaultAsync(d => d.Id == domainId, ct)
+            ?? throw new InvalidOperationException("Domain not found.");
+
+        _auth.AssertPermission(domain.TenantId, userId, "system.manage");
+
+        if (request.ScanningEnabled.HasValue) domain.MalwareScanningEnabled = request.ScanningEnabled.Value;
+        if (request.BlockExecutables.HasValue) domain.MalwareBlockExecutables = request.BlockExecutables.Value;
+        if (request.BlockMacros.HasValue) domain.MalwareBlockMacros = request.BlockMacros.Value;
+        if (request.BlockEncryptedArchives.HasValue) domain.MalwareBlockEncryptedArchives = request.BlockEncryptedArchives.Value;
+        if (request.MaxFileSizeBytes.HasValue) domain.MalwareMaxFileSizeBytes = ValidateLongRange(request.MaxFileSizeBytes.Value, 1_048_576, 524_288_000, "Maximum file size");
+        if (request.ArchiveRecursionLimit.HasValue) domain.MalwareArchiveRecursionLimit = ValidateIntRange(request.ArchiveRecursionLimit.Value, 1, 32, "Archive recursion limit");
+        if (request.ScanTimeoutSeconds.HasValue) domain.MalwareScanTimeoutSeconds = ValidateIntRange(request.ScanTimeoutSeconds.Value, 1, 120, "Scan timeout");
+        if (request.TimeoutAction is { } timeoutAction) domain.MalwareTimeoutAction = NormalizeMalwareTimeoutAction(timeoutAction);
+        if (request.DetectedAction is { } detectedAction) domain.MalwareDetectedAction = NormalizeMalwareAction(detectedAction);
+
+        domain.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(ct);
+
+        return ToAntiMalwareSettingsDto(domain);
+    }
+
+    public async Task<AntiMalwareStatusDto> GetAntiMalwareStatusAsync(Guid tenantId, Guid userId, CancellationToken ct = default)
+    {
+        _auth.AssertPermission(tenantId, userId, "system.view");
+
+        var since = DateTimeOffset.UtcNow.AddDays(-1);
+        var verdicts = _db.MalwareVerdicts.AsNoTracking()
+            .Where(v => v.TenantId == tenantId && v.CreatedAt >= since);
+
+        var clean24h = await verdicts.CountAsync(v => !v.IsMalware, ct);
+        var threats24h = await verdicts.CountAsync(v => v.IsMalware, ct);
+        var lastScanAt = await _db.MalwareVerdicts.AsNoTracking()
+            .Where(v => v.TenantId == tenantId)
+            .OrderByDescending(v => v.CreatedAt)
+            .Select(v => (DateTimeOffset?)v.CreatedAt)
+            .FirstOrDefaultAsync(ct);
+
+        var socketPath = Environment.GetEnvironmentVariable("MIAUTRIX_CLAMAV_SOCKET") ?? DefaultClamAvSocketPath;
+        var scannerConfigured = !string.IsNullOrWhiteSpace(socketPath);
+        var scannerAvailable = File.Exists(socketPath);
+        var version = Environment.GetEnvironmentVariable("MIAUTRIX_CLAMAV_VERSION");
+
+        return new AntiMalwareStatusDto(
+            ScannerConfigured: scannerConfigured,
+            ScannerAvailable: scannerAvailable,
+            Engine: "clamav",
+            Version: version,
+            SocketPath: socketPath,
+            Clean24h: clean24h,
+            Threats24h: threats24h,
+            Errors24h: 0,
+            LastScanAt: lastScanAt,
+            LastError: scannerConfigured && !scannerAvailable ? "ClamAV socket is not available." : null);
+    }
+
     private static AntiSpamSettingsDto ToAntiSpamSettingsDto(DomainEntity domain) => new(
         domain.SpamRejectScore,
         domain.SpamQuarantineScore,
@@ -1471,6 +1538,17 @@ public sealed class AdminService : IAdminService
         domain.SpamGreylistScore,
         domain.SpamGreylistingEnabled,
         domain.SpamSpfDmarcEnforcementEnabled);
+
+    private static AntiMalwareSettingsDto ToAntiMalwareSettingsDto(DomainEntity domain) => new(
+        domain.MalwareScanningEnabled,
+        domain.MalwareBlockExecutables,
+        domain.MalwareBlockMacros,
+        domain.MalwareBlockEncryptedArchives,
+        domain.MalwareMaxFileSizeBytes,
+        domain.MalwareArchiveRecursionLimit,
+        domain.MalwareScanTimeoutSeconds,
+        domain.MalwareTimeoutAction,
+        domain.MalwareDetectedAction);
 
     private static double ValidateScore(double value, double min, double max, string label)
     {
@@ -1480,6 +1558,46 @@ public sealed class AdminService : IAdminService
         }
 
         return value;
+    }
+
+    private static int ValidateIntRange(int value, int min, int max, string label)
+    {
+        if (value < min || value > max)
+        {
+            throw new InvalidOperationException($"{label} must be between {min} and {max}.");
+        }
+
+        return value;
+    }
+
+    private static long ValidateLongRange(long value, long min, long max, string label)
+    {
+        if (value < min || value > max)
+        {
+            throw new InvalidOperationException($"{label} must be between {min} and {max} bytes.");
+        }
+
+        return value;
+    }
+
+    private static string NormalizeMalwareTimeoutAction(string value)
+    {
+        var normalized = value.Trim().ToLowerInvariant();
+        return normalized switch
+        {
+            "quarantine" or "allow" or "reject" => normalized,
+            _ => throw new InvalidOperationException("Timeout action must be quarantine, allow, or reject.")
+        };
+    }
+
+    private static string NormalizeMalwareAction(string value)
+    {
+        var normalized = value.Trim().ToLowerInvariant();
+        return normalized switch
+        {
+            "quarantine" or "discard" => normalized,
+            _ => throw new InvalidOperationException("Detected action must be quarantine or discard.")
+        };
     }
 
     // -------------------------------------------------------------

@@ -34,4 +34,29 @@ public interface IMailboxService
         Guid userId,
         Guid mailboxId,
         CancellationToken cancellationToken = default);
+
+    Task<FolderDto> CreateFolderAsync(
+        Guid tenantId,
+        Guid userId,
+        Guid mailboxId,
+        CreateFolderRequest request,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Creates any missing default system folders (Inbox, Sent, Drafts, Trash, Junk, Archive)
+    /// for the mailbox. Idempotent. Performs no authorization check: callers are responsible
+    /// for having already established access to the mailbox.
+    /// </summary>
+    Task ProvisionDefaultFoldersAsync(
+        Guid tenantId,
+        Guid mailboxId,
+        CancellationToken cancellationToken = default);
+
+    Task<FolderDto> UpdateFolderParentAsync(
+        Guid tenantId,
+        Guid userId,
+        Guid mailboxId,
+        Guid folderId,
+        UpdateFolderParentRequest request,
+        CancellationToken cancellationToken = default);
 }

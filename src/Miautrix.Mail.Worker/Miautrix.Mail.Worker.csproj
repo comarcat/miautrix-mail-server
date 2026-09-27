@@ -32,6 +32,7 @@
     <ProjectReference Include="..\Miautrix.Mail.Protocols.Imap\Miautrix.Mail.Protocols.Imap.csproj" />
     <ProjectReference Include="..\Miautrix.Mail.Queue\Miautrix.Mail.Queue.csproj" />
     <ProjectReference Include="..\Miautrix.Mail.AntiSpam\Miautrix.Mail.AntiSpam.csproj" />
+    <ProjectReference Include="..\Miautrix.Mail.AntiMalware\Miautrix.Mail.AntiMalware.csproj" />
     <ProjectReference Include="..\Miautrix.Mail.Storage\Miautrix.Mail.Storage.csproj" />
   </ItemGroup>
 

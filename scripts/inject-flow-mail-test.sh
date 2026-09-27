@@ -54,6 +54,38 @@ path, boundary, msgid, from_addr, to_addr, subject = sys.argv[1:]
 crlf='\r\n'
 body_text='This is a test message to verify ZIP export downloads.'
 
+# Rich HTML body (multipart/alternative): colors, font sizes, table, lists.
+# Keep it simple but clearly formatted so we can verify BodyHtml rendering.
+html_body = """<div style='font-family: Arial, sans-serif; color:#0f172a;'>
+  <h2 style='margin:0 0 12px; color:#4f46e5;'>Miautrix Webmail HTML Render Test</h2>
+  <p style='font-size:14px; color:#334155;'>This message includes <span style='color:#ef4444; font-weight:bold;'>colors</span>,
+  <span style='color:#0ea5e9; font-weight:bold;'>sizes</span>, and structured content.</p>
+
+  <table style='border-collapse:collapse; width:100%; max-width:520px; margin:14px 0; font-size:13px;'>
+    <tr>
+      <th style='border:1px solid #cbd5e1; padding:8px; background:#f1f5f9; text-align:left;'>Item</th>
+      <th style='border:1px solid #cbd5e1; padding:8px; background:#f1f5f9; text-align:left;'>Value</th>
+    </tr>
+    <tr>
+      <td style='border:1px solid #cbd5e1; padding:8px;'>Tenant</td>
+      <td style='border:1px solid #cbd5e1; padding:8px;'>{{miautrix}}</td>
+    </tr>
+    <tr>
+      <td style='border:1px solid #cbd5e1; padding:8px;'>Format</td>
+      <td style='border:1px solid #cbd5e1; padding:8px;'>multipart/alternative</td>
+    </tr>
+  </table>
+
+  <h3 style='font-size:13px; margin:14px 0 8px; color:#0f766e;'>List</h3>
+  <ul style='margin:0 0 14px 18px; color:#1f2937; font-size:13px;'>
+    <li>Bullet one</li>
+    <li>Bullet two</li>
+    <li>Bullet three</li>
+  </ul>
+
+  <p style='font-size:13px; color:#475569;'>End of HTML test.</p>
+</div>"""
+
 lines=[]
 lines.append(f"From: {from_addr}")
 lines.append(f"To: {to_addr}")
@@ -70,6 +102,14 @@ lines.append("Content-Type: text/plain; charset=utf-8")
 lines.append("Content-Transfer-Encoding: 8bit")
 lines.append('')
 lines.append(body_text)
+lines.append('')
+
+# HTML part (multipart/mixed sibling; backend parser looks for first text/html part)
+lines.append(f"--{boundary}")
+lines.append("Content-Type: text/html; charset=utf-8")
+lines.append("Content-Transfer-Encoding: 8bit")
+lines.append('')
+lines.append(html_body)
 lines.append('')
 
 # Empty attachment part (0 bytes, base64 is empty)

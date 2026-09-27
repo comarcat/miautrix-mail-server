@@ -28,8 +28,6 @@ const makeResponse = (
 
 describe('QueueScreen', () => {
   let client: AdminApiClient;
-  const today = new Date().toISOString().slice(0, 10);
-
   beforeEach(() => {
     client = new AdminApiClient('http://test');
     vi.restoreAllMocks();
@@ -50,8 +48,8 @@ describe('QueueScreen', () => {
     expect(getQueue).toHaveBeenCalledTimes(1);
 
     const callArg = getQueue.mock.calls[0][0] as any;
-    expect(callArg.start_at).toBe(`${today}T00:00:01`);
-    expect(callArg.end_at).toBe(`${today}T23:59:59`);
+    expect(callArg.start_at).toBeUndefined();
+    expect(callArg.end_at).toBeUndefined();
     expect(callArg.domain).toBe('all');
   });
 
@@ -72,8 +70,8 @@ describe('QueueScreen', () => {
 
     const callArg = getQueue.mock.calls[0][0] as any;
     expect(callArg).toEqual(expect.objectContaining({ limit: 20 }));
-    expect(callArg.start_at).toBe(`${today}T00:00:01`);
-    expect(callArg.end_at).toBe(`${today}T23:59:59`);
+    expect(callArg.start_at).toBeUndefined();
+    expect(callArg.end_at).toBeUndefined();
   });
 
   it('does not fire extra requests when filters change without submit', async () => {
@@ -137,8 +135,31 @@ describe('QueueScreen', () => {
     const callArg = getQueue.mock.calls[0][0] as any;
 
     expect(callArg.domain).toBe('example.com');
-    expect(callArg.start_at).toBe(`${today}T00:00:01`);
-    expect(callArg.end_at).toBe(`${today}T23:59:59`);
+    expect(callArg.start_at).toBeUndefined();
+    expect(callArg.end_at).toBeUndefined();
+  });
+
+  it('passes queued status when Queued filter is selected', async () => {
+    const getQueue = vi
+      .spyOn(client, 'getQueue')
+      .mockResolvedValue(makeResponse([makeItem()]));
+
+    render(<QueueScreen client={client} domainFilter="all" />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('queue-table')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('filter-queued'));
+
+    await waitFor(() => {
+      expect(getQueue).toHaveBeenCalledTimes(2);
+    });
+
+    expect(getQueue).toHaveBeenLastCalledWith(expect.objectContaining({
+      status: 'queued',
+      cursor: undefined,
+    }));
   });
 
   it('resets cursor history when status/search/domain/date filters change', async () => {
@@ -196,7 +217,7 @@ describe('QueueScreen', () => {
 
     const secondCallArg = getQueue.mock.calls[1][0] as any;
     expect(secondCallArg.start_at).toBe('2026-09-01T00:00:01');
-    expect(secondCallArg.end_at).toBe(`${today}T23:59:59`);
+    expect(secondCallArg.end_at).toBeUndefined();
 
     fireEvent.change(screen.getByLabelText('End date'), {
       target: { value: '2026-09-02' },

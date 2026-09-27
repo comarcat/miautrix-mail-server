@@ -277,6 +277,8 @@ if ($LASTEXITCODE -ne 0) { throw "Remote preparation or restart failed." }
 
 Write-Host " -> Protocol ports require firewall/NAT access for 25, 465, 587, and 993." -ForegroundColor Yellow
 Write-Host " -> Worker environment lives in /opt/miautrix-mail/.env, written by lxc-install-worker-env.sh." -ForegroundColor Yellow
+Write-Host " -> Anti-malware scanning requires clamav-daemon + clamav-freshclam on the server." -ForegroundColor Yellow
+Write-Host "    Install with: scripts/lxc-install-antimalware.sh, then restart miautrix-mail-worker." -ForegroundColor Yellow
 if (-not ($WorkerCert -and $WorkerKey)) {
     Write-Host " -> TLS not provisioned. The Worker will exit until you re-run with:" -ForegroundColor Yellow
     Write-Host "      -WorkerCert <cert.pem> -WorkerKey <key.pem>" -ForegroundColor Yellow

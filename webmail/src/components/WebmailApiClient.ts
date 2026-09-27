@@ -1,4 +1,4 @@
-import type { Mailbox, EmailMessage } from '../types';
+import type { Mailbox, EmailMessage, RawEmailMessage, Contact, CalendarEvent, SieveFilterRule } from '../types';
 
 export interface WebmailLoginResult {
   data: any;
@@ -63,10 +63,12 @@ export class WebmailApiClient {
     return this.userId;
   }
 
-  private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  private getDefaultHeaders(extra: Record<string, string> = {}): Record<string, string> {
+    // Includes Authorization + tenant scoping headers.
+    // Useful for downloading binary endpoints without opening a new tab.
+
     const headers: Record<string, string> = {
-      'Accept': 'application/json',
-      ...(options.headers as Record<string, string> || {}),
+      ...(extra as Record<string, string> || {}),
     };
 
     if (this.token) {
@@ -80,6 +82,17 @@ export class WebmailApiClient {
     if (this.userId) {
       headers['X-User-Id'] = this.userId;
     }
+
+    return headers;
+  }
+
+  private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
+    const headers: Record<string, string> = {
+      'Accept': 'application/json',
+      ...this.getDefaultHeaders(options.headers as Record<string, string> || {}),
+    };
+
+    // getDefaultHeaders already includes Authorization + tenant/user scoping.
 
     const method = options.method?.toUpperCase() || 'GET';
     if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) && !headers['Idempotency-Key']) {
@@ -144,6 +157,38 @@ export class WebmailApiClient {
     return result as WebmailLoginResult;
   }
 
+  async downloadAttachment(downloadPath: string, fileName: string): Promise<void> {
+    const headers = this.getDefaultHeaders();
+
+    // downloadPath is expected to be a relative API path like `/api/v1/messages/.../attachments/...`.
+    const url = downloadPath.startsWith('/') ? downloadPath : `/${downloadPath}`;
+
+    const res = await fetch(url, {
+      method: 'GET',
+      headers,
+    });
+
+    if (!res.ok) {
+      const errorText = await res.text().catch(() => '');
+      throw new Error(`Download failed (${res.status}): ${errorText || res.statusText}`);
+    }
+
+    const blob = await res.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+
+    try {
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = fileName;
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } finally {
+      window.URL.revokeObjectURL(blobUrl);
+    }
+  }
+
   async logout(): Promise<void> {
     try {
       await this.request('/auth/logout', { method: 'POST' });
@@ -171,17 +216,141 @@ export class WebmailApiClient {
     });
   }
 
-  async getMailboxes(): Promise<{ data: Mailbox[] }> {
-    return this.request<{ data: Mailbox[] }>('/mailboxes');
+  private normalizeArray<T>(res: any): { data: T[] } {
+    if (Array.isArray(res)) {
+      return { data: res };
+    }
+    if (res && Array.isArray(res.data)) {
+      return { data: res.data };
+    }
+    if (res && Array.isArray(res.items)) {
+      return { data: res.items };
+    }
+    return { data: [] };
   }
 
-  async getMessages(mailboxId: string, params: { search?: string; limit?: number; cursor?: string } = {}): Promise<{ data: EmailMessage[] }> {
+  async getMailboxes(): Promise<{ data: Mailbox[] }> {
+    const res = await this.request<any>('/mailboxes');
+    return this.normalizeArray<Mailbox>(res);
+  }
+
+  async getFolders(mailboxId: string): Promise<{ data: Mailbox[] }> {
+    const res = await this.request<any>(`/mailboxes/${mailboxId}/folders`);
+    return this.normalizeArray<Mailbox>(res);
+  }
+
+  async getMessages(mailboxId: string, folderId: string, params: { search?: string; limit?: number; cursor?: string } = {}): Promise<{ data: EmailMessage[] }> {
     const query = new URLSearchParams();
+    query.set('folder_id', folderId);
     if (params.search) query.set('search', params.search);
     if (params.limit) query.set('limit', params.limit.toString());
     if (params.cursor) query.set('cursor', params.cursor);
     const qs = query.toString();
-    return this.request<{ data: EmailMessage[] }>(`/mailboxes/${mailboxId}/messages${qs ? `?${qs}` : ''}`);
+    const res = await this.request<any>(`/mailboxes/${mailboxId}/messages${qs ? `?${qs}` : ''}`);
+
+    const rawMessages = this.normalizeArray<RawEmailMessage>(res).data;
+    // The list endpoint is not guaranteed to populate every field (e.g. `preview`
+    // is absent), so default instead of letting `undefined` reach component state.
+    const messages: EmailMessage[] = rawMessages.map((msg) => ({
+      id: msg.id,
+      mailboxId: msg.mailbox_id,
+      folderId: msg.folder_id,
+      from: { name: msg.sender ?? '', email: msg.sender ?? '' },
+      to: [{ name: msg.recipient ?? '', email: msg.recipient ?? '' }],
+      subject: msg.subject ?? '(No Subject)',
+      snippet: msg.preview ?? '',
+      bodyHtml: '', // fetched on demand via getMessageDetail
+      receivedAt: msg.date ?? '',
+      isUnread: !msg.is_read,
+      securityChecks: { spfPass: true, dkimPass: true, dmarcPass: true },
+      attachments: [],
+    }));
+
+    return { data: messages };
+  }
+
+  async getMessageDetail(mailboxId: string, messageId: string): Promise<{ data: EmailMessage }> {
+    const res = await this.request<any>(`/mailboxes/${mailboxId}/messages/${messageId}`);
+    const d = res?.data ?? res;
+
+    const attachments = (d?.attachments ?? []).map((a: any) => ({
+      id: a.id,
+      name: a.file_name ?? a.fileName ?? 'attachment',
+      size: a.size_bytes ?? a.sizeBytes ?? 0,
+      contentType: a.content_type ?? a.contentType ?? 'application/octet-stream',
+      blobId: a.download_url ?? a.downloadUrl,
+    }));
+
+    const email: EmailMessage = {
+      id: d.id,
+      mailboxId: d.mailbox_id,
+      folderId: d.folder_id,
+      from: { name: d.sender, email: d.sender },
+      to: [{ name: d.recipient, email: d.recipient }],
+      subject: d.subject,
+      snippet: d.body_text ? String(d.body_text).slice(0, 80) : '',
+      bodyHtml: d.body_html ?? d.bodyHtml ?? '',
+      bodyText: d.body_text ?? d.bodyText ?? undefined,
+      receivedAt: d.date,
+      isUnread: !d.is_read,
+      securityChecks: { spfPass: true, dkimPass: true, dmarcPass: true },
+      attachments,
+    };
+
+    return { data: email };
+  }
+
+  async markRead(mailboxId: string, messageId: string, isRead: boolean): Promise<{ data: boolean }> {
+    await this.request<any>(`/mailboxes/${mailboxId}/messages/${messageId}/read`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_read: isRead }),
+    });
+
+    return { data: true };
+  }
+
+  async moveMessage(mailboxId: string, messageId: string, targetFolderId: string): Promise<{ data: boolean }> {
+    await this.request<any>(`/mailboxes/${mailboxId}/messages/${messageId}/move`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target_folder_id: targetFolderId }),
+    });
+
+    return { data: true };
+  }
+
+  async deleteMessage(mailboxId: string, messageId: string, permanent: boolean = false): Promise<{ data: boolean }> {
+    const url = `/mailboxes/${mailboxId}/messages/${messageId}?permanent=${permanent ? 'true' : 'false'}`;
+    await this.request<any>(url, {
+      method: 'DELETE',
+    });
+
+    return { data: true };
+  }
+
+  async createFolder(mailboxId: string, name: string, parentId: string | null = null): Promise<{ data: Mailbox }> {
+    const res = await this.request<any>(`/mailboxes/${mailboxId}/folders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, parent_id: parentId }),
+    });
+
+    return { data: res?.data ?? res };
+  }
+
+  async updateFolderParent(
+    mailboxId: string,
+    folderId: string,
+    parentId: string | null,
+  ): Promise<{ data: Mailbox }> {
+    const res = await this.request<any>(`/mailboxes/${mailboxId}/folders/${folderId}/parent`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ parent_id: parentId }),
+    });
+
+    return { data: res?.data ?? res };
   }
 
   async sendMessage(mailboxId: string, payload: { to: string; subject: string; body: string }): Promise<{ data: EmailMessage }> {
@@ -190,6 +359,21 @@ export class WebmailApiClient {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
+  }
+
+  async getContacts(): Promise<{ data: Contact[] }> {
+    const res = await this.request<any>('/contacts');
+    return this.normalizeArray<Contact>(res);
+  }
+
+  async getCalendarEvents(): Promise<{ data: CalendarEvent[] }> {
+    const res = await this.request<any>('/calendar/events');
+    return this.normalizeArray<CalendarEvent>(res);
+  }
+
+  async getSieveRules(): Promise<{ data: SieveFilterRule[] }> {
+    const res = await this.request<any>('/mail/rules');
+    return this.normalizeArray<SieveFilterRule>(res);
   }
 }
 

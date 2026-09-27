@@ -21,6 +21,87 @@ public sealed class MailboxService : IMailboxService
         _auth = auth;
     }
 
+    public async Task<FolderDto> UpdateFolderParentAsync(
+        Guid tenantId,
+        Guid userId,
+        Guid mailboxId,
+        Guid folderId,
+        UpdateFolderParentRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var mailbox = await _db.Mailboxes
+            .FirstOrDefaultAsync(m => m.TenantId == tenantId && m.Id == mailboxId, cancellationToken);
+
+        _auth.AssertMailboxAccess(tenantId, userId, mailbox, requireWrite: true);
+
+        var folder = await _db.Folders
+            .FirstOrDefaultAsync(f => f.TenantId == tenantId && f.MailboxId == mailboxId && f.Id == folderId, cancellationToken);
+
+        if (folder is null)
+        {
+            throw new ResourceNotFoundException("Folder not found.");
+        }
+
+        // System folders are not re-parentable.
+        if (!string.Equals(folder.Role, "custom", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException("Only personal folders can be re-parented.");
+        }
+
+        Guid? newParentId = request.ParentId;
+
+        if (newParentId.HasValue)
+        {
+            // Parent must be a custom folder in the same mailbox.
+            var parent = await _db.Folders
+                .FirstOrDefaultAsync(
+                    f => f.TenantId == tenantId && f.MailboxId == mailboxId && f.Id == newParentId.Value,
+                    cancellationToken);
+
+            if (parent is null)
+            {
+                throw new ResourceNotFoundException("Parent folder not found.");
+            }
+
+            if (!string.Equals(parent.Role, "custom", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new ArgumentException("Parent folder must be personal.");
+            }
+
+            // Prevent cycles (folder cannot be parent of itself, directly or indirectly).
+            if (newParentId.Value == folderId)
+            {
+                throw new ArgumentException("A folder cannot be its own parent.");
+            }
+
+            var cursor = parent;
+            while (cursor.ParentId.HasValue)
+            {
+                if (cursor.ParentId.Value == folderId)
+                {
+                    throw new ArgumentException("Folder re-parenting would create a cycle.");
+                }
+
+                cursor = await _db.Folders
+                    .FirstOrDefaultAsync(
+                        f => f.TenantId == tenantId && f.MailboxId == mailboxId && f.Id == cursor.ParentId.Value,
+                        cancellationToken);
+
+                if (cursor is null)
+                {
+                    break;
+                }
+            }
+        }
+
+        folder.ParentId = newParentId;
+        folder.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        // Maintain contract shape: counts are computed by caller for now.
+        return new FolderDto(folder.Id, folder.MailboxId, folder.Name, folder.Role, folder.ParentId, 0, 0);
+    }
+
     public async Task<IReadOnlyList<MailboxDto>> ListMailboxesAsync(
         Guid tenantId,
         Guid userId,
@@ -129,6 +210,7 @@ public sealed class MailboxService : IMailboxService
                 folder.MailboxId,
                 folder.Name,
                 folder.Role,
+                folder.ParentId,
                 unreadCount,
                 totalCount));
         }
@@ -151,14 +233,61 @@ public sealed class MailboxService : IMailboxService
         var inbox = await _db.Folders
             .FirstAsync(f => f.TenantId == tenantId && f.MailboxId == mailboxId && f.Role == "inbox", cancellationToken);
 
-        return new FolderDto(inbox.Id, inbox.MailboxId, inbox.Name, inbox.Role, 0, 0);
+        return new FolderDto(inbox.Id, inbox.MailboxId, inbox.Name, inbox.Role, inbox.ParentId, 0, 0);
+    }
+
+    public async Task<FolderDto> CreateFolderAsync(
+        Guid tenantId,
+        Guid userId,
+        Guid mailboxId,
+        CreateFolderRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var mailbox = await _db.Mailboxes
+            .FirstOrDefaultAsync(m => m.TenantId == tenantId && m.Id == mailboxId, cancellationToken);
+
+        _auth.AssertMailboxAccess(tenantId, userId, mailbox, requireWrite: true);
+
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            throw new ArgumentException("Folder name is required.");
+        }
+
+        Guid? parentId = request.ParentId;
+        if (parentId.HasValue)
+        {
+            var parent = await _db.Folders
+                .FirstOrDefaultAsync(f => f.TenantId == tenantId && f.MailboxId == mailboxId && f.Id == parentId.Value, cancellationToken);
+
+            if (parent is null)
+            {
+                throw new ResourceNotFoundException("Parent folder not found.");
+            }
+        }
+
+        var folder = new Folder
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            MailboxId = mailboxId,
+            Name = request.Name.Trim(),
+            Role = "custom",
+            ParentId = parentId,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+
+        _db.Folders.Add(folder);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return new FolderDto(folder.Id, folder.MailboxId, folder.Name, folder.Role, folder.ParentId, 0, 0);
     }
 
     /// <summary>
     /// Creates any missing default folder. Idempotent; the caller is responsible for the
     /// authorization check.
     /// </summary>
-    private async Task ProvisionDefaultFoldersAsync(Guid tenantId, Guid mailboxId, CancellationToken cancellationToken)
+    public async Task ProvisionDefaultFoldersAsync(Guid tenantId, Guid mailboxId, CancellationToken cancellationToken)
     {
         var existingRoles = await _db.Folders
             .Where(f => f.TenantId == tenantId && f.MailboxId == mailboxId)

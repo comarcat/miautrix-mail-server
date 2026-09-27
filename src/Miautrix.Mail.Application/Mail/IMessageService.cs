@@ -45,6 +45,13 @@ public interface IMessageService
         bool permanent = false,
         CancellationToken cancellationToken = default);
 
+    Task<AttachmentDownloadDto?> DownloadAttachmentAsync(
+        Guid tenantId,
+        Guid userId,
+        Guid messageId,
+        Guid attachmentId,
+        CancellationToken cancellationToken = default);
+
     Task<SendMessageResult> SendMessageAsync(
         Guid tenantId,
         Guid userId,

@@ -151,6 +151,69 @@ public sealed class SecurityController : ControllerBase
         }
     }
 
+    [HttpGet("domains/{domainId:guid}/anti-malware")]
+    [ProducesResponseType(typeof(ApiResponse<AntiMalwareSettingsDto>), StatusCodes.Status200OK)]
+    public async Task<IResult> GetDomainAntiMalwareSettings(Guid domainId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var settings = await _adminService.GetAntiMalwareSettingsAsync(
+                domainId,
+                _context.CurrentUserId,
+                cancellationToken);
+
+            return Results.Json(
+                new ApiResponse<AntiMalwareSettingsDto>(settings),
+                ApiJson.Options,
+                statusCode: StatusCodes.Status200OK);
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("Domain not found"))
+        {
+            return Results.NotFound(new { error = new { code = "not_found", message = ex.Message } });
+        }
+    }
+
+    [HttpPatch("domains/{domainId:guid}/anti-malware")]
+    [ProducesResponseType(typeof(ApiResponse<AntiMalwareSettingsDto>), StatusCodes.Status200OK)]
+    public async Task<IResult> UpdateDomainAntiMalwareSettings(
+        Guid domainId,
+        [FromBody] UpdateAntiMalwareSettingsRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var settings = await _adminService.UpdateAntiMalwareSettingsAsync(
+                domainId,
+                _context.CurrentUserId,
+                request,
+                cancellationToken);
+
+            return Results.Json(
+                new ApiResponse<AntiMalwareSettingsDto>(settings),
+                ApiJson.Options,
+                statusCode: StatusCodes.Status200OK);
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("Domain not found"))
+        {
+            return Results.NotFound(new { error = new { code = "not_found", message = ex.Message } });
+        }
+    }
+
+    [HttpGet("anti-malware/status")]
+    [ProducesResponseType(typeof(ApiResponse<AntiMalwareStatusDto>), StatusCodes.Status200OK)]
+    public async Task<IResult> GetAntiMalwareStatus(CancellationToken cancellationToken)
+    {
+        var status = await _adminService.GetAntiMalwareStatusAsync(
+            _context.CurrentTenantId,
+            _context.CurrentUserId,
+            cancellationToken);
+
+        return Results.Json(
+            new ApiResponse<AntiMalwareStatusDto>(status),
+            ApiJson.Options,
+            statusCode: StatusCodes.Status200OK);
+    }
+
     [HttpGet("domains/{domainId:guid}/security")]
     [ProducesResponseType(typeof(ApiResponse<SecuritySettingsDto>), StatusCodes.Status200OK)]
     public async Task<IResult> GetDomainSecuritySettings(Guid domainId, CancellationToken cancellationToken)

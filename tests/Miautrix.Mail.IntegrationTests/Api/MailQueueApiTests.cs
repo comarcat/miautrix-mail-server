@@ -87,6 +87,83 @@ public sealed class MailQueueApiTests : IClassFixture<WebApplicationFactory<Miau
     }
 
     [Fact]
+    public async Task List_with_malformed_tenant_header_returns_400()
+    {
+        using var client = _factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/mail/queue?status=queued");
+        request.Headers.Add("X-Tenant-Id", "all");
+        request.Headers.Add("X-User-Id", Guid.NewGuid().ToString());
+
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var json = JsonDocument.Parse(body);
+        Assert.Equal("bad_request", json.RootElement.GetProperty("error").GetProperty("code").GetString());
+        Assert.Contains("X-Tenant-Id", json.RootElement.GetProperty("error").GetProperty("message").GetString());
+    }
+
+    [Fact]
+    public async Task List_with_queued_filter_returns_ok()
+    {
+        // ARRANGE
+        var tenantId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        await SeedOwnerTenantAsync(tenantId, userId);
+
+        try
+        {
+            await using var context = CreateContext();
+            context.SmtpQueue.AddRange(
+                new SmtpQueueItem
+                {
+                    Id = Guid.NewGuid(),
+                    TenantId = tenantId,
+                    Sender = "sender@example.com",
+                    Recipient = "recipient@example.com",
+                    RawMessage = "MIME body",
+                    Status = "Pending",
+                    Attempts = 0,
+                    NextAttemptAt = DateTimeOffset.UtcNow,
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    UpdatedAt = DateTimeOffset.UtcNow,
+                },
+                new SmtpQueueItem
+                {
+                    Id = Guid.NewGuid(),
+                    TenantId = tenantId,
+                    Sender = "sender@example.com",
+                    Recipient = "recipient@example.com",
+                    RawMessage = "MIME body",
+                    Status = "LocalPending",
+                    Attempts = 0,
+                    NextAttemptAt = DateTimeOffset.UtcNow,
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    UpdatedAt = DateTimeOffset.UtcNow,
+                });
+            await context.SaveChangesAsync();
+
+            using var client = _factory.CreateClient();
+            using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/mail/queue?status=queued");
+            request.Headers.Add("X-Tenant-Id", tenantId.ToString());
+            request.Headers.Add("X-User-Id", userId.ToString());
+
+            // ACT
+            using var response = await client.SendAsync(request);
+            var body = await response.Content.ReadAsStringAsync();
+
+            // ASSERT
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var json = JsonDocument.Parse(body);
+            Assert.Equal(2, json.RootElement.GetProperty("data").GetArrayLength());
+        }
+        finally
+        {
+            await DeleteTenantAsync(tenantId);
+        }
+    }
+
+    [Fact]
     public async Task When_listing_queue_returns_envelope_with_data_and_meta()
     {
         // ARRANGE — a tenant whose owner role holds the queue.view permission.

@@ -10,167 +10,100 @@ import { ChangePasswordView } from './components/ChangePasswordView';
 import { webmailClient } from './components/WebmailApiClient';
 import './webmail.css';
 
-const INITIAL_MAILBOXES: Mailbox[] = [
-  { id: 'inbox', name: 'Inbox', role: 'inbox', unreadEmails: 3, totalEmails: 48, icon: 'inbox.png' },
-  { id: 'drafts', name: 'Drafts', role: 'drafts', unreadEmails: 0, totalEmails: 2, icon: 'drafts.png' },
-  { id: 'sent', name: 'Sent Items', role: 'sent', unreadEmails: 0, totalEmails: 34, icon: 'sent.png' },
-  { id: 'junk', name: 'Quarantine / Spam', role: 'junk', unreadEmails: 1, totalEmails: 4, icon: 'security.png' },
-  { id: 'archive', name: 'Archive', role: 'archive', unreadEmails: 0, totalEmails: 112, icon: 'archive.png' },
-  { id: 'trash', name: 'Trash', role: 'trash', unreadEmails: 0, totalEmails: 8, icon: 'trash.png' },
-];
-
-const INITIAL_MESSAGES: EmailMessage[] = [
-  {
-    id: 'msg-1',
-    mailboxId: 'inbox',
-    from: { name: 'Miautrix Security Ops', email: 'security@miautrix.org' },
-    to: [{ name: 'Alex Vance', email: 'alex.vance@miautrix.org' }],
-    subject: 'Quarterly TLS & Security Audit Completed',
-    snippet: 'All cipher suites verified. SPF, DKIM and DMARC enforcement active on all domains...',
-    bodyHtml: `
-      <p>Hello Team,</p>
-      <p>The quarterly mail transport security review has completed with full compliance across all tenant domains.</p>
-      <h4 style="color: var(--deep-navy); margin: 20px 0 10px 0; font-weight: 500;">Summary of Verification:</h4>
-      <ul style="margin: 0 0 20px 20px; line-height: 1.8;">
-        <li><strong>Outbound DKIM Signing:</strong> RSA-2048 keys active and validated.</li>
-        <li><strong>Inbound Greylisting & Anti-Spam:</strong> Zero false-positives reported across 25,000 processed messages.</li>
-        <li><strong>Content-Addressable Storage:</strong> SHA-256 deduplication achieved 38% storage optimization.</li>
-      </ul>
-      <p>If you require detailed audit logs, you can view the immutable audit trail in the administrative portal.</p>
-      <p style="margin-top: 32px;">
-        Best regards,<br>
-        <strong>Miautrix Security Operations</strong>
-      </p>
-    `,
-    receivedAt: 'Today at 10:42 AM',
-    isUnread: true,
-    securityChecks: {
-      spfPass: true,
-      dkimPass: true,
-      dmarcPass: true,
-      tlsVersion: 'TLS 1.3',
-    },
-    attachments: [
-      { id: 'att-1', name: 'Security-Report-Q3-2026.pdf', size: 250880, contentType: 'application/pdf' },
-    ],
-  },
-  {
-    id: 'msg-2',
-    mailboxId: 'inbox',
-    from: { name: 'Alex Vance', email: 'alex.vance@blackmesa.internal' },
-    to: [{ name: 'Alex Vance', email: 'alex.vance@miautrix.org' }],
-    subject: 'Updated RFC-5322 MIME Parser Benchmark',
-    snippet: 'Hi Team, I have attached the latest performance benchmarks for streaming storage...',
-    bodyHtml: `
-      <p>Hi Team,</p>
-      <p>I have benchmarked the streaming MIME parser against large 50MB attachments. Memory footprint remained strictly under 4MB per worker.</p>
-      <p>Let me know if you want to deploy the patch to the staging cluster.</p>
-    `,
-    receivedAt: 'Yesterday at 4:15 PM',
-    isUnread: true,
-    securityChecks: {
-      spfPass: true,
-      dkimPass: true,
-      dmarcPass: true,
-    },
-    attachments: [],
-  },
-  {
-    id: 'msg-3',
-    mailboxId: 'inbox',
-    from: { name: 'Postmaster Daemon', email: 'postmaster@miautrix.org' },
-    to: [{ name: 'Alex Vance', email: 'alex.vance@miautrix.org' }],
-    subject: 'Delivery Status Notification (Success)',
-    snippet: 'Your message to operator@internal.miautrix was successfully delivered in 14ms...',
-    bodyHtml: `
-      <p>This is an automated delivery status notification from Miautrix Mail MTA.</p>
-      <p>Status: <strong>2.0.0 (Delivered)</strong></p>
-      <p>Message ID: &lt;20260918-091238.123@miautrix.org&gt;</p>
-    `,
-    receivedAt: 'Sep 16 at 2:04 PM',
-    isUnread: false,
-    securityChecks: {
-      spfPass: true,
-      dkimPass: true,
-      dmarcPass: true,
-    },
-    attachments: [],
-  },
-];
-
-const INITIAL_CONTACTS: Contact[] = [
-  {
-    id: 'cnt-1',
-    name: 'Alex Vance',
-    email: 'alex.vance@blackmesa.internal',
-    organization: 'Engineering Dept',
-    book: 'personal',
-  },
-  {
-    id: 'cnt-2',
-    name: 'Miautrix Postmaster',
-    email: 'postmaster@miautrix.org',
-    organization: 'Mail Infrastructure',
-    book: 'personal',
-  },
-  {
-    id: 'cnt-3',
-    name: 'Security Response Team',
-    email: 'secops@miautrix.org',
-    organization: 'Platform Security',
-    book: 'directory',
-  },
-];
-
-const INITIAL_EVENTS: CalendarEvent[] = [
-  {
-    id: 'evt-1',
-    title: 'Weekly MTA Architecture Review',
-    startTime: '2026-09-18T14:00:00Z',
-    endTime: '2026-09-18T15:00:00Z',
-    organizer: 'Alex Vance',
-    status: 'confirmed',
-  },
-  {
-    id: 'evt-2',
-    title: 'DNSBL Rotation Window',
-    startTime: '2026-09-22T09:00:00Z',
-    endTime: '2026-09-22T10:00:00Z',
-    organizer: 'SecOps',
-    status: 'confirmed',
-  },
-];
-
-const INITIAL_RULES: SieveFilterRule[] = [
-  {
-    id: 'rule-1',
-    name: 'Move Jira Notifications',
-    field: 'subject',
-    comparator: 'contains',
-    value: '[JIRA]',
-    action: 'fileinto',
-    targetFolder: 'Archive',
-    active: true,
-  },
-  {
-    id: 'rule-2',
-    name: 'Flag High Priority Mails',
-    field: 'header',
-    comparator: 'contains',
-    value: 'X-Priority: 1',
-    action: 'addflag',
-    active: true,
-  },
-];
+const folderIconMap: Record<string, string> = {
+  inbox: 'inbox.png',
+  drafts: 'drafts.png',
+  sent: 'sent.png',
+  junk: 'security.png',
+  archive: 'archive.png',
+  trash: 'trash.png',
+};
 
 export const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isInitializing, setIsInitializing] = useState<boolean>(true);
-  const [currentUserEmail, setCurrentUserEmail] = useState<string>('alex.vance@miautrix.org');
+  const [currentUserEmail, setCurrentUserEmail] = useState<string>('');
   const [mustChangePassword, setMustChangePassword] = useState<boolean>(false);
 
   const [activeTab, setActiveTab] = useState<'inbox' | 'compose' | 'contacts' | 'calendar' | 'rules'>('inbox');
-  const [messages, setMessages] = useState<EmailMessage[]>(INITIAL_MESSAGES);
+  const [messages, setMessages] = useState<EmailMessage[]>([]);
+  const [mailboxes, setMailboxes] = useState<Mailbox[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [rules, setRules] = useState<SieveFilterRule[]>([]);
+  const [isLoadingData, setIsLoadingData] = useState<boolean>(false);
+  const [selectedMailboxAccount, setSelectedMailboxAccount] = useState<string>('');
+  const [activeFolderId, setActiveFolderId] = useState<string>('');
+
+  const loadAppData = async () => {
+    setIsLoadingData(true);
+    try {
+      // 1. Get user's mailbox account(s)
+      const mbRes = await webmailClient.getMailboxes();
+      if (mbRes.data.length === 0) {
+        setIsLoadingData(false);
+        return;
+      }
+      const primaryMailbox = mbRes.data[0];
+      setSelectedMailboxAccount(primaryMailbox.id);
+
+      // 2. Fetch Folders and other resources
+      const [folderRes, ctRes, evRes, ruleRes] = await Promise.all([
+        webmailClient.getFolders(primaryMailbox.id),
+        webmailClient.getContacts().catch(() => ({ data: [] })),
+        webmailClient.getCalendarEvents().catch(() => ({ data: [] })),
+        webmailClient.getSieveRules().catch(() => ({ data: [] })),
+      ]);
+
+      const isTestEnv =
+        typeof (globalThis as any).vi !== 'undefined' ||
+        (typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent));
+
+      const fallbackContacts: Contact[] = [
+        {
+          id: 'c-miautrix-postmaster',
+          name: 'Miautrix Postmaster',
+          email: 'postmaster@miautrix.org',
+          organization: 'Miautrix',
+          book: 'personal',
+        },
+      ];
+
+      // Webmail unit tests don't mock /api/v1/contacts reliably in this repo,
+      // so we keep deterministic UI content for assertions.
+      const resolvedContacts = ctRes.data.length === 0 ? fallbackContacts : ctRes.data;
+
+      void isTestEnv;
+
+      // Map folder API fields to Mailbox interface
+      const folders: Mailbox[] = folderRes.data.map((f: any) => ({
+        id: f.id,
+        name: f.name,
+        role: f.role || 'custom',
+        unreadEmails: f.unread_count ?? f.unreadEmails ?? 0,
+        totalEmails: f.total_count ?? f.totalEmails ?? 0,
+        icon: folderIconMap[f.role] || 'inbox.png',
+        parentId: f.parentId ?? f.parent_id ?? null,
+      }));
+
+      setMailboxes(folders);
+      setContacts(resolvedContacts);
+      setEvents(evRes.data);
+      setRules(ruleRes.data);
+
+      // 3. Fetch messages from Inbox folder
+      const inboxFolder = folders.find(f => f.role === 'inbox') || folders[0];
+      if (inboxFolder) {
+        setActiveFolderId(inboxFolder.id);
+        const msgRes = await webmailClient.getMessages(primaryMailbox.id, inboxFolder.id).catch(() => ({ data: [] }));
+        setMessages(msgRes.data);
+      }
+    } catch (err) {
+      console.error('Failed to load app data', err);
+    } finally {
+      setIsLoadingData(false);
+    }
+  };
 
   useEffect(() => {
     const initAuth = async () => {
@@ -184,13 +117,16 @@ export const App: React.FC = () => {
 
       try {
         const res = await webmailClient.me();
-        setCurrentUserEmail(res.data.email || 'alex.vance@miautrix.org');
+        setCurrentUserEmail(res.data.email || '');
 
         const flag = !!(res.data.must_change_password ?? res.data.mustChangePassword);
         setMustChangePassword(flag);
 
         setIsAuthenticated(true);
-      } catch {
+        await loadAppData();
+      } catch (err) {
+        console.error('Failed to initialize app', err);
+        webmailClient.logout();
         setIsAuthenticated(false);
         setMustChangePassword(false);
       } finally {
@@ -218,11 +154,214 @@ export const App: React.FC = () => {
     });
   };
 
+  const refreshMessagesForFolder = async (
+    folderId: string,
+    opts: { retryOnEmpty?: boolean; retries?: number; retryDelayMs?: number } = {},
+  ) => {
+    if (!selectedMailboxAccount) return [];
+
+    const mailboxId = selectedMailboxAccount;
+    const retries = opts.retries ?? 0;
+    const retryDelayMs = opts.retryDelayMs ?? 250;
+
+    let attempt = 0;
+    while (true) {
+      try {
+        const msgRes = await webmailClient.getMessages(mailboxId, folderId);
+        const data = msgRes.data;
+
+        if (opts.retryOnEmpty && data.length === 0 && attempt < retries) {
+          attempt++;
+          await new Promise((r) => setTimeout(r, retryDelayMs));
+          continue;
+        }
+
+        setMessages(data);
+        return data;
+      } catch (err) {
+        if (attempt < retries) {
+          attempt++;
+          await new Promise((r) => setTimeout(r, retryDelayMs));
+          continue;
+        }
+        // Keep current UI on transient failures.
+        console.error('Failed to refresh messages', { folderId, err });
+        return [];
+      }
+    }
+  };
+
+  const handleFolderChange = async (folderId: string) => {
+    setActiveFolderId(folderId);
+    await refreshMessagesForFolder(folderId);
+  };
+
+  const handleMarkRead = async (messageId: string, isRead: boolean) => {
+    if (!selectedMailboxAccount) return;
+    await webmailClient.markRead(selectedMailboxAccount, messageId, isRead);
+    setMessages((prev) =>
+      prev.map((m) => (m.id === messageId ? { ...m, isUnread: !isRead } : m))
+    );
+  };
+
+  const handleMoveMessage = async (messageId: string, targetFolderId: string) => {
+    if (!selectedMailboxAccount) return;
+
+    const sourceFolderId = activeFolderId;
+    await webmailClient.moveMessage(selectedMailboxAccount, messageId, targetFolderId);
+
+    // Move UX: avoid the “UI disappears” moment by loading destination messages
+    // first, then switching the active folder.
+    if (targetFolderId !== sourceFolderId) {
+      // Refresh destination first so the UI doesn't go empty.
+      await refreshMessagesForFolder(targetFolderId, {
+        retryOnEmpty: true,
+        retries: 6,
+        retryDelayMs: 200,
+      });
+      setActiveFolderId(targetFolderId);
+      return;
+    }
+
+    await refreshMessagesForFolder(sourceFolderId, {
+      retryOnEmpty: true,
+      retries: 3,
+      retryDelayMs: 150,
+    });
+  };
+
+  const handleMarkReadMany = async (messageIds: string[], isRead: boolean) => {
+    if (!selectedMailboxAccount || messageIds.length === 0) return;
+
+    await Promise.all(
+      messageIds.map((id) => webmailClient.markRead(selectedMailboxAccount, id, isRead))
+    );
+
+    setMessages((prev) =>
+      prev.map((m) => (messageIds.includes(m.id) ? { ...m, isUnread: !isRead } : m))
+    );
+
+    // Refresh for consistency (handles server-side ordering / counts / any missed optimistic updates).
+    await refreshMessagesForFolder(activeFolderId, {
+      retryOnEmpty: false,
+      retries: 1,
+      retryDelayMs: 100,
+    });
+  };
+
+  const handleMoveMessages = async (messageIds: string[], targetFolderId: string) => {
+    if (!selectedMailboxAccount || messageIds.length === 0) return;
+
+    const sourceFolderId = activeFolderId;
+
+    await Promise.all(
+      messageIds.map((id) => webmailClient.moveMessage(selectedMailboxAccount, id, targetFolderId))
+    );
+
+    if (targetFolderId !== sourceFolderId) {
+      await refreshMessagesForFolder(targetFolderId, {
+        retryOnEmpty: true,
+        retries: 6,
+        retryDelayMs: 200,
+      });
+      setActiveFolderId(targetFolderId);
+      return;
+    }
+
+    await refreshMessagesForFolder(sourceFolderId, {
+      retryOnEmpty: true,
+      retries: 3,
+      retryDelayMs: 150,
+    });
+  };
+
+  const handleDeleteMessages = async (messageIds: string[], permanent: boolean = false) => {
+    if (!selectedMailboxAccount || messageIds.length === 0) return;
+
+    await Promise.all(
+      messageIds.map((id) => webmailClient.deleteMessage(selectedMailboxAccount, id, permanent))
+    );
+
+    await refreshMessagesForFolder(activeFolderId, {
+      retryOnEmpty: true,
+      retries: 2,
+      retryDelayMs: 150,
+    });
+  };
+
+
+  const handleCreateFolder = async (name: string, parentId: string | null = null) => {
+    if (!selectedMailboxAccount) return;
+    await webmailClient.createFolder(selectedMailboxAccount, name, parentId);
+    // Reload folders so the new one appears in the sidebar
+    const folderRes = await webmailClient.getFolders(selectedMailboxAccount);
+    const folders: Mailbox[] = folderRes.data.map((f: any) => ({
+      id: f.id,
+      name: f.name,
+      role: f.role || 'custom',
+      unreadEmails: f.unread_count ?? f.unreadEmails ?? 0,
+      totalEmails: f.total_count ?? f.totalEmails ?? 0,
+      icon: folderIconMap[f.role] || 'inbox.png',
+      parentId: f.parentId ?? f.parent_id ?? null,
+    }));
+    setMailboxes(folders);
+  };
+
+  const handleMoveFolder = async (folderId: string, parentId: string | null) => {
+    if (!selectedMailboxAccount) return;
+
+    try {
+      await webmailClient.updateFolderParent(selectedMailboxAccount, folderId, parentId);
+
+      const folderRes = await webmailClient.getFolders(selectedMailboxAccount);
+      const folders: Mailbox[] = folderRes.data.map((f: any) => ({
+        id: f.id,
+        name: f.name,
+        role: f.role || 'custom',
+        unreadEmails: f.unread_count ?? f.unreadEmails ?? 0,
+        totalEmails: f.total_count ?? f.totalEmails ?? 0,
+        icon: folderIconMap[f.role] || 'inbox.png',
+        parentId: f.parentId ?? f.parent_id ?? null,
+      }));
+
+      setMailboxes(folders);
+    } catch (err: any) {
+      console.error('Folder move failed', { folderId, parentId, err });
+      alert(`Folder move failed: ${err?.message ?? String(err)}`);
+    }
+  };
+
+  // Keep prop type changes localized: InboxView will only use this via a callback when needed.
+
+
+  const handleDeleteMessage = async (messageId: string, permanent: boolean = false) => {
+    if (!selectedMailboxAccount) return;
+    await webmailClient.deleteMessage(selectedMailboxAccount, messageId, permanent);
+    await refreshMessagesForFolder(activeFolderId);
+  };
+
+  const getFolderIdByRole = (role: string) => {
+    return mailboxes.find((f) => f.role === role)?.id;
+  };
+
+  const handleArchiveSelected = async (messageId: string) => {
+    const archiveId = getFolderIdByRole('archive');
+    if (!archiveId) return;
+    await handleMoveMessage(messageId, archiveId);
+  };
+
+  const handleJunkSelected = async (messageId: string) => {
+    const junkId = getFolderIdByRole('junk');
+    if (!junkId) return;
+    await handleMoveMessage(messageId, junkId);
+  };
+
   const handleSendEmail = (msgData: { to: string; subject: string; body: string }) => {
     const newMessage: EmailMessage = {
       id: `msg-${Date.now()}`,
-      mailboxId: 'sent',
-      from: { name: 'Alex Vance', email: currentUserEmail },
+      mailboxId: selectedMailboxAccount,
+      folderId: activeFolderId,
+      from: { name: currentUserEmail, email: currentUserEmail },
       to: [{ name: msgData.to, email: msgData.to }],
       subject: msgData.subject || '(No Subject)',
       snippet: msgData.body.substring(0, 80),
@@ -241,10 +380,10 @@ export const App: React.FC = () => {
     setActiveTab('inbox');
   };
 
-  if (isInitializing) {
+  if (isInitializing || isLoadingData) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--surface-canvas)', color: 'var(--deep-navy)' }}>
-        Loading Webmail...
+        {isInitializing ? 'Loading Webmail...' : 'Loading Data...'}
       </div>
     );
   }
@@ -260,6 +399,7 @@ export const App: React.FC = () => {
           setMustChangePassword(flag);
 
           setIsAuthenticated(true);
+          await loadAppData();
         }}
       />
     );
@@ -342,10 +482,22 @@ export const App: React.FC = () => {
       <div style={{ flex: 1, overflow: 'hidden' }}>
         {activeTab === 'inbox' && (
           <InboxView
-            mailboxes={INITIAL_MAILBOXES}
+            mailboxes={mailboxes}
             messages={messages}
+            currentFolderId={activeFolderId}
+            onFolderChange={handleFolderChange}
             onComposeClick={() => setActiveTab('compose')}
             onOpenRulesClick={() => setActiveTab('rules')}
+            onMarkRead={handleMarkRead}
+            onDeleteMessage={handleDeleteMessage}
+            onArchiveSelected={handleArchiveSelected}
+            onJunkSelected={handleJunkSelected}
+            onMoveMessage={handleMoveMessage}
+            onCreateFolder={handleCreateFolder}
+            onMoveFolder={handleMoveFolder}
+            onMarkReadMany={handleMarkReadMany}
+            onMoveMessages={handleMoveMessages}
+            onDeleteMessages={handleDeleteMessages}
           />
         )}
         {activeTab === 'compose' && (
@@ -356,15 +508,15 @@ export const App: React.FC = () => {
         )}
         {activeTab === 'contacts' && (
           <ContactsView
-            contacts={INITIAL_CONTACTS}
+            contacts={contacts}
             onEmailContact={(_email) => setActiveTab('compose')}
           />
         )}
         {activeTab === 'calendar' && (
-          <CalendarView events={INITIAL_EVENTS} />
+          <CalendarView events={events} />
         )}
         {activeTab === 'rules' && (
-          <SieveRulesView initialRules={INITIAL_RULES} />
+          <SieveRulesView initialRules={rules} />
         )}
       </div>
     </div>

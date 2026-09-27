@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Miautrix.Mail.Domain;
 using Miautrix.Mail.Persistence;
 using Miautrix.Mail.Security;
+using Miautrix.Mail.Storage;
 using Microsoft.EntityFrameworkCore;
 
 namespace Miautrix.Mail.Application.Mail;
@@ -16,11 +17,20 @@ public sealed class MessageService : IMessageService
 {
     private readonly AppDbContext _db;
     private readonly ITenantAuthorizationHelper _auth;
+    private readonly IMailboxService _mailboxes;
 
-    public MessageService(AppDbContext db, ITenantAuthorizationHelper auth)
+    private readonly IMailStorage _storage;
+
+    public MessageService(
+        AppDbContext db,
+        ITenantAuthorizationHelper auth,
+        IMailboxService mailboxes,
+        IMailStorage storage)
     {
         _db = db;
         _auth = auth;
+        _mailboxes = mailboxes;
+        _storage = storage;
     }
 
     public async Task<MessageListPage> ListMessagesAsync(
@@ -230,30 +240,114 @@ public sealed class MessageService : IMessageService
             return false;
         }
 
+        // A delete is only ever destructive when it is explicitly requested as permanent,
+        // or when the message is already sitting in Trash (the usual "empty trash" case).
         if (permanent)
         {
-            _db.Attachments.RemoveRange(_db.Attachments.Where(a => a.TenantId == tenantId && a.MessageId == messageId));
-            _db.MessageRecipients.RemoveRange(_db.MessageRecipients.Where(r => r.TenantId == tenantId && r.MessageId == messageId));
-            _db.MessageFlags.RemoveRange(_db.MessageFlags.Where(f => f.TenantId == tenantId && f.MessageId == messageId));
-            _db.Messages.Remove(message);
-            await _db.SaveChangesAsync(cancellationToken);
+            await HardDeleteMessageAsync(tenantId, message, cancellationToken);
             return true;
         }
 
-        var trashFolder = await _db.Folders
-            .FirstOrDefaultAsync(f => f.TenantId == tenantId && f.MailboxId == mailboxId && f.Role == "trash", cancellationToken);
+        var trashFolder = await FindTrashFolderAsync(tenantId, mailboxId, cancellationToken);
 
-        if (trashFolder is not null && message.FolderId != trashFolder.Id)
+        if (message.FolderId == trashFolder.Id)
         {
-            message.FolderId = trashFolder.Id;
-            message.UpdatedAt = DateTimeOffset.UtcNow;
-            await _db.SaveChangesAsync(cancellationToken);
+            // Already in Trash: deleting again removes it for good.
+            await HardDeleteMessageAsync(tenantId, message, cancellationToken);
             return true;
         }
 
-        _db.Messages.Remove(message);
+        message.FolderId = trashFolder.Id;
+        message.UpdatedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(cancellationToken);
         return true;
+    }
+
+    /// <summary>
+    /// Resolves the mailbox Trash folder, provisioning the default folder set when it is absent.
+    /// Throws rather than returning null: a missing system folder must never be the reason a
+    /// message is destroyed, so the caller fails the request instead of falling through to a
+    /// permanent delete.
+    /// </summary>
+    private async Task<Folder> FindTrashFolderAsync(Guid tenantId, Guid mailboxId, CancellationToken cancellationToken)
+    {
+        var trashFolder = await _db.Folders
+            .FirstOrDefaultAsync(
+                f => f.TenantId == tenantId && f.MailboxId == mailboxId && f.Role.ToLower() == "trash",
+                cancellationToken);
+
+        if (trashFolder is not null)
+        {
+            return trashFolder;
+        }
+
+        // Legacy or partially provisioned mailbox: create the system folders, then retry.
+        await _mailboxes.ProvisionDefaultFoldersAsync(tenantId, mailboxId, cancellationToken);
+
+        trashFolder = await _db.Folders
+            .FirstOrDefaultAsync(
+                f => f.TenantId == tenantId && f.MailboxId == mailboxId && f.Role.ToLower() == "trash",
+                cancellationToken);
+
+        if (trashFolder is null)
+        {
+            throw new InvalidOperationException(
+                $"Mailbox {mailboxId} has no Trash folder; refusing to permanently delete the message.");
+        }
+
+        return trashFolder;
+    }
+
+    private async Task HardDeleteMessageAsync(Guid tenantId, Message message, CancellationToken cancellationToken)
+    {
+        var messageId = message.Id;
+        _db.Attachments.RemoveRange(_db.Attachments.Where(a => a.TenantId == tenantId && a.MessageId == messageId));
+        _db.MessageRecipients.RemoveRange(_db.MessageRecipients.Where(r => r.TenantId == tenantId && r.MessageId == messageId));
+        _db.MessageFlags.RemoveRange(_db.MessageFlags.Where(f => f.TenantId == tenantId && f.MessageId == messageId));
+        _db.Messages.Remove(message);
+        await _db.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<AttachmentDownloadDto?> DownloadAttachmentAsync(
+        Guid tenantId,
+        Guid userId,
+        Guid messageId,
+        Guid attachmentId,
+        CancellationToken cancellationToken = default)
+    {
+        // Tenant membership is enforced by tenant-scoped read + authorization.
+        var message = await _db.Messages
+            .FirstOrDefaultAsync(m => m.TenantId == tenantId && m.Id == messageId, cancellationToken);
+
+        if (message is null)
+        {
+            return null;
+        }
+
+        var mailbox = await _db.Mailboxes
+            .FirstOrDefaultAsync(m => m.TenantId == tenantId && m.Id == message.MailboxId, cancellationToken);
+
+        _auth.AssertMailboxAccess(tenantId, userId, mailbox, requireWrite: false);
+
+        var attachment = await _db.Attachments
+            .FirstOrDefaultAsync(a =>
+                a.TenantId == tenantId &&
+                a.MessageId == messageId &&
+                a.Id == attachmentId,
+                cancellationToken);
+
+        if (attachment is null)
+        {
+            return null;
+        }
+
+        var stream = await _storage.OpenReadAsync(attachment.ContentHash, cancellationToken);
+        if (stream is null)
+        {
+            return null;
+        }
+
+        return new AttachmentDownloadDto(attachment.FileName, attachment.ContentType, stream);
     }
 
     public async Task<SendMessageResult> SendMessageAsync(
