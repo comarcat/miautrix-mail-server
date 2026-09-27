@@ -60,6 +60,7 @@ interface InboxViewProps {
   onFolderChange: (mailboxId: string, folderId: string) => void;
   onComposeClick: () => void;
   onOpenRulesClick: () => void;
+  onRefreshMessages: () => Promise<void>;
   currentFolderId: string;
   currentMailboxId: string;
 
@@ -180,6 +181,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
   onFolderChange,
   onComposeClick,
   onOpenRulesClick,
+  onRefreshMessages,
   currentFolderId,
   currentMailboxId,
   onMarkRead,
@@ -612,6 +614,15 @@ export const InboxView: React.FC<InboxViewProps> = ({
         </div>
 
         <div className="wm-ribbon-group">
+          <button
+            type="button"
+            className="wm-tool-btn"
+            title="Refresh"
+            aria-label="Refresh"
+            onClick={onRefreshMessages}
+          >
+            <img src="/images/icons/webmail/refresh.png" alt="Refresh" />
+          </button>
           <button
             type="button"
             className="wm-tool-btn"

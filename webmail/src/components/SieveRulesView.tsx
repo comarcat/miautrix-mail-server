@@ -31,6 +31,10 @@ export const SieveRulesView: React.FC<SieveRulesViewProps> = ({ initialRules, ma
   const [newRuleValue, setNewRuleValue] = useState('');
   const [newRuleAction, setNewRuleAction] = useState<'fileinto' | 'redirect' | 'reject' | 'addflag' | 'discard'>('fileinto');
   const [newRuleTarget, setNewRuleTarget] = useState('Archive');
+  const [refreshInterval, setRefreshInterval] = useState(() => {
+    const stored = window.localStorage.getItem('miautrix_webmail_refresh_interval');
+    return stored ? (stored as any) : '5m';
+  });
   const [flagAlerts, setFlagAlerts] = useState<Record<FlagColor, FlagAlertConfig>>(() =>
     FLAG_COLORS.reduce((acc, color) => {
       acc[color] = { enabled: false, title: `${FLAG_LABELS[color]} flagged email`, message: '' };
@@ -41,6 +45,7 @@ export const SieveRulesView: React.FC<SieveRulesViewProps> = ({ initialRules, ma
 
   useEffect(() => {
     if (!mailboxId) return;
+
 
     let cancelled = false;
     webmailClient.getFlagAlerts(mailboxId).then((res) => {
@@ -70,7 +75,14 @@ export const SieveRulesView: React.FC<SieveRulesViewProps> = ({ initialRules, ma
     };
   }, [mailboxId]);
 
+  const handleRefreshIntervalChange = (val: string) => {
+    setRefreshInterval(val);
+    window.localStorage.setItem('miautrix_webmail_refresh_interval', val);
+    window.dispatchEvent(new Event('miautrix:webmail:refresh-interval-changed'));
+  };
+
   const saveFlagAlerts = async () => {
+
     if (!mailboxId) return;
     setIsSavingFlagAlerts(true);
     try {
@@ -132,7 +144,28 @@ export const SieveRulesView: React.FC<SieveRulesViewProps> = ({ initialRules, ma
             </p>
           </div>
 
-          {/* Add Rule Form */}
+          <div className="card" style={{ marginBottom: '32px' }}>
+            <h3 style={{ fontSize: '1.25rem', marginBottom: '16px' }}>General Settings</h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div style={{ flex: '0 0 200px' }}>
+                <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--deep-navy)' }}>
+                  Auto-Refresh Interval
+                </label>
+              </div>
+              <select
+                className="input-base"
+                style={{ width: '200px' }}
+                value={refreshInterval}
+                onChange={(e) => handleRefreshIntervalChange(e.target.value)}
+              >
+                <option value="off">Off</option>
+                <option value="1m">1 Minute</option>
+                <option value="5m">5 Minutes</option>
+                <option value="15m">15 Minutes</option>
+                <option value="30m">30 Minutes</option>
+              </select>
+            </div>
+          </div>
           <div className="card" style={{ marginBottom: '32px' }}>
             <h3 style={{ fontSize: '1.25rem', marginBottom: '16px' }}>Create Sieve Rule</h3>
             <form onSubmit={handleAddRule}>

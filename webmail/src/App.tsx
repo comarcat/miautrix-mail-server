@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { Mailbox, MailboxAccount, SharedMailboxGroup, EmailMessage, Contact, CalendarEvent, SieveFilterRule } from './types';
 import { InboxView } from './components/InboxView';
 import { ComposerView } from './components/ComposerView';
@@ -64,6 +64,8 @@ export const App: React.FC = () => {
   const [isLoadingData, setIsLoadingData] = useState<boolean>(false);
   const [selectedMailboxAccount, setSelectedMailboxAccount] = useState<string>('');
   const [activeFolderId, setActiveFolderId] = useState<string>('');
+  const refreshTimerRef = useRef<NodeJS.Timeout | null>(null);
+
 
   const loadAppData = async () => {
     setIsLoadingData(true);
@@ -336,8 +338,47 @@ export const App: React.FC = () => {
   };
 
 
+  const handleRefreshMessages = async () => {
+    if (!activeFolderId) return;
+    await refreshMessagesForFolder(activeFolderId);
+  };
+
+  const setupAutoRefresh = () => {
+    if (refreshTimerRef.current) clearInterval(refreshTimerRef.current);
+    refreshTimerRef.current = null;
+
+    const intervalStr = window.localStorage.getItem('miautrix_webmail_refresh_interval') || '5m';
+    if (intervalStr === 'off') return;
+
+    const minutes = parseInt(intervalStr.replace('m', ''), 10);
+    const safeMinutes = Number.isFinite(minutes) && minutes > 0 ? minutes : 5;
+    const ms = safeMinutes * 60 * 1000;
+
+    refreshTimerRef.current = setInterval(async () => {
+      if (activeFolderId) {
+        await refreshMessagesForFolder(activeFolderId);
+      }
+    }, ms);
+  };
+
+  useEffect(() => {
+    const onIntervalChanged = () => {
+      setupAutoRefresh();
+    };
+
+    window.addEventListener('miautrix:webmail:refresh-interval-changed', onIntervalChanged);
+    setupAutoRefresh();
+
+    return () => {
+      window.removeEventListener('miautrix:webmail:refresh-interval-changed', onIntervalChanged);
+      if (refreshTimerRef.current) clearInterval(refreshTimerRef.current);
+      refreshTimerRef.current = null;
+    };
+  }, [activeFolderId, selectedMailboxAccount]);
+
   const handleCreateFolder = async (name: string, parentId: string | null = null) => {
     if (!selectedMailboxAccount || !canWriteMailbox(selectedMailboxAccount)) return;
+
     await webmailClient.createFolder(selectedMailboxAccount, name, parentId);
     // Reload folders so the new one appears in the sidebar
     const folderRes = await webmailClient.getFolders(selectedMailboxAccount);
@@ -535,6 +576,7 @@ export const App: React.FC = () => {
             onFolderChange={handleFolderChange}
             onComposeClick={() => setActiveTab('compose')}
             onOpenRulesClick={() => setActiveTab('rules')}
+            onRefreshMessages={handleRefreshMessages}
             onMarkRead={handleMarkRead}
             onDeleteMessage={handleDeleteMessage}
             onArchiveSelected={handleArchiveSelected}
@@ -550,6 +592,7 @@ export const App: React.FC = () => {
             quotaUsedBytes={mailboxes[0]?.usedBytes ?? 0}
             quotaBytes={mailboxes[0]?.quotaBytes ?? 0}
           />
+
         )}
         {activeTab === 'compose' && (
           <ComposerView
