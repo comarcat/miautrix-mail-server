@@ -121,10 +121,41 @@ function shouldShowFolderInMoveMenu(folder: Mailbox, currentFolderId: string) {
   return folder.id !== currentFolderId;
 }
 
+const SYSTEM_FOLDER_ORDER = ['inbox', 'sent', 'drafts', 'archive', 'junk', 'trash'];
+
+function compareMailboxLabels(a: string, b: string) {
+  return a.localeCompare(b, undefined, { sensitivity: 'base' });
+}
+
+function compareSystemFolders(a: Mailbox, b: Mailbox) {
+  const aIndex = SYSTEM_FOLDER_ORDER.indexOf(a.role);
+  const bIndex = SYSTEM_FOLDER_ORDER.indexOf(b.role);
+  const aKnown = aIndex >= 0;
+  const bKnown = bIndex >= 0;
+
+  if (aKnown && bKnown) return aIndex - bIndex;
+  if (aKnown) return -1;
+  if (bKnown) return 1;
+  return compareMailboxLabels(a.name, b.name);
+}
+
+function sortSystemFolders(folders: Mailbox[]) {
+  return [...folders].sort(compareSystemFolders);
+}
+
+function sortCustomFolders(folders: Mailbox[]) {
+  return [...folders].sort((a, b) => compareMailboxLabels(a.name, b.name));
+}
+
 function buildMoveMenuFolders(mailboxes: Mailbox[], currentFolderId: string) {
   return [...mailboxes]
     .filter((f) => shouldShowFolderInMoveMenu(f, currentFolderId))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => {
+      if (a.role !== 'custom' && b.role !== 'custom') return compareSystemFolders(a, b);
+      if (a.role !== 'custom') return -1;
+      if (b.role !== 'custom') return 1;
+      return compareMailboxLabels(a.name, b.name);
+    });
 }
 
 function isTestEnv() {
@@ -189,6 +220,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
     messageIds: string[];
   } | null>(null);
   const [groupByFlag, setGroupByFlag] = useState(false);
+  const [collapsedSharedMailboxIds, setCollapsedSharedMailboxIds] = useState<string[]>([]);
 
   const contextMenuRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -516,10 +548,24 @@ export const InboxView: React.FC<InboxViewProps> = ({
 
   const displayedMessage = detailMessage ?? currentMessage;
 
+  const sortedSharedMailboxGroups = [...sharedMailboxGroups].sort((a, b) =>
+    compareMailboxLabels(a.account.address || a.account.name || '', b.account.address || b.account.name || ''),
+  );
+
+  const toggleSharedMailboxCollapsed = (mailboxId: string) => {
+    setCollapsedSharedMailboxIds((prev) =>
+      prev.includes(mailboxId) ? prev.filter((id) => id !== mailboxId) : [...prev, mailboxId],
+    );
+  };
+
+  const handleSharedMailboxHeaderKeyDown = (mailboxId: string, e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    toggleSharedMailboxCollapsed(mailboxId);
+  };
+
   const renderCustomFolderLinks = (folders: Mailbox[], mailboxId: string, parentId: string | null = null, level = 0): React.ReactNode =>
-    folders
-      .filter((folder) => folder.role === 'custom' && (folder.parentId ?? null) === parentId)
-      .sort((a, b) => a.name.localeCompare(b.name))
+    sortCustomFolders(folders.filter((folder) => folder.role === 'custom' && (folder.parentId ?? null) === parentId))
       .map((folder) => (
         <React.Fragment key={folder.id}>
           <a
@@ -659,8 +705,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
               Folders
             </div>
 
-            {mailboxes
-              .filter((f) => f.role !== 'custom')
+            {sortSystemFolders(mailboxes.filter((f) => f.role !== 'custom'))
               .map((mb) => (
                 <a
                   key={mb.id}
@@ -754,8 +799,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
               </button>
             </div>
 
-            {mailboxes
-              .filter((f) => f.role === 'custom')
+            {sortCustomFolders(mailboxes.filter((f) => f.role === 'custom'))
               .map((mb) => (
                 <a
                   key={mb.id}
@@ -849,38 +893,59 @@ export const InboxView: React.FC<InboxViewProps> = ({
           {sharedMailboxGroups.length > 0 && (
             <div className="wm-nav-section">
               <div className="wm-nav-head">Shared Mailboxes</div>
-              {sharedMailboxGroups.map((group) => {
-                const systemFolders = group.folders.filter((f) => f.role !== 'custom');
+              {sortedSharedMailboxGroups.map((group) => {
+                const systemFolders = sortSystemFolders(group.folders.filter((f) => f.role !== 'custom'));
                 const customFolders = group.folders.filter((f) => f.role === 'custom');
+                const isCollapsed = collapsedSharedMailboxIds.includes(group.account.id);
+                const label = group.account.address || group.account.name;
                 return (
                   <div key={group.account.id}>
-                    <div className="wm-nav-head" style={{ paddingLeft: '16px', fontSize: '13px' }}>
-                      {group.account.address || group.account.name}
+                    <div
+                      className="wm-nav-head wm-shared-mailbox-head"
+                      style={{ paddingLeft: '16px', fontSize: '13px', cursor: 'pointer' }}
+                      role="button"
+                      tabIndex={0}
+                      aria-expanded={!isCollapsed}
+                      onClick={() => toggleSharedMailboxCollapsed(group.account.id)}
+                      onKeyDown={(e) => handleSharedMailboxHeaderKeyDown(group.account.id, e)}
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        style={{ transform: isCollapsed ? 'rotate(-90deg)' : undefined }}
+                      >
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                      </svg>
+                      <span>{label}</span>
                     </div>
-                    {systemFolders
-                      .sort((a, b) => ['inbox', 'junk', 'archive', 'sent', 'drafts'].indexOf(a.role) - ['inbox', 'junk', 'archive', 'sent', 'drafts'].indexOf(b.role))
-                      .map((folder) => (
-                        <a
-                          key={folder.id}
-                          className={`wm-nav-item ${currentMailboxId === group.account.id && currentFolderId === folder.id ? 'active' : ''}`}
-                          href={`#${folder.id}`}
-                          onClick={(e) => {
-                            e.preventDefault();
-                            onFolderChange(group.account.id, folder.id);
-                          }}
-                        >
-                          <div className="wm-nav-icon">
-                            <img src={`/images/icons/webmail/${folder.icon}`} alt="" />
-                            <span>{folder.name}</span>
-                          </div>
-                          {folder.unreadEmails > 0 && <span className="badge">{folder.unreadEmails}</span>}
-                        </a>
-                      ))}
-                    {customFolders.length > 0 && (
+                    {!isCollapsed && (
                       <>
-                        <div className="wm-context-separator" />
-                        <div className="wm-nav-head" style={{ paddingLeft: '38px', fontSize: '13px' }}>Folders</div>
-                        {renderCustomFolderLinks(group.folders, group.account.id)}
+                        {systemFolders.map((folder) => (
+                          <a
+                            key={folder.id}
+                            className={`wm-nav-item ${currentMailboxId === group.account.id && currentFolderId === folder.id ? 'active' : ''}`}
+                            href={`#${folder.id}`}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              onFolderChange(group.account.id, folder.id);
+                            }}
+                          >
+                            <div className="wm-nav-icon">
+                              <img src={`/images/icons/webmail/${folder.icon}`} alt="" />
+                              <span>{folder.name}</span>
+                            </div>
+                            {folder.unreadEmails > 0 && <span className="badge">{folder.unreadEmails}</span>}
+                          </a>
+                        ))}
+                        {customFolders.length > 0 && (
+                          <>
+                            <div className="wm-context-separator" />
+                            <div className="wm-nav-head" style={{ paddingLeft: '38px', fontSize: '13px' }}>Folders</div>
+                            {renderCustomFolderLinks(group.folders, group.account.id)}
+                          </>
+                        )}
                       </>
                     )}
                   </div>
