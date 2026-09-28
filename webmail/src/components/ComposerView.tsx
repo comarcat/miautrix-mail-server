@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import type { MailSignature } from '../types';
+import type { Contact, MailSignature } from '../types';
+import { ContactPickerDialog } from './ContactPickerDialog';
 import { webmailClient } from './WebmailApiClient';
 
 interface ComposerAccount { id: string; address: string; name?: string }
@@ -16,7 +17,7 @@ export interface ComposeInitialState {
   attachments?: import('../types').EmailAttachment[];
 }
 interface ComposerViewProps {
-  accounts: ComposerAccount[]; defaultAccountId: string; initialState?: ComposeInitialState;
+  accounts: ComposerAccount[]; defaultAccountId: string; initialState?: ComposeInitialState; contacts?: Contact[];
   onDiscardClick: () => void;
   onSendClick: (message: { mailboxId: string; from: string; to: string; cc?: string; bcc?: string; subject: string; body: string; bodyHtml?: string }) => Promise<void>;
   onSent?: () => void;
@@ -40,13 +41,14 @@ const insertSignatureBeforeQuote = (html: string, signature?: MailSignature | nu
   return quoteIndex >= 0 ? `${clean.slice(0, quoteIndex)}${sig}${clean.slice(quoteIndex)}` : `${clean}${sig}`;
 };
 
-export const ComposerView: React.FC<ComposerViewProps> = ({ accounts, defaultAccountId, initialState, onDiscardClick, onSendClick, onSent }) => {
+export const ComposerView: React.FC<ComposerViewProps> = ({ accounts, defaultAccountId, initialState, contacts = [], onDiscardClick, onSendClick, onSent }) => {
   const [fromMailboxId, setFromMailboxId] = useState(initialState?.mailboxId ?? defaultAccountId);
   const [to, setTo] = useState(initialState?.to ?? '');
   const [cc, setCc] = useState(initialState?.cc ?? '');
   const [bcc, setBcc] = useState(initialState?.bcc ?? '');
   const [showCc, setShowCc] = useState(!!initialState?.cc?.trim());
   const [showBcc, setShowBcc] = useState(!!initialState?.bcc?.trim());
+  const [contactPickerTarget, setContactPickerTarget] = useState<'to' | 'cc' | 'bcc' | null>(null);
   const [subject, setSubject] = useState(initialState?.subject ?? '');
   const [bodyHtml, setBodyHtml] = useState(initialState?.bodyHtml ?? textToHtml(initialState?.body ?? ''));
   const [draftId, setDraftId] = useState<string | null>(initialState?.draftId ?? null);
@@ -90,6 +92,16 @@ export const ComposerView: React.FC<ComposerViewProps> = ({ accounts, defaultAcc
   const currentHtml = () => bodyRef.current?.innerHTML ?? bodyHtml;
   const setEditorHtml = (html: string) => { setBodyHtml(html); if (bodyRef.current) bodyRef.current.innerHTML = html; };
   const finalHtml = () => insertSignatureBeforeQuote(currentHtml(), selectedSignature);
+  const currentRecipientValue = () => contactPickerTarget === 'cc' ? cc : contactPickerTarget === 'bcc' ? bcc : to;
+  const applyContactSelection = (emails: string[]) => {
+    const unique = new Set(currentRecipientValue().split(',').map((value) => value.trim()).filter(Boolean));
+    emails.forEach((email) => unique.add(email.trim().toLowerCase()));
+    const value = [...unique].join(', ');
+    if (contactPickerTarget === 'cc') setCc(value);
+    else if (contactPickerTarget === 'bcc') setBcc(value);
+    else setTo(value);
+    setContactPickerTarget(null);
+  };
 
   useEffect(() => setFromMailboxId(initialState?.mailboxId ?? defaultAccountId), [defaultAccountId, initialState?.mailboxId]);
   useEffect(() => {
@@ -443,10 +455,21 @@ export const ComposerView: React.FC<ComposerViewProps> = ({ accounts, defaultAcc
     </div></div>
     <div style={{ flex: 1, padding: '14px', display: 'flex', justifyContent: 'center', overflowY: 'auto' }}><div className="card" style={{ width: '100%', display: 'flex', flexDirection: 'column', height: '100%', padding: 0, overflow: 'hidden' }}>
       <div style={{ padding: '14px 18px 0' }}><div className="compose-header"><div className="from-selector"><span style={{ color: 'var(--neutral-body)' }}>From:</span><select className="input-base" value={fromMailboxId} onChange={(e) => setFromMailboxId(e.target.value)}>{accounts.map((a) => <option key={a.id} value={a.id}>{a.name && a.name !== a.address ? `${a.name} <${a.address}>` : a.address}</option>)}</select><span style={{ color: 'var(--neutral-body)' }}>Signature:</span><select className="input-base" value={signatureId} onChange={(e) => setSignatureId(e.target.value)}><option value="">None</option>{signatures.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
-      <div className="compose-row"><div className="pill-label">To</div><input className="compose-input" placeholder="Enter recipients..." value={to} onChange={(e) => setTo(e.target.value)} /><button type="button" className="btn btn-ghost" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => setShowCc((v) => !v)}>Cc</button><button type="button" className="btn btn-ghost" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => setShowBcc((v) => !v)}>Bcc</button></div>
-      {showCc && <div className="compose-row"><div className="pill-label">Cc</div><input className="compose-input" placeholder="Cc recipients..." value={cc} onChange={(e) => setCc(e.target.value)} /></div>}
-      {showBcc && <div className="compose-row"><div className="pill-label">Bcc</div><input className="compose-input" placeholder="Bcc recipients..." value={bcc} onChange={(e) => setBcc(e.target.value)} /></div>}
+      <div className="compose-row"><div className="pill-label">To</div><input className="compose-input" placeholder="Enter recipients..." value={to} onChange={(e) => setTo(e.target.value)} /><button type="button" className="btn btn-outline" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => setContactPickerTarget('to')}>Contacts</button><button type="button" className="btn btn-ghost" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => setShowCc((v) => !v)}>Cc</button><button type="button" className="btn btn-ghost" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => setShowBcc((v) => !v)}>Bcc</button></div>
+      {showCc && <div className="compose-row"><div className="pill-label">Cc</div><input className="compose-input" placeholder="Cc recipients..." value={cc} onChange={(e) => setCc(e.target.value)} /><button type="button" className="btn btn-outline" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => setContactPickerTarget('cc')}>Contacts</button></div>}
+      {showBcc && <div className="compose-row"><div className="pill-label">Bcc</div><input className="compose-input" placeholder="Bcc recipients..." value={bcc} onChange={(e) => setBcc(e.target.value)} /><button type="button" className="btn btn-outline" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => setContactPickerTarget('bcc')}>Contacts</button></div>}
       <div className="compose-row" style={{ paddingBottom: 10 }}><input className="subject-input" placeholder="Add a subject" value={subject} onChange={(e) => setSubject(e.target.value)} style={{ fontSize: '1.15rem', padding: '6px 8px' }} /></div></div></div>
+
+    {contactPickerTarget && (
+      <ContactPickerDialog
+        open={!!contactPickerTarget}
+        target={contactPickerTarget}
+        contacts={contacts}
+        currentValue={currentRecipientValue()}
+        onApply={applyContactSelection}
+        onClose={() => setContactPickerTarget(null)}
+      />
+    )}
 
     { (persistedAttachments.length > 0 || pendingAttachments.length > 0) && (
       <div style={{ padding: '10px 18px', display: 'flex', gap: 8, flexWrap: 'wrap', borderBottom: '1px solid var(--neutral-border)' }}>

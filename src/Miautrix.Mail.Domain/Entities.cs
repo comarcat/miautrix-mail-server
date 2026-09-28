@@ -132,6 +132,9 @@ public class Mailbox : TenantScopedEntityBase
     public string Address { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string Kind { get; set; } = "user";
+    public string? Organization { get; set; }
+    public string? Department { get; set; }
+    public string? Phone { get; set; }
     public long QuotaBytes { get; set; } = 10L * 1024 * 1024 * 1024;
     public long UsedBytes { get; set; }
     public bool IsActive { get; set; } = true;
@@ -202,6 +205,46 @@ public class MailSignature : TenantScopedEntityBase
     public string ContentText { get; set; } = string.Empty;
     public string? ContentHtml { get; set; }
     public bool IsDefault { get; set; }
+}
+
+public class Contact : TenantScopedEntityBase
+{
+    public Guid UserId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string? Organization { get; set; }
+    public string? Department { get; set; }
+    public string? Phone { get; set; }
+}
+
+public class CalendarEvent : TenantScopedEntityBase
+{
+    public Guid UserId { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public DateTimeOffset StartTime { get; set; }
+    public DateTimeOffset EndTime { get; set; }
+    public string? Location { get; set; }
+    public string? Organizer { get; set; }
+    public string Status { get; set; } = "confirmed";
+    public string Visibility { get; set; } = "private";
+    public string ShowAs { get; set; } = "busy";
+}
+
+public class CalendarEventAttendee : TenantScopedEntityBase
+{
+    public Guid EventId { get; set; }
+    public string Email { get; set; } = string.Empty;
+    public string? DisplayName { get; set; }
+    public string Role { get; set; } = "required";
+    public bool IsExternal { get; set; }
+    public string ResponseStatus { get; set; } = "needs_action";
+    public DateTimeOffset? RespondedAt { get; set; }
+    public string? TokenHash { get; set; }
+    public DateTimeOffset? TokenExpiresAt { get; set; }
+    public DateTimeOffset? ProposedStartTime { get; set; }
+    public DateTimeOffset? ProposedEndTime { get; set; }
+    public string? ProposalNote { get; set; }
+    public Guid? MirroredEventId { get; set; }
 }
 
 public class Attachment : TenantScopedEntityBase

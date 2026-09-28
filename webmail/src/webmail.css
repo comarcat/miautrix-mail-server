@@ -907,6 +907,124 @@ h3 { font-size: 26px; line-height: 1.12; letter-spacing: -0.26px; }
   border-left: 2px solid var(--iris-violet);
 }
 
+.wm-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: rgba(11, 31, 58, 0.42);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.wm-modal-panel {
+  width: min(720px, 100%);
+  max-height: min(760px, 92vh);
+  background: var(--surface-card);
+  border: 1px solid var(--neutral-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lvl3);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.wm-modal-header,
+.wm-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--neutral-border);
+}
+
+.wm-modal-header h2 {
+  margin: 0;
+  color: var(--deep-navy);
+  font-size: 1.25rem;
+}
+
+.wm-modal-header p {
+  margin: 4px 0 0;
+  color: var(--neutral-body);
+  font-size: 13px;
+}
+
+.wm-modal-footer {
+  border-top: 1px solid var(--neutral-border);
+  border-bottom: none;
+  color: var(--neutral-label);
+  font-size: 13px;
+}
+
+.contact-picker-search {
+  margin: 16px 18px 12px;
+  width: calc(100% - 36px);
+}
+
+.contact-picker-list {
+  overflow-y: auto;
+  padding: 0 18px 12px;
+}
+
+.contact-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--neutral-border);
+  border-radius: var(--radius-md);
+  margin-bottom: 8px;
+  cursor: pointer;
+  background: var(--pure-white);
+}
+
+.contact-picker-row:hover,
+.contact-picker-row.selected {
+  border-color: var(--iris-violet);
+  background: rgba(83, 58, 253, 0.06);
+}
+
+.contact-picker-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.contact-picker-name {
+  color: var(--deep-navy);
+  font-weight: 600;
+}
+
+.contact-picker-email,
+.contact-picker-meta,
+.contact-picker-empty {
+  color: var(--neutral-body);
+  font-size: 13px;
+}
+
+.contact-picker-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.contact-picker-badge {
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--neutral-border);
+  color: var(--deep-navy);
+  font-size: 11px;
+  text-transform: uppercase;
+  background: var(--surface-canvas);
+}
+
+.contact-picker-badge.muted {
+  color: var(--neutral-label);
+}
+
 .wm-context-menu {
   position: fixed;
   z-index: 1000;

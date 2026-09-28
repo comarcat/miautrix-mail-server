@@ -8,6 +8,7 @@ using Miautrix.Mail.Identity;
 using Miautrix.Mail.Infrastructure.Backup;
 using Miautrix.Mail.Infrastructure.MailboxArchiving;
 using Miautrix.Mail.Persistence;
+using Miautrix.Mail.Protocols.Sieve;
 using Miautrix.Mail.Protocols.Smtp;
 using Miautrix.Mail.Queue;
 using Miautrix.Mail.Security;
@@ -81,6 +82,15 @@ public class Program
         builder.Services.AddScoped<IMailQueueService, MailQueueService>();
         builder.Services.AddScoped<IMailboxService, MailboxService>();
         builder.Services.AddScoped<IMessageService, MessageService>();
+        builder.Services.AddScoped<IContactService, ContactService>();
+        builder.Services.AddSingleton(new CalendarInvitationOptions
+        {
+            PublicBaseUrl = Environment.GetEnvironmentVariable("MIAUTRIX_PUBLIC_BASE_URL") ?? string.Empty
+        });
+        builder.Services.AddScoped<ICalendarService, CalendarService>();
+        builder.Services.AddScoped<ISieveRuleService, SieveRuleService>();
+        builder.Services.AddScoped<SieveParser>();
+        builder.Services.AddScoped<SieveScriptService>();
         builder.Services.AddScoped<IAuthService, AuthService>();
         builder.Services.AddScoped<IAdminService, AdminService>();
 

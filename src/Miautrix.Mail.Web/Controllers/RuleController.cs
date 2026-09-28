@@ -11,7 +11,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Miautrix.Mail.Web.Controllers;
 
 [ApiController]
-[Route("api/v1/mail/rules")]
+[Route("api/v1/admin/mail/rules")]
 public sealed class RuleController : ControllerBase
 {
     private readonly IAdminService _adminService;

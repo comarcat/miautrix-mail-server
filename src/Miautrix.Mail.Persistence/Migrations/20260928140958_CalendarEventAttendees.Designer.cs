@@ -3,6 +3,7 @@ using System;
 using Miautrix.Mail.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Miautrix.Mail.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260928140958_CalendarEventAttendees")]
+    partial class CalendarEventAttendees
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -819,10 +822,6 @@ namespace Miautrix.Mail.Persistence.Migrations
                         .HasColumnType("text")
                         .HasColumnName("address");
 
-                    b.Property<string>("Department")
-                        .HasColumnType("text")
-                        .HasColumnName("department");
-
                     b.Property<Guid>("DomainId")
                         .HasColumnType("uuid")
                         .HasColumnName("domain_id");
@@ -840,14 +839,6 @@ namespace Miautrix.Mail.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("name");
-
-                    b.Property<string>("Organization")
-                        .HasColumnType("text")
-                        .HasColumnName("organization");
-
-                    b.Property<string>("Phone")
-                        .HasColumnType("text")
-                        .HasColumnName("phone");
 
                     b.Property<long>("QuotaBytes")
                         .HasColumnType("bigint")

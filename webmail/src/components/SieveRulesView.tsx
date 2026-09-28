@@ -22,9 +22,10 @@ interface FlagAlertConfig {
 interface SieveRulesViewProps {
   initialRules: SieveFilterRule[];
   mailboxId: string;
+  onRulesChanged: (rules: SieveFilterRule[]) => void;
 }
 
-export const SieveRulesView: React.FC<SieveRulesViewProps> = ({ initialRules, mailboxId }) => {
+export const SieveRulesView: React.FC<SieveRulesViewProps> = ({ initialRules, mailboxId, onRulesChanged }) => {
   const [rules, setRules] = useState<SieveFilterRule[]>(initialRules);
   const [newRuleName, setNewRuleName] = useState('');
   const [newRuleField, setNewRuleField] = useState<'from' | 'subject' | 'to' | 'header'>('subject');
@@ -48,15 +49,31 @@ export const SieveRulesView: React.FC<SieveRulesViewProps> = ({ initialRules, ma
   const [signatureHtml, setSignatureHtml] = useState('');
   const [editingSignatureId, setEditingSignatureId] = useState<string | null>(null);
   const [signatureDefault, setSignatureDefault] = useState(false);
+  const [ruleError, setRuleError] = useState('');
 
   const loadSignatures = async () => {
     const res = await webmailClient.getSignatures().catch(() => ({ data: [] }));
     setSignatures(res.data);
   };
 
+  const loadRules = async () => {
+    if (!mailboxId) return;
+    const res = await webmailClient.getSieveRules(mailboxId).catch(() => ({ data: [] }));
+    setRules(res.data);
+    onRulesChanged(res.data);
+  };
+
   useEffect(() => {
     void loadSignatures();
   }, []);
+
+  useEffect(() => {
+    setRules(initialRules);
+  }, [initialRules]);
+
+  useEffect(() => {
+    void loadRules();
+  }, [mailboxId]);
 
   useEffect(() => {
     if (!mailboxId) return;
@@ -141,32 +158,49 @@ export const SieveRulesView: React.FC<SieveRulesViewProps> = ({ initialRules, ma
     setSignatureDefault(signature.isDefault);
   };
 
-  const handleAddRule = (e: React.FormEvent) => {
+  const handleAddRule = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newRuleName || !newRuleValue) return;
+    if (!mailboxId || !newRuleName || !newRuleValue) return;
+    setRuleError('');
 
-    const newRule: SieveFilterRule = {
-      id: `rule-${Date.now()}`,
-      name: newRuleName,
-      field: newRuleField,
-      comparator: 'contains',
-      value: newRuleValue,
-      action: newRuleAction,
-      targetFolder: newRuleTarget,
-      active: true,
-    };
-
-    setRules([...rules, newRule]);
-    setNewRuleName('');
-    setNewRuleValue('');
+    try {
+      await webmailClient.createSieveRule(mailboxId, {
+        name: newRuleName,
+        field: newRuleField,
+        comparator: 'contains',
+        value: newRuleValue,
+        action: newRuleAction,
+        targetFolder: newRuleTarget,
+        active: true,
+      });
+      setNewRuleName('');
+      setNewRuleValue('');
+      await loadRules();
+    } catch (err: any) {
+      setRuleError(err?.message ?? 'Failed to save filter rule.');
+    }
   };
 
-  const toggleRuleActive = (id: string) => {
-    setRules(rules.map((r) => (r.id === id ? { ...r, active: !r.active } : r)));
+  const toggleRuleActive = async (rule: SieveFilterRule) => {
+    if (!mailboxId) return;
+    setRuleError('');
+    try {
+      await webmailClient.setSieveRuleActive(mailboxId, rule.id, !rule.active);
+      await loadRules();
+    } catch (err: any) {
+      setRuleError(err?.message ?? 'Failed to update filter rule.');
+    }
   };
 
-  const deleteRule = (id: string) => {
-    setRules(rules.filter((r) => r.id !== id));
+  const deleteRule = async (id: string) => {
+    if (!mailboxId) return;
+    setRuleError('');
+    try {
+      await webmailClient.deleteSieveRule(mailboxId, id);
+      await loadRules();
+    } catch (err: any) {
+      setRuleError(err?.message ?? 'Failed to delete filter rule.');
+    }
   };
 
   return (
@@ -249,6 +283,7 @@ export const SieveRulesView: React.FC<SieveRulesViewProps> = ({ initialRules, ma
 
           <div className="card" style={{ marginBottom: '32px' }}>
             <h3 style={{ fontSize: '1.25rem', marginBottom: '16px' }}>Create Sieve Rule</h3>
+            {ruleError && <div style={{ color: 'var(--danger-red)', fontSize: '13px', marginBottom: '12px' }}>{ruleError}</div>}
             <form onSubmit={handleAddRule}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '16px' }}>
                 <div>
@@ -420,7 +455,7 @@ export const SieveRulesView: React.FC<SieveRulesViewProps> = ({ initialRules, ma
                       <input
                         type="checkbox"
                         checked={r.active}
-                        onChange={() => toggleRuleActive(r.id)}
+                        onChange={() => void toggleRuleActive(r)}
                         style={{ accentColor: 'var(--iris-violet)', width: '16px', height: '16px' }}
                       />
                     </td>
@@ -436,7 +471,7 @@ export const SieveRulesView: React.FC<SieveRulesViewProps> = ({ initialRules, ma
                         type="button"
                         className="btn btn-ghost"
                         style={{ color: 'var(--accent-ruby)', padding: '4px 8px', fontSize: '13px' }}
-                        onClick={() => deleteRule(r.id)}
+                        onClick={() => void deleteRule(r.id)}
                       >
                         Delete
                       </button>

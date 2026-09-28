@@ -98,16 +98,55 @@ export interface Contact {
   department?: string;
   phone?: string;
   book: 'personal' | 'directory';
+  kind?: 'user' | 'shared' | 'group' | string | null;
+  canEdit?: boolean;
+}
+
+export interface CalendarAttendee {
+  id: string;
+  email: string;
+  displayName?: string | null;
+  role: 'required' | 'optional' | string;
+  isExternal: boolean;
+  responseStatus: 'needs_action' | 'accepted' | 'tentative' | 'declined' | 'reschedule_proposed' | string;
+  respondedAt?: string | null;
+  proposedStartTime?: string | null;
+  proposedEndTime?: string | null;
+  proposalNote?: string | null;
+}
+
+export interface CalendarInvitee {
+  email: string;
+  displayName?: string | null;
+  role?: 'required' | 'optional' | string;
 }
 
 export interface CalendarEvent {
   id: string;
+  userId?: string;
   title: string;
   startTime: string;
   endTime: string;
-  location?: string;
-  organizer: string;
+  location?: string | null;
+  organizer?: string | null;
   status: 'confirmed' | 'tentative' | 'cancelled';
+  visibility?: 'private' | 'public';
+  showAs?: 'free' | 'busy' | 'tentative' | 'out_of_office';
+  attendees?: CalendarAttendee[];
+  invitees?: CalendarInvitee[];
+  sendInvitations?: boolean;
+}
+
+export interface CalendarAvailability {
+  userId: string;
+  displayName: string;
+  email: string;
+  busy: Array<{
+    startTime: string;
+    endTime: string;
+    showAs: string;
+    title?: string | null;
+  }>;
 }
 
 export interface MailSignature {

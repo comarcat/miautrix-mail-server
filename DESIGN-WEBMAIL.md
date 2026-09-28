@@ -77,8 +77,10 @@ dependencies: ["lucide-react"]
 
 ## Current Implementation Notes
 
-- Webmail now includes persisted draft attachments, rich composer formatting, sanitized inline image sizing, mail signatures, and recursive personal-folder rendering.
+- Webmail now includes persisted draft attachments, rich composer formatting, sanitized inline image sizing, mail signatures, recursive personal-folder rendering, working Personal Contacts, editable Company Directory fields, and an address-book dialog for compose/reply/forward recipients.
 - Personal folders are rendered as a tree by `parentId`; root folders are only folders with no parent, and children remain under their actual parent even after drag/drop moves.
+- Company Directory entries come from active tenant mailbox/group addresses, are domain-filtered, and allow owner/admin edits for name, organization, department, and phone.
+- The composer recipient picker reuses loaded Personal Contacts and Company Directory contacts for `To`, `Cc`, and `Bcc` without changing send/draft API payload shapes.
 - Custom folder deletion requires confirmation; when folder counts indicate mails/messages exist, the prompt explicitly warns that mails/messages are inside.
 
 ## AI Build Instructions

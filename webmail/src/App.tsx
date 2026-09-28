@@ -51,6 +51,7 @@ export const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isInitializing, setIsInitializing] = useState<boolean>(true);
   const [currentUserEmail, setCurrentUserEmail] = useState<string>('');
+  const [currentUserRoles, setCurrentUserRoles] = useState<string[]>([]);
   const [mustChangePassword, setMustChangePassword] = useState<boolean>(false);
 
   const [activeTab, setActiveTab] = useState<'inbox' | 'compose' | 'contacts' | 'calendar' | 'rules'>('inbox');
@@ -66,6 +67,7 @@ export const App: React.FC = () => {
   const [activeFolderId, setActiveFolderId] = useState<string>('');
   const [composeInitialState, setComposeInitialState] = useState<ComposeInitialState>({ mode: 'new' });
   const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const canEditCompanyDirectory = currentUserRoles.includes('owner') || currentUserRoles.includes('admin');
 
   useEffect(() => {
     const username = currentUserEmail?.trim();
@@ -73,7 +75,7 @@ export const App: React.FC = () => {
   }, [currentUserEmail]);
 
 
-  const loadAppData = async () => {
+  const loadAppData = async (userEmail: string = currentUserEmail) => {
     setIsLoadingData(true);
     try {
       // 1. Get user's mailbox account(s)
@@ -83,7 +85,7 @@ export const App: React.FC = () => {
         return;
       }
       const accounts = mbRes.data.map((m: any) => normalizeMailboxAccount(m));
-      const primaryMailbox = accounts.find((m) => m.address.toLowerCase() === currentUserEmail.toLowerCase()) ?? accounts[0];
+      const primaryMailbox = accounts.find((m) => m.address.toLowerCase() === userEmail.toLowerCase()) ?? accounts[0];
       const sharedAccounts = accounts.filter((m) => m.id !== primaryMailbox.id && m.kind === 'shared');
       setMailboxAccounts(accounts);
       setSelectedMailboxAccount(primaryMailbox.id);
@@ -92,30 +94,10 @@ export const App: React.FC = () => {
       const [folderRes, sharedFolderResults, ctRes, evRes, ruleRes] = await Promise.all([
         webmailClient.getFolders(primaryMailbox.id),
         Promise.all(sharedAccounts.map((account) => webmailClient.getFolders(account.id).catch(() => ({ data: [] })))),
-        webmailClient.getContacts().catch(() => ({ data: [] })),
+        webmailClient.getContacts().catch((err) => { console.error('Contacts failed:', err); return { data: [] }; }),
         webmailClient.getCalendarEvents().catch(() => ({ data: [] })),
-        webmailClient.getSieveRules().catch(() => ({ data: [] })),
+        webmailClient.getSieveRules(primaryMailbox.id).catch(() => ({ data: [] })),
       ]);
-
-      const isTestEnv =
-        typeof (globalThis as any).vi !== 'undefined' ||
-        (typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent));
-
-      const fallbackContacts: Contact[] = [
-        {
-          id: 'c-miautrix-postmaster',
-          name: 'Miautrix Postmaster',
-          email: 'postmaster@miautrix.org',
-          organization: 'Miautrix',
-          book: 'personal',
-        },
-      ];
-
-      // Webmail unit tests don't mock /api/v1/contacts reliably in this repo,
-      // so we keep deterministic UI content for assertions.
-      const resolvedContacts = ctRes.data.length === 0 ? fallbackContacts : ctRes.data;
-
-      void isTestEnv;
 
       const folders = mapFolders(folderRes.data, primaryMailbox);
       const sharedGroups = sharedAccounts.map((account, index) => ({
@@ -125,7 +107,10 @@ export const App: React.FC = () => {
 
       setMailboxes(folders);
       setSharedMailboxGroups(sharedGroups);
-      setContacts(resolvedContacts);
+
+      const allContacts = ctRes.data.filter((c: Contact) => c.book === 'personal' || c.book === 'directory');
+      setContacts(allContacts);
+
       setEvents(evRes.data);
       setRules(ruleRes.data);
 
@@ -149,24 +134,30 @@ export const App: React.FC = () => {
       if (!token) {
         setIsAuthenticated(false);
         setMustChangePassword(false);
+        setCurrentUserRoles([]);
         setIsInitializing(false);
         return;
       }
 
       try {
         const res = await webmailClient.me();
-        setCurrentUserEmail(res.data.email || '');
+        const userEmail = res.data.email || '';
+        setCurrentUserEmail(userEmail);
+        webmailClient.setTenantId(res.data.tenant_id ?? res.data.tenantId ?? null);
+        webmailClient.setUserId(res.data.id ?? null);
 
         const flag = !!(res.data.must_change_password ?? res.data.mustChangePassword);
         setMustChangePassword(flag);
+        setCurrentUserRoles((res.data.roles ?? []).map((role: string) => role.toLowerCase()));
 
         setIsAuthenticated(true);
-        await loadAppData();
+        await loadAppData(userEmail);
       } catch (err) {
         console.error('Failed to initialize app', err);
         webmailClient.logout();
         setIsAuthenticated(false);
         setMustChangePassword(false);
+        setCurrentUserRoles([]);
       } finally {
         setIsInitializing(false);
       }
@@ -611,15 +602,18 @@ export const App: React.FC = () => {
   if (!isAuthenticated) {
     return (
       <LoginView
-        onLoginSuccess={async (email) => {
-          const res = await webmailClient.me();
-          setCurrentUserEmail(res.data.email || email);
+        onLoginSuccess={async (user) => {
+          const userEmail = user.email || '';
+          setCurrentUserEmail(userEmail);
+          webmailClient.setTenantId(user.tenant_id ?? user.tenantId ?? null);
+          webmailClient.setUserId(user.id ?? null);
 
-          const flag = !!(res.data.must_change_password ?? res.data.mustChangePassword);
+          const flag = !!(user.must_change_password ?? user.mustChangePassword);
           setMustChangePassword(flag);
+          setCurrentUserRoles((user.roles ?? []).map((role: string) => role.toLowerCase()));
 
           setIsAuthenticated(true);
-          await loadAppData();
+          await loadAppData(userEmail);
         }}
       />
     );
@@ -633,6 +627,7 @@ export const App: React.FC = () => {
           setCurrentUserEmail(res.data.email || currentUserEmail);
           const flag = !!(res.data.must_change_password ?? res.data.mustChangePassword);
           setMustChangePassword(flag);
+            setCurrentUserRoles((res.data.roles ?? []).map((role: string) => role.toLowerCase()));
         }}
       />
     );
@@ -737,6 +732,7 @@ export const App: React.FC = () => {
             accounts={mailboxAccounts.filter((account) => account.kind !== 'shared' || account.accessLevel === 'write')}
             defaultAccountId={writableComposeMailboxId()}
             initialState={composeInitialState}
+            contacts={contacts}
             onDiscardClick={() => setActiveTab('inbox')}
             onSendClick={handleSendEmail}
             onSent={handleRefreshMessages}
@@ -744,7 +740,10 @@ export const App: React.FC = () => {
         )}
         {activeTab === 'contacts' && (
           <ContactsView
-            contacts={contacts}
+            contacts={contacts.map((contact) => contact.book === 'directory'
+              ? { ...contact, canEdit: canEditCompanyDirectory }
+              : contact)}
+            onContactsChanged={(nextContacts) => setContacts(nextContacts)}
             onEmailContact={(email) => {
               setComposeInitialState({ mode: 'new', to: email });
               setActiveTab('compose');
@@ -752,10 +751,16 @@ export const App: React.FC = () => {
           />
         )}
         {activeTab === 'calendar' && (
-          <CalendarView events={events} />
+          <CalendarView
+            events={events}
+            onEventsChanged={(nextEvents) => setEvents(nextEvents)}
+            currentUserEmail={currentUserEmail}
+            contacts={contacts}
+            mailboxAccounts={mailboxAccounts}
+          />
         )}
         {activeTab === 'rules' && (
-          <SieveRulesView initialRules={rules} mailboxId={selectedMailboxAccount} />
+          <SieveRulesView initialRules={rules} mailboxId={selectedMailboxAccount} onRulesChanged={(nextRules) => setRules(nextRules)} />
         )}
       </div>
     </div>

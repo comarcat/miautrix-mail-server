@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Attachment = Miautrix.Mail.Domain.Attachment;
+using System.Net.Mail;
+
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
@@ -10,6 +13,7 @@ using Miautrix.Mail.Persistence;
 using Miautrix.Mail.Security;
 using Miautrix.Mail.Storage;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Miautrix.Mail.Application.Mail;
 
@@ -20,17 +24,20 @@ public sealed class MessageService : IMessageService
     private readonly IMailboxService _mailboxes;
 
     private readonly IMailStorage _storage;
+    private readonly ILogger<MessageService> _logger;
 
     public MessageService(
         AppDbContext db,
         ITenantAuthorizationHelper auth,
         IMailboxService mailboxes,
-        IMailStorage storage)
+        IMailStorage storage,
+        ILogger<MessageService> logger)
     {
         _db = db;
         _auth = auth;
         _mailboxes = mailboxes;
         _storage = storage;
+        _logger = logger;
     }
 
     public async Task<MessageListPage> ListMessagesAsync(
@@ -638,8 +645,106 @@ public sealed class MessageService : IMessageService
         }
 
         await _db.SaveChangesAsync(cancellationToken);
+        await AutoSaveRecipientContactsAsync(tenantId, userId, request.From, deliveryRecipients, cancellationToken);
 
         return new SendMessageResult(true, messageId, firstQueueItemId, "Message sent and queued for delivery.");
+    }
+
+    private async Task AutoSaveRecipientContactsAsync(Guid tenantId, Guid userId, string from, IReadOnlyList<string> recipients, CancellationToken cancellationToken)
+    {
+        var excluded = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (TryNormalizeEmail(from, out var fromAddress, out _))
+        {
+            excluded.Add(fromAddress);
+        }
+
+        var user = await _db.Users
+            .FirstOrDefaultAsync(u => u.TenantId == tenantId && u.Id == userId, cancellationToken);
+        if (user != null && TryNormalizeEmail(user.Email, out var normalizedUserEmail, out _))
+        {
+            excluded.Add(normalizedUserEmail);
+        }
+
+        var candidates = recipients
+            .Select(r => TryNormalizeEmail(r, out var email, out var displayName) ? (Email: email, DisplayName: displayName) : default)
+            .Where(r => !string.IsNullOrWhiteSpace(r.Email) && !excluded.Contains(r.Email))
+            .GroupBy(r => r.Email, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First())
+            .ToList();
+
+        if (candidates.Count == 0)
+        {
+            return;
+        }
+
+        var candidateEmails = candidates.Select(c => c.Email).ToList();
+        var existingEmails = await _db.Contacts
+            .Where(c => c.TenantId == tenantId && c.UserId == userId && candidateEmails.Contains(c.Email))
+            .Select(c => c.Email)
+            .Union(_db.Mailboxes
+                .Where(m => m.TenantId == tenantId && m.IsActive && candidateEmails.Contains(m.Address))
+                .Select(m => m.Address))
+            .Union(_db.Groups
+                .Where(g => g.TenantId == tenantId && candidateEmails.Contains(g.Address))
+                .Select(g => g.Address))
+            .ToListAsync(cancellationToken);
+
+        var existing = existingEmails.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var now = DateTimeOffset.UtcNow;
+
+        foreach (var candidate in candidates.Where(c => !existing.Contains(c.Email)))
+        {
+            _db.Contacts.Add(new Contact
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                UserId = userId,
+                Name = string.IsNullOrWhiteSpace(candidate.DisplayName) ? candidate.Email.Split('@')[0] : candidate.DisplayName,
+                Email = candidate.Email,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+        }
+
+        if (!_db.ChangeTracker.Entries<Contact>().Any(e => e.State == EntityState.Added))
+        {
+            return;
+        }
+
+        try
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex)
+        {
+            _logger.LogWarning(ex, "Recipient contact autosave skipped after message send due to a persistence race.");
+            foreach (var entry in _db.ChangeTracker.Entries<Contact>().Where(e => e.State == EntityState.Added))
+            {
+                entry.State = EntityState.Detached;
+            }
+        }
+    }
+
+    private static bool TryNormalizeEmail(string raw, out string email, out string? displayName)
+    {
+        email = string.Empty;
+        displayName = null;
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return false;
+        }
+
+        try
+        {
+            var address = new MailAddress(raw.Trim());
+            email = address.Address.Trim().ToLowerInvariant();
+            displayName = string.IsNullOrWhiteSpace(address.DisplayName) ? null : address.DisplayName.Trim();
+            return email.Contains('@', StringComparison.Ordinal);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
     }
 
     private Task<Folder> GetOrCreateSentFolderAsync(Guid tenantId, Guid mailboxId, CancellationToken cancellationToken) =>

@@ -104,6 +104,38 @@ describe('Webmail SPA UI Flow', () => {
       vi.spyOn(webmailClient, 'me').mockResolvedValue({
         data: { id: 'u1', email: 'alex.vance@miautrix.org' },
       });
+      vi.spyOn(webmailClient, 'getMailboxes').mockResolvedValue({
+        data: [{ id: 'mb1', address: 'alex.vance@miautrix.org', name: 'Alex Vance', kind: 'user', accessLevel: 'write', quotaBytes: 0, usedBytes: 0 } as any],
+      });
+      vi.spyOn(webmailClient, 'getFolders').mockResolvedValue({
+        data: [{ id: 'inbox', name: 'Inbox', role: 'inbox', unreadEmails: 1, totalEmails: 1 } as any],
+      });
+      vi.spyOn(webmailClient, 'getMessages').mockResolvedValue({
+        data: [{
+          id: 'm1',
+          mailboxId: 'mb1',
+          folderId: 'inbox',
+          from: { name: 'Miautrix Security Ops', email: 'security@miautrix.org' },
+          to: [{ name: 'Alex Vance', email: 'alex.vance@miautrix.org' }],
+          subject: 'Quarterly TLS & Security Audit Completed',
+          snippet: 'Security audit summary',
+          bodyHtml: '<p>Security audit summary</p>',
+          receivedAt: '2026-09-18T10:00:00Z',
+          isUnread: true,
+          securityChecks: { spfPass: true, dkimPass: true, dmarcPass: true },
+          attachments: [],
+        } as any],
+      });
+      vi.spyOn(webmailClient, 'getContacts').mockResolvedValue({
+        data: [
+          { id: 'c1', name: 'Miautrix Postmaster', email: 'postmaster@miautrix.org', organization: 'Miautrix', book: 'personal' },
+          { id: 'c2', name: 'Security Team', email: 'security-team@miautrix.org', organization: 'Miautrix', book: 'directory', kind: 'group' },
+        ],
+      });
+      vi.spyOn(webmailClient, 'getCalendarEvents').mockResolvedValue({ data: [] });
+      vi.spyOn(webmailClient, 'getSieveRules').mockResolvedValue({
+        data: [{ id: 'r1', name: 'Move Jira Notifications', field: 'from', comparator: 'contains', value: 'jira', action: 'fileinto', targetFolder: 'Jira', active: true }],
+      });
     });
 
     it('renders webmail navigation tabs and default inbox messages', async () => {
@@ -135,6 +167,12 @@ describe('Webmail SPA UI Flow', () => {
 
       expect(screen.getByPlaceholderText('Add a subject')).toBeInTheDocument();
       expect(screen.getByPlaceholderText('Enter recipients...')).toBeInTheDocument();
+      fireEvent.click(screen.getAllByRole('button', { name: 'Contacts' }).at(-1)!);
+      expect(screen.getByRole('dialog', { name: /select to recipients/i })).toBeInTheDocument();
+      expect(screen.getByText('Security Team')).toBeInTheDocument();
+      fireEvent.click(screen.getByLabelText(/security-team@miautrix.org/i));
+      fireEvent.click(screen.getByRole('button', { name: /add selected/i }));
+      expect(screen.getByPlaceholderText('Enter recipients...')).toHaveValue('security-team@miautrix.org');
     });
 
     it('navigates to Contacts view and allows searching contacts', async () => {
@@ -162,7 +200,7 @@ describe('Webmail SPA UI Flow', () => {
       fireEvent.click(rulesTab);
 
       expect(screen.getByRole('heading', { level: 1, name: /managesieve filter rules/i })).toBeInTheDocument();
-      expect(screen.getByText('Move Jira Notifications')).toBeInTheDocument();
+      expect(screen.getAllByText('Move Jira Notifications')[0]).toBeInTheDocument();
     });
   });
 });

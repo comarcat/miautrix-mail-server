@@ -51,6 +51,15 @@ public sealed class IdempotencyMiddleware
             return;
         }
 
+        // Public calendar RSVP forms are reached from invitation emails and cannot be expected to
+        // provide a custom header. These mutations are idempotent by state instead: repeating the
+        // same response writes the same attendee status.
+        if (path.StartsWith("/api/v1/public", StringComparison.OrdinalIgnoreCase))
+        {
+            await _next(context);
+            return;
+        }
+
         var idempotencyKey = context.Request.Headers["Idempotency-Key"].FirstOrDefault();
         if (string.IsNullOrWhiteSpace(idempotencyKey))
         {

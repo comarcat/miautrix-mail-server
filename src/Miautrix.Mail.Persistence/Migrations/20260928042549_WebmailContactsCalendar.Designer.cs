@@ -3,6 +3,7 @@ using System;
 using Miautrix.Mail.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Miautrix.Mail.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260928042549_WebmailContactsCalendar")]
+    partial class WebmailContactsCalendar
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -263,83 +266,6 @@ namespace Miautrix.Mail.Persistence.Migrations
                         .HasDatabaseName("idx_calendar_events_tenant_id_user_id_start_time");
 
                     b.ToTable("calendar_events", (string)null);
-                });
-
-            modelBuilder.Entity("Miautrix.Mail.Domain.CalendarEventAttendee", b =>
-                {
-                    b.HasBaseType("Miautrix.Mail.Domain.TenantScopedEntityBase");
-
-                    b.Property<string>("DisplayName")
-                        .HasColumnType("text")
-                        .HasColumnName("display_name");
-
-                    b.Property<string>("Email")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("email");
-
-                    b.Property<Guid>("EventId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("event_id");
-
-                    b.Property<bool>("IsExternal")
-                        .HasColumnType("boolean")
-                        .HasColumnName("is_external");
-
-                    b.Property<Guid?>("MirroredEventId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("mirrored_event_id");
-
-                    b.Property<string>("ProposalNote")
-                        .HasColumnType("text")
-                        .HasColumnName("proposal_note");
-
-                    b.Property<DateTimeOffset?>("ProposedEndTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("proposed_end_time");
-
-                    b.Property<DateTimeOffset?>("ProposedStartTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("proposed_start_time");
-
-                    b.Property<DateTimeOffset?>("RespondedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("responded_at");
-
-                    b.Property<string>("ResponseStatus")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("response_status");
-
-                    b.Property<string>("Role")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("role");
-
-                    b.Property<DateTimeOffset?>("TokenExpiresAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("token_expires_at");
-
-                    b.Property<string>("TokenHash")
-                        .HasColumnType("text")
-                        .HasColumnName("token_hash");
-
-                    b.HasIndex("TokenHash")
-                        .IsUnique()
-                        .HasDatabaseName("uq_calendar_event_attendees_token_hash")
-                        .HasFilter("token_hash IS NOT NULL");
-
-                    b.HasIndex("TenantId", "Email")
-                        .HasDatabaseName("idx_calendar_event_attendees_tenant_id_email");
-
-                    b.HasIndex("TenantId", "EventId")
-                        .HasDatabaseName("idx_calendar_event_attendees_tenant_id_event_id");
-
-                    b.HasIndex("TenantId", "EventId", "Email")
-                        .IsUnique()
-                        .HasDatabaseName("uq_calendar_event_attendees_tenant_id_event_id_email");
-
-                    b.ToTable("calendar_event_attendees", (string)null);
                 });
 
             modelBuilder.Entity("Miautrix.Mail.Domain.Contact", b =>
@@ -819,10 +745,6 @@ namespace Miautrix.Mail.Persistence.Migrations
                         .HasColumnType("text")
                         .HasColumnName("address");
 
-                    b.Property<string>("Department")
-                        .HasColumnType("text")
-                        .HasColumnName("department");
-
                     b.Property<Guid>("DomainId")
                         .HasColumnType("uuid")
                         .HasColumnName("domain_id");
@@ -840,14 +762,6 @@ namespace Miautrix.Mail.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("name");
-
-                    b.Property<string>("Organization")
-                        .HasColumnType("text")
-                        .HasColumnName("organization");
-
-                    b.Property<string>("Phone")
-                        .HasColumnType("text")
-                        .HasColumnName("phone");
 
                     b.Property<long>("QuotaBytes")
                         .HasColumnType("bigint")

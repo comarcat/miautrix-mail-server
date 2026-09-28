@@ -37,6 +37,9 @@ public class AppDbContext : DbContext
     public DbSet<MessageFlag> MessageFlags => Set<MessageFlag>();
     public DbSet<FlagAlertConfiguration> FlagAlertConfigurations => Set<FlagAlertConfiguration>();
     public DbSet<MailSignature> MailSignatures => Set<MailSignature>();
+    public DbSet<Contact> Contacts => Set<Contact>();
+    public DbSet<CalendarEvent> CalendarEvents => Set<CalendarEvent>();
+    public DbSet<CalendarEventAttendee> CalendarEventAttendees => Set<CalendarEventAttendee>();
     public DbSet<Attachment> Attachments => Set<Attachment>();
     public DbSet<Alias> Aliases => Set<Alias>();
     public DbSet<Group> Groups => Set<Group>();
@@ -194,6 +197,9 @@ public class AppDbContext : DbContext
             entity.Property(e => e.Address).HasColumnName("address").IsRequired();
             entity.Property(e => e.Name).HasColumnName("name").IsRequired();
             entity.Property(e => e.Kind).HasColumnName("kind").IsRequired();
+            entity.Property(e => e.Organization).HasColumnName("organization");
+            entity.Property(e => e.Department).HasColumnName("department");
+            entity.Property(e => e.Phone).HasColumnName("phone");
             entity.Property(e => e.QuotaBytes).HasColumnName("quota_bytes");
             entity.Property(e => e.UsedBytes).HasColumnName("used_bytes");
             entity.Property(e => e.IsActive).HasColumnName("is_active");
@@ -283,6 +289,70 @@ public class AppDbContext : DbContext
             entity.HasIndex(e => new { e.TenantId, e.UserId, e.Name })
                 .IsUnique()
                 .HasDatabaseName("uq_mail_signatures_tenant_id_user_id_name");
+        });
+
+        ConfigureTenantScoped<Contact>(modelBuilder, "contacts");
+        modelBuilder.Entity<Contact>(entity =>
+        {
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.Name).HasColumnName("name").IsRequired();
+            entity.Property(e => e.Email).HasColumnName("email").IsRequired();
+            entity.Property(e => e.Organization).HasColumnName("organization");
+            entity.Property(e => e.Department).HasColumnName("department");
+            entity.Property(e => e.Phone).HasColumnName("phone");
+
+            entity.HasIndex(e => new { e.TenantId, e.UserId })
+                .HasDatabaseName("idx_contacts_tenant_id_user_id");
+            entity.HasIndex(e => new { e.TenantId, e.UserId, e.Email })
+                .IsUnique()
+                .HasDatabaseName("uq_contacts_tenant_id_user_id_email");
+        });
+
+        ConfigureTenantScoped<CalendarEvent>(modelBuilder, "calendar_events");
+        modelBuilder.Entity<CalendarEvent>(entity =>
+        {
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.Title).HasColumnName("title").IsRequired();
+            entity.Property(e => e.StartTime).HasColumnName("start_time");
+            entity.Property(e => e.EndTime).HasColumnName("end_time");
+            entity.Property(e => e.Location).HasColumnName("location");
+            entity.Property(e => e.Organizer).HasColumnName("organizer");
+            entity.Property(e => e.Status).HasColumnName("status").IsRequired();
+            entity.Property(e => e.Visibility).HasColumnName("visibility").IsRequired();
+            entity.Property(e => e.ShowAs).HasColumnName("show_as").IsRequired();
+
+            entity.HasIndex(e => new { e.TenantId, e.UserId, e.StartTime })
+                .HasDatabaseName("idx_calendar_events_tenant_id_user_id_start_time");
+        });
+
+        ConfigureTenantScoped<CalendarEventAttendee>(modelBuilder, "calendar_event_attendees");
+        modelBuilder.Entity<CalendarEventAttendee>(entity =>
+        {
+            entity.Property(e => e.EventId).HasColumnName("event_id");
+            entity.Property(e => e.Email).HasColumnName("email").IsRequired();
+            entity.Property(e => e.DisplayName).HasColumnName("display_name");
+            entity.Property(e => e.Role).HasColumnName("role").IsRequired();
+            entity.Property(e => e.IsExternal).HasColumnName("is_external");
+            entity.Property(e => e.ResponseStatus).HasColumnName("response_status").IsRequired();
+            entity.Property(e => e.RespondedAt).HasColumnName("responded_at");
+            entity.Property(e => e.TokenHash).HasColumnName("token_hash");
+            entity.Property(e => e.TokenExpiresAt).HasColumnName("token_expires_at");
+            entity.Property(e => e.ProposedStartTime).HasColumnName("proposed_start_time");
+            entity.Property(e => e.ProposedEndTime).HasColumnName("proposed_end_time");
+            entity.Property(e => e.ProposalNote).HasColumnName("proposal_note");
+            entity.Property(e => e.MirroredEventId).HasColumnName("mirrored_event_id");
+
+            entity.HasIndex(e => new { e.TenantId, e.EventId })
+                .HasDatabaseName("idx_calendar_event_attendees_tenant_id_event_id");
+            entity.HasIndex(e => new { e.TenantId, e.Email })
+                .HasDatabaseName("idx_calendar_event_attendees_tenant_id_email");
+            entity.HasIndex(e => new { e.TenantId, e.EventId, e.Email })
+                .IsUnique()
+                .HasDatabaseName("uq_calendar_event_attendees_tenant_id_event_id_email");
+            entity.HasIndex(e => e.TokenHash)
+                .IsUnique()
+                .HasFilter("token_hash IS NOT NULL")
+                .HasDatabaseName("uq_calendar_event_attendees_token_hash");
         });
 
         ConfigureTenantScoped<Attachment>(modelBuilder, "attachments");

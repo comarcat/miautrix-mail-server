@@ -29,3 +29,4 @@ blueprint's verify command is the whole reason the acceptance criterion is trust
 - Does every new tenant-scoped query pass through the authorization helper?
 - Are new secrets excluded from logs?
 - Were migrations written forward-only?
+- For webmail composer/contact changes, run `pnpm --filter webmail build` and verify compose/new-reply-forward recipient flows still use the existing send/draft API payload shape.

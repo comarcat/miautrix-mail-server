@@ -1,4 +1,4 @@
-import type { Mailbox, EmailMessage, RawEmailMessage, Contact, CalendarEvent, SieveFilterRule, MailSignature, EmailAttachment } from '../types';
+import type { Mailbox, EmailMessage, RawEmailMessage, Contact, CalendarEvent, SieveFilterRule, MailSignature, EmailAttachment, CalendarAvailability } from '../types';
 
 const normalizeEmailAttachment = (a: any): EmailAttachment => ({
   id: a.id,
@@ -133,6 +133,10 @@ export class WebmailApiClient {
   }
 
   async login(email: string, password: string): Promise<WebmailLoginResult> {
+    this.setToken(null);
+    this.setTenantId(null);
+    this.setUserId(null);
+
     const idempotencyKey = typeof crypto !== 'undefined' && crypto.randomUUID
       ? crypto.randomUUID()
       : `idemp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -153,14 +157,16 @@ export class WebmailApiClient {
     }
 
     const result = await res.json();
+    const loginData = result.data ?? result.user ?? null;
     if (result.token) {
       this.setToken(result.token);
     }
-    if (result.data?.tenantId) {
-      this.setTenantId(result.data.tenantId);
+    const tenantId = loginData?.tenantId ?? loginData?.tenant_id;
+    if (tenantId) {
+      this.setTenantId(tenantId);
     }
-    if (result.data?.id) {
-      this.setUserId(result.data.id);
+    if (loginData?.id) {
+      this.setUserId(loginData.id);
     }
     return result as WebmailLoginResult;
   }
@@ -525,19 +531,228 @@ export class WebmailApiClient {
     await this.request(`/mail/signatures/${signatureId}/default`, { method: 'PUT' });
   }
 
+  private normalizeContact(item: any): Contact {
+    return {
+      id: item.id,
+      name: item.name ?? item.email ?? '',
+      email: item.email ?? '',
+      organization: item.organization ?? '',
+      department: item.department ?? undefined,
+      phone: item.phone ?? undefined,
+      book: item.book ?? 'personal',
+      kind: item.kind ?? null,
+      canEdit: item.canEdit ?? item.can_edit ?? false,
+    };
+  }
+
+  private normalizeCalendarEvent(item: any): CalendarEvent {
+    return {
+      id: item.id,
+      userId: item.userId ?? item.user_id,
+      title: item.title ?? 'Busy',
+      startTime: item.startTime ?? item.start_time,
+      endTime: item.endTime ?? item.end_time,
+      location: item.location ?? null,
+      organizer: item.organizer ?? null,
+      status: item.status ?? 'confirmed',
+      visibility: item.visibility ?? 'private',
+      showAs: item.showAs ?? item.show_as ?? 'busy',
+      attendees: (item.attendees ?? []).map((a: any) => ({
+        id: a.id,
+        email: a.email,
+        displayName: a.displayName ?? a.display_name ?? null,
+        role: a.role ?? 'required',
+        isExternal: !!(a.isExternal ?? a.is_external),
+        responseStatus: a.responseStatus ?? a.response_status ?? 'needs_action',
+        respondedAt: a.respondedAt ?? a.responded_at ?? null,
+        proposedStartTime: a.proposedStartTime ?? a.proposed_start_time ?? null,
+        proposedEndTime: a.proposedEndTime ?? a.proposed_end_time ?? null,
+        proposalNote: a.proposalNote ?? a.proposal_note ?? null,
+      })),
+    };
+  }
+
+  private normalizeSieveRule(item: any): SieveFilterRule {
+    return {
+      id: item.id,
+      name: item.name ?? '',
+      field: item.field ?? 'subject',
+      comparator: item.comparator ?? 'contains',
+      value: item.value ?? '',
+      action: item.action ?? 'fileinto',
+      targetFolder: item.targetFolder ?? item.target_folder ?? undefined,
+      active: !!(item.active ?? item.isActive ?? item.is_active),
+    };
+  }
+
   async getContacts(): Promise<{ data: Contact[] }> {
     const res = await this.request<any>('/contacts');
-    return this.normalizeArray<Contact>(res);
+    return { data: this.normalizeArray<any>(res).data.map((item) => this.normalizeContact(item)) };
   }
 
-  async getCalendarEvents(): Promise<{ data: CalendarEvent[] }> {
-    const res = await this.request<any>('/calendar/events');
-    return this.normalizeArray<CalendarEvent>(res);
+  private static contactBody(contact: Omit<Contact, 'id' | 'book'>) {
+    return JSON.stringify({
+      name: contact.name,
+      email: contact.email,
+      organization: contact.organization ?? null,
+      department: contact.department ?? null,
+      phone: contact.phone ?? null,
+    });
   }
 
-  async getSieveRules(): Promise<{ data: SieveFilterRule[] }> {
-    const res = await this.request<any>('/mail/rules');
-    return this.normalizeArray<SieveFilterRule>(res);
+  async createContact(contact: Omit<Contact, 'id' | 'book'>): Promise<{ data: Contact }> {
+    const res = await this.request<any>('/contacts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: WebmailApiClient.contactBody(contact),
+    });
+    return { data: this.normalizeContact(res?.data ?? res) };
+  }
+
+  async updateContact(contactId: string, contact: Omit<Contact, 'id' | 'book'>): Promise<{ data: Contact }> {
+    const res = await this.request<any>(`/contacts/${contactId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: WebmailApiClient.contactBody(contact),
+    });
+    return { data: this.normalizeContact(res?.data ?? res) };
+  }
+
+  async updateDirectoryContact(contactId: string, contact: Omit<Contact, 'id' | 'book'>): Promise<{ data: Contact }> {
+    const res = await this.request<any>(`/contacts/directory/${contactId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: WebmailApiClient.contactBody(contact),
+    });
+    return { data: this.normalizeContact(res?.data ?? res) };
+  }
+
+  async deleteContact(contactId: string): Promise<void> {
+    await this.request(`/contacts/${contactId}`, { method: 'DELETE' });
+  }
+
+  async getCalendarEvents(params: { from?: string; to?: string } = {}): Promise<{ data: CalendarEvent[] }> {
+    const query = new URLSearchParams();
+    if (params.from) query.set('from', params.from);
+    if (params.to) query.set('to', params.to);
+    const qs = query.toString();
+    const res = await this.request<any>(`/calendar/events${qs ? `?${qs}` : ''}`);
+    return { data: this.normalizeArray<any>(res).data.map((item) => this.normalizeCalendarEvent(item)) };
+  }
+
+  async getCalendarAvailability(params: { from: string; to: string; userIds?: string[] }): Promise<{ data: CalendarAvailability[] }> {
+    const query = new URLSearchParams({ from: params.from, to: params.to });
+    if (params.userIds?.length) query.set('user_ids', params.userIds.join(','));
+    const res = await this.request<any>(`/calendar/availability?${query.toString()}`);
+    return {
+      data: this.normalizeArray<any>(res).data.map((item) => ({
+        userId: item.userId ?? item.user_id,
+        displayName: item.displayName ?? item.display_name ?? item.email,
+        email: item.email,
+        busy: (item.busy ?? []).map((b: any) => ({
+          startTime: b.startTime ?? b.start_time,
+          endTime: b.endTime ?? b.end_time,
+          showAs: b.showAs ?? b.show_as ?? 'busy',
+          title: b.title ?? null,
+        })),
+      })),
+    };
+  }
+
+  // The API contract is snake_case (ApiJson.Options uses SnakeCaseLower) and rejects
+  // unknown members, so request bodies are serialized explicitly rather than passed through.
+  private static calendarEventBody(event: Omit<CalendarEvent, 'id'>) {
+    return JSON.stringify({
+      title: event.title,
+      start_time: event.startTime,
+      end_time: event.endTime,
+      location: event.location ?? null,
+      organizer: event.organizer ?? null,
+      status: event.status ?? 'confirmed',
+      visibility: event.visibility ?? 'private',
+      show_as: event.showAs ?? 'busy',
+      invitees: (event.invitees ?? []).map((invitee) => ({
+        email: invitee.email,
+        display_name: invitee.displayName ?? null,
+        role: invitee.role ?? 'required',
+      })),
+      send_invitations: event.sendInvitations ?? true,
+    });
+  }
+
+  async createCalendarEvent(event: Omit<CalendarEvent, 'id'>): Promise<{ data: CalendarEvent }> {
+    const res = await this.request<any>('/calendar/events', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: WebmailApiClient.calendarEventBody(event),
+    });
+    return { data: this.normalizeCalendarEvent(res?.data ?? res) };
+  }
+
+  async updateCalendarEvent(eventId: string, event: Omit<CalendarEvent, 'id'>): Promise<{ data: CalendarEvent }> {
+    const res = await this.request<any>(`/calendar/events/${eventId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: WebmailApiClient.calendarEventBody(event),
+    });
+    return { data: this.normalizeCalendarEvent(res?.data ?? res) };
+  }
+
+  async deleteCalendarEvent(eventId: string): Promise<void> {
+    await this.request(`/calendar/events/${eventId}`, { method: 'DELETE' });
+  }
+
+  async acceptRescheduleProposal(eventId: string, attendeeId: string): Promise<void> {
+    await this.request(`/calendar/events/${eventId}/attendees/${attendeeId}/accept-proposal`, {
+      method: 'POST',
+    });
+  }
+
+  async getSieveRules(mailboxId: string): Promise<{ data: SieveFilterRule[] }> {
+    const res = await this.request<any>(`/mail/rules?mailboxId=${encodeURIComponent(mailboxId)}`);
+    return { data: this.normalizeArray<any>(res).data.map((item) => this.normalizeSieveRule(item)) };
+  }
+
+  private static sieveRuleBody(rule: Omit<SieveFilterRule, 'id'>) {
+    return JSON.stringify({
+      name: rule.name,
+      field: rule.field,
+      comparator: rule.comparator,
+      value: rule.value,
+      action: rule.action,
+      target_folder: rule.targetFolder ?? null,
+      active: !!rule.active,
+    });
+  }
+
+  async createSieveRule(mailboxId: string, rule: Omit<SieveFilterRule, 'id'>): Promise<{ data: SieveFilterRule }> {
+    const res = await this.request<any>(`/mail/rules?mailboxId=${encodeURIComponent(mailboxId)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: WebmailApiClient.sieveRuleBody(rule),
+    });
+    return { data: this.normalizeSieveRule(res?.data ?? res) };
+  }
+
+  async updateSieveRule(mailboxId: string, ruleId: string, rule: Omit<SieveFilterRule, 'id'>): Promise<{ data: SieveFilterRule }> {
+    const res = await this.request<any>(`/mail/rules/${ruleId}?mailboxId=${encodeURIComponent(mailboxId)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: WebmailApiClient.sieveRuleBody(rule),
+    });
+    return { data: this.normalizeSieveRule(res?.data ?? res) };
+  }
+
+  async setSieveRuleActive(mailboxId: string, ruleId: string, active: boolean): Promise<void> {
+    await this.request(`/mail/rules/${ruleId}/active?mailboxId=${encodeURIComponent(mailboxId)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ active }),
+    });
+  }
+
+  async deleteSieveRule(mailboxId: string, ruleId: string): Promise<void> {
+    await this.request(`/mail/rules/${ruleId}?mailboxId=${encodeURIComponent(mailboxId)}`, { method: 'DELETE' });
   }
 }
 
