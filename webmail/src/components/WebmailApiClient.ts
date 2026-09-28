@@ -1,4 +1,12 @@
-import type { Mailbox, EmailMessage, RawEmailMessage, Contact, CalendarEvent, SieveFilterRule } from '../types';
+import type { Mailbox, EmailMessage, RawEmailMessage, Contact, CalendarEvent, SieveFilterRule, MailSignature, EmailAttachment } from '../types';
+
+const normalizeEmailAttachment = (a: any): EmailAttachment => ({
+  id: a.id,
+  name: a.file_name ?? a.fileName ?? 'attachment',
+  size: a.size_bytes ?? a.sizeBytes ?? 0,
+  contentType: a.content_type ?? a.contentType ?? 'application/octet-stream',
+  blobId: a.download_url ?? a.downloadUrl,
+});
 
 export interface WebmailLoginResult {
   data: any;
@@ -288,6 +296,8 @@ export class WebmailApiClient {
       folderId: d.folder_id,
       from: { name: d.sender, email: d.sender },
       to: [{ name: d.recipient, email: d.recipient }],
+      cc: (d.cc ?? d.cc_recipients ?? []).map ? (d.cc ?? d.cc_recipients ?? []).map((email: string) => ({ name: email, email })) : (d.cc ?? d.cc_recipients ?? '').split(',').map((email: string) => email.trim()).filter(Boolean).map((email: string) => ({ name: email, email })),
+      bcc: (d.bcc ?? d.bcc_recipients ?? []).map ? (d.bcc ?? d.bcc_recipients ?? []).map((email: string) => ({ name: email, email })) : (d.bcc ?? d.bcc_recipients ?? '').split(',').map((email: string) => email.trim()).filter(Boolean).map((email: string) => ({ name: email, email })),
       subject: d.subject,
       snippet: d.body_text ? String(d.body_text).slice(0, 80) : '',
       bodyHtml: d.body_html ?? d.bodyHtml ?? '',
@@ -380,18 +390,139 @@ export class WebmailApiClient {
     return { data: res?.data ?? res };
   }
 
-  async sendMessage(mailboxId: string, payload: { from: string; to: string; subject: string; body: string }): Promise<{ data: EmailMessage }> {
-    return this.request<{ data: EmailMessage }>(`/mailboxes/${mailboxId}/messages/send`, {
+  async deleteFolder(mailboxId: string, folderId: string): Promise<void> {
+    await this.request<any>(`/mailboxes/${mailboxId}/folders/${folderId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async sendMessage(mailboxId: string, payload: { from: string; to: string; cc?: string; bcc?: string; subject: string; body: string; bodyHtml?: string }): Promise<{ data: EmailMessage }> {
+    const res = await this.request<any>(`/mailboxes/${mailboxId}/messages/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         from: payload.from,
         to: payload.to.split(',').map((item) => item.trim()).filter(Boolean),
+        cc: (payload.cc ?? '').split(',').map((item) => item.trim()).filter(Boolean),
+        bcc: (payload.bcc ?? '').split(',').map((item) => item.trim()).filter(Boolean),
         subject: payload.subject,
-        bodyText: payload.body,
-        bodyHtml: `<p>${payload.body.replace(/\n/g, '<br/>')}</p>`,
+        body_text: payload.body,
+        body_html: payload.bodyHtml ?? `<p>${payload.body.replace(/\n/g, '<br/>')}</p>`,
       }),
     });
+
+    return { data: res?.data ?? res };
+  }
+
+  async upsertDraft(mailboxId: string, payload: { draftId?: string | null; from: string; to: string; cc?: string; bcc?: string; subject: string; body: string; bodyHtml?: string }): Promise<{ data: { draftId: string; success: boolean; message: string } }> {
+    const path = payload.draftId ? `/mailboxes/${mailboxId}/drafts/${payload.draftId}` : `/mailboxes/${mailboxId}/drafts`;
+    const res = await this.request<any>(path, {
+      method: payload.draftId ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: payload.from,
+        to: payload.to.split(',').map((item) => item.trim()).filter(Boolean),
+        cc: (payload.cc ?? '').split(',').map((item) => item.trim()).filter(Boolean),
+        bcc: (payload.bcc ?? '').split(',').map((item) => item.trim()).filter(Boolean),
+        subject: payload.subject,
+        body_text: payload.body,
+        body_html: payload.bodyHtml ?? `<p>${payload.body.replace(/\n/g, '<br/>')}</p>`,
+      }),
+    });
+
+    const data = res?.data ?? res;
+    return { data };
+  }
+
+  async sendDraft(mailboxId: string, draftId: string, payload: { from: string; to: string; cc?: string; bcc?: string; subject: string; body: string; bodyHtml?: string }): Promise<{ data: EmailMessage }> {
+    const res = await this.request<any>(`/mailboxes/${mailboxId}/drafts/${draftId}/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: payload.from,
+        to: payload.to.split(',').map((item) => item.trim()).filter(Boolean),
+        cc: (payload.cc ?? '').split(',').map((item) => item.trim()).filter(Boolean),
+        bcc: (payload.bcc ?? '').split(',').map((item) => item.trim()).filter(Boolean),
+        subject: payload.subject,
+        body_text: payload.body,
+        body_html: payload.bodyHtml ?? `<p>${payload.body.replace(/\n/g, '<br/>')}</p>`,
+      }),
+    });
+
+    return { data: res?.data ?? res };
+  }
+
+  async discardDraft(mailboxId: string, draftId: string): Promise<void> {
+    await this.request(`/mailboxes/${mailboxId}/drafts/${draftId}`, { method: 'DELETE' });
+  }
+
+  async uploadDraftAttachments(mailboxId: string, draftId: string, files: File[]): Promise<{ data: EmailAttachment[] }> {
+    const form = new FormData();
+    for (const file of files) {
+      form.append('files', file);
+    }
+
+    const path = `/mailboxes/${mailboxId}/drafts/${draftId}/attachments`;
+    // Use this.request so the shared Idempotency-Key header is injected for POST.
+    const json = await this.request<any>(path, {
+      method: 'POST',
+      body: form,
+    });
+
+    const raw = json?.data ?? json;
+    const attachments = (raw ?? []).map(normalizeEmailAttachment);
+
+    return { data: attachments };
+  }
+
+  async deleteDraftAttachment(mailboxId: string, draftId: string, attachmentId: string): Promise<void> {
+    await this.request(`/mailboxes/${mailboxId}/drafts/${draftId}/attachments/${attachmentId}`, { method: 'DELETE' });
+  }
+
+  async getSignatures(): Promise<{ data: MailSignature[] }> {
+    const res = await this.request<any>('/mail/signatures');
+    const raw = this.normalizeArray<any>(res).data;
+    return {
+      data: raw.map((item) => ({
+        id: item.id,
+        name: item.name,
+        contentText: item.contentText ?? item.content_text ?? '',
+        contentHtml: item.contentHtml ?? item.content_html ?? null,
+        isDefault: !!(item.isDefault ?? item.is_default),
+      })),
+    };
+  }
+
+  async saveSignature(signature: Partial<MailSignature> & { name: string; contentText: string }): Promise<{ data: MailSignature }> {
+    const path = signature.id ? `/mail/signatures/${signature.id}` : '/mail/signatures';
+    const res = await this.request<any>(path, {
+      method: signature.id ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: signature.name,
+        content_text: signature.contentText,
+        content_html: signature.contentHtml ?? null,
+        is_default: !!signature.isDefault,
+      }),
+    });
+    const item = res?.data ?? res;
+    return {
+      data: {
+        id: item.id,
+        name: item.name,
+        contentText: item.contentText ?? item.content_text ?? '',
+        contentHtml: item.contentHtml ?? item.content_html ?? null,
+        isDefault: !!(item.isDefault ?? item.is_default),
+      },
+    };
+  }
+
+  async deleteSignature(signatureId: string): Promise<void> {
+    await this.request(`/mail/signatures/${signatureId}`, { method: 'DELETE' });
+  }
+
+  async setDefaultSignature(signatureId: string): Promise<void> {
+    await this.request(`/mail/signatures/${signatureId}/default`, { method: 'PUT' });
   }
 
   async getContacts(): Promise<{ data: Contact[] }> {

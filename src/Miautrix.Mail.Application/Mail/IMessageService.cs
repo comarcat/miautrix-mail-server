@@ -53,11 +53,73 @@ public interface IMessageService
         Guid attachmentId,
         CancellationToken cancellationToken = default);
 
+    Task<AttachmentDto?> UploadDraftAttachmentAsync(
+        Guid tenantId,
+        Guid userId,
+        Guid mailboxId,
+        Guid draftId,
+        AttachmentUploadInput input,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> DeleteDraftAttachmentAsync(
+        Guid tenantId,
+        Guid userId,
+        Guid mailboxId,
+        Guid draftId,
+        Guid attachmentId,
+        CancellationToken cancellationToken = default);
+
     Task<SendMessageResult> SendMessageAsync(
         Guid tenantId,
         Guid userId,
         Guid mailboxId,
         SendMessageRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<DraftMessageResult> UpsertDraftAsync(
+        Guid tenantId,
+        Guid userId,
+        Guid mailboxId,
+        DraftMessageRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<SendMessageResult> SendDraftAsync(
+        Guid tenantId,
+        Guid userId,
+        Guid mailboxId,
+        Guid draftId,
+        DraftMessageRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> DiscardDraftAsync(
+        Guid tenantId,
+        Guid userId,
+        Guid mailboxId,
+        Guid draftId,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<MailSignatureDto>> ListSignaturesAsync(
+        Guid tenantId,
+        Guid userId,
+        CancellationToken cancellationToken = default);
+
+    Task<MailSignatureDto> UpsertSignatureAsync(
+        Guid tenantId,
+        Guid userId,
+        MailSignatureRequest request,
+        Guid? signatureId = null,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> DeleteSignatureAsync(
+        Guid tenantId,
+        Guid userId,
+        Guid signatureId,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> SetDefaultSignatureAsync(
+        Guid tenantId,
+        Guid userId,
+        Guid signatureId,
         CancellationToken cancellationToken = default);
 
     Task<bool> SetFlagAsync(

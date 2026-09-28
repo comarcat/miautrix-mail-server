@@ -35,7 +35,7 @@ public partial class UpdateFlagSystem : Migration
                 });
 
             migrationBuilder.CreateIndex(
-                name: "idx_license_events_tenant_id",
+                name: "idx_flag_alert_configurations_tenant_id",
                 table: "flag_alert_configurations",
                 column: "tenant_id");
         }

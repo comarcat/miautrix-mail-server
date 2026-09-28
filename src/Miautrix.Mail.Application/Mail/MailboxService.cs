@@ -104,6 +104,75 @@ public sealed class MailboxService : IMailboxService
         return new FolderDto(folder.Id, folder.MailboxId, folder.Name, folder.Role, folder.ParentId, 0, 0);
     }
 
+    public async Task<bool> DeleteFolderAsync(
+        Guid tenantId,
+        Guid userId,
+        Guid mailboxId,
+        Guid folderId,
+        CancellationToken cancellationToken = default)
+    {
+        var mailbox = await _db.Mailboxes
+            .FirstOrDefaultAsync(m => m.TenantId == tenantId && m.Id == mailboxId, cancellationToken);
+
+        _auth.AssertMailboxAccess(tenantId, userId, mailbox, requireWrite: true);
+
+        var folder = await _db.Folders
+            .FirstOrDefaultAsync(f => f.TenantId == tenantId && f.MailboxId == mailboxId && f.Id == folderId, cancellationToken);
+
+        if (folder is null)
+        {
+            return false;
+        }
+
+        // Only personal folders can be deleted.
+        if (!string.Equals(folder.Role, "custom", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        // Collect all descendant folders first so we can delete messages safely.
+        var folderIds = new List<Guid>();
+        var toVisit = new Queue<Guid>();
+        toVisit.Enqueue(folderId);
+
+        while (toVisit.Count > 0)
+        {
+            var current = toVisit.Dequeue();
+            folderIds.Add(current);
+
+            var children = await _db.Folders
+                .Where(f => f.TenantId == tenantId && f.MailboxId == mailboxId && f.ParentId == current)
+                .Select(f => f.Id)
+                .ToListAsync(cancellationToken);
+
+            foreach (var childId in children)
+            {
+                toVisit.Enqueue(childId);
+            }
+        }
+
+        // Delete messages in all these folders (this is destructive).
+        var messageIds = await _db.Messages
+            .Where(m => m.TenantId == tenantId && m.MailboxId == mailboxId && folderIds.Contains(m.FolderId))
+            .Select(m => m.Id)
+            .ToListAsync(cancellationToken);
+
+        if (messageIds.Count > 0)
+        {
+            // Keep ordering consistent with HardDeleteMessageAsync.
+            _db.Attachments.RemoveRange(_db.Attachments.Where(a => a.TenantId == tenantId && messageIds.Contains(a.MessageId)));
+            _db.MessageRecipients.RemoveRange(_db.MessageRecipients.Where(r => r.TenantId == tenantId && messageIds.Contains(r.MessageId)));
+            _db.MessageFlags.RemoveRange(_db.MessageFlags.Where(f => f.TenantId == tenantId && messageIds.Contains(f.MessageId)));
+            _db.Messages.RemoveRange(_db.Messages.Where(m => m.TenantId == tenantId && messageIds.Contains(m.Id)));
+        }
+
+        _db.Folders.RemoveRange(_db.Folders.Where(f => f.TenantId == tenantId && f.MailboxId == mailboxId && folderIds.Contains(f.Id)));
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return true;
+    }
+
+
     public async Task<IReadOnlyList<MailboxDto>> ListMailboxesAsync(
         Guid tenantId,
         Guid userId,
@@ -204,8 +273,10 @@ public sealed class MailboxService : IMailboxService
             var totalCount = await _db.Messages
                 .CountAsync(m => m.TenantId == tenantId && m.MailboxId == mailboxId && m.FolderId == folder.Id, cancellationToken);
 
-            var unreadCount = await _db.Messages
-                .CountAsync(m => m.TenantId == tenantId && m.MailboxId == mailboxId && m.FolderId == folder.Id && !m.IsRead, cancellationToken);
+            var unreadCount = folder.Role.Equals("drafts", StringComparison.OrdinalIgnoreCase)
+                ? totalCount
+                : await _db.Messages
+                    .CountAsync(m => m.TenantId == tenantId && m.MailboxId == mailboxId && m.FolderId == folder.Id && !m.IsRead, cancellationToken);
 
             result.Add(new FolderDto(
                 folder.Id,

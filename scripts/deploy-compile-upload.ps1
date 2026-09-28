@@ -83,6 +83,18 @@ param (
 
 $ErrorActionPreference = "Stop"
 
+# Ensure local tests/migrations use the same DB connection as the deployment worker.
+# (Worker env is configured from -DbConnectionFile; tests/migrations must use it too.)
+$conn = [Environment]::GetEnvironmentVariable("MIAUTRIX_DB_CONNECTION")
+if ([string]::IsNullOrWhiteSpace($conn) -and $DbConnectionFile) {
+    if (-not (Test-Path $DbConnectionFile)) { throw "DbConnectionFile not found: $DbConnectionFile" }
+    $conn = Get-Content $DbConnectionFile -Raw
+    $conn = $conn.Trim()
+    if ([string]::IsNullOrWhiteSpace($conn)) { throw "DbConnectionFile is empty: $DbConnectionFile" }
+    $env:MIAUTRIX_DB_CONNECTION = $conn
+    $env:ASPNETCORE_ENVIRONMENT = 'Production'
+}
+
 $RepoRoot = (Get-Item $PSScriptRoot).Parent.FullName
 
 $PublishDir = Join-Path $RepoRoot "publish"
@@ -120,13 +132,16 @@ if (Test-Path $PublishDir) {
 
 # 1) Optional: migrations + seeding
 if (-not $SkipMigrations) {
+    # Connection must match whatever tests use (see env injection above).
     $conn = [Environment]::GetEnvironmentVariable("MIAUTRIX_DB_CONNECTION")
     if ([string]::IsNullOrWhiteSpace($conn)) {
-        throw "MIAUTRIX_DB_CONNECTION must be set unless -SkipMigrations is used."
+        throw "MIAUTRIX_DB_CONNECTION must be set unless -SkipMigrations is used (or provide -DbConnectionFile)."
     }
+    # Ensure integration-test DB bootstrap sees the same connection.
+    $env:MIAUTRIX_DB_CONNECTION = $conn
 
     Write-Host "[1/6] Applying EF Core migrations..." -ForegroundColor Yellow
-    dotnet ef database update --project src/Miautrix.Mail.Persistence --startup-project src/Miautrix.Mail.Web
+    dotnet ef database update --project src/Miautrix.Mail.Persistence --startup-project src/Miautrix.Mail.Web --connection "$conn"
     if ($LASTEXITCODE -ne 0) { throw "Migrations failed; nothing was published." }
 
     if ($RunSeeding) {
@@ -166,9 +181,12 @@ Write-Host "[4/6] Uploading to LXC ($TargetIp) via SCP..." -ForegroundColor Gree
 Write-Host " -> Preparing target directories and stopping running service..." -ForegroundColor Green
 # The blob store must survive a deploy: it is never inside the uploaded payload, and this
 # step never removes files from the destination.
-$sshOut = & ssh -o StrictHostKeyChecking=no $Remote "systemctl stop miautrix-mail-worker || true; systemctl stop miautrix-mail || true;
+$sshOut = & ssh -o StrictHostKeyChecking=no -o PubkeyAuthentication=no -o PreferredAuthentications=password $Remote "systemctl stop miautrix-mail-worker || true; systemctl stop miautrix-mail || true;
   mkdir -p $RemoteRoot/app $RemoteRoot/worker $RemoteRoot/admin $RemoteRoot/webmail $RemoteRoot/data;
-  rm -rf $RemoteRoot/app/* $RemoteRoot/worker/*" 2>&1
+  rm -rf $RemoteRoot/app/* $RemoteRoot/worker/*"
+
+# NOTE: this script will prompt for SSH password interactively.
+# It does not inject passwords non-interactively.
 if ($LASTEXITCODE -ne 0) { throw "Target directory prep failed ($LASTEXITCODE): $sshOut" }
 
 Write-Host " -> Copying Backend Application..." -ForegroundColor Green

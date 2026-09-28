@@ -126,10 +126,10 @@
     "semantic_hash": "46b0780bd56312ea2d1bab391f179e89"
   },
   "src/Miautrix.Mail.Domain/Entities.cs": {
-    "mtime": 1790273128.3059382,
-    "seen": 1790276152.4645276,
-    "ast_hash": "291414bfd7cf9a72ea7267dfacebd761",
-    "semantic_hash": "291414bfd7cf9a72ea7267dfacebd761"
+    "mtime": 1790474522.7835596,
+    "seen": 1790482281.1119046,
+    "ast_hash": "f67107af8e6d96fd603c0cdd956f25b1",
+    "semantic_hash": ""
   },
   "src/Miautrix.Mail.Domain/Miautrix.Mail.Domain.csproj": {
     "mtime": 1789680051.3640544,
@@ -198,10 +198,10 @@
     "semantic_hash": "c0338c8aca0f49f41a0f856fcc38fb2b"
   },
   "src/Miautrix.Mail.Persistence/AppDbContext.cs": {
-    "mtime": 1790223358.8476684,
-    "seen": 1790276152.4666166,
-    "ast_hash": "84ea74c14f2cb0caa0f7a23f456c604c",
-    "semantic_hash": "84ea74c14f2cb0caa0f7a23f456c604c"
+    "mtime": 1790474527.5278442,
+    "seen": 1790482281.1119046,
+    "ast_hash": "e4ab128f96a0dab7569a0dd880fd9ee7",
+    "semantic_hash": ""
   },
   "src/Miautrix.Mail.Persistence/Miautrix.Mail.Persistence.csproj": {
     "mtime": 1789757375.6876905,
@@ -270,10 +270,10 @@
     "semantic_hash": "161c10821efce1910fe75d752238fd8d"
   },
   "src/Miautrix.Mail.Persistence/Migrations/AppDbContextModelSnapshot.cs": {
-    "mtime": 1790273139.6960459,
-    "seen": 1790276152.4666166,
-    "ast_hash": "542ebf324d012c59ed27f3c61a226934",
-    "semantic_hash": "542ebf324d012c59ed27f3c61a226934"
+    "mtime": 1790474575.7083285,
+    "seen": 1790482281.1119046,
+    "ast_hash": "125840b786960796bb7f1c79fcd61588",
+    "semantic_hash": ""
   },
   "src/Miautrix.Mail.Plugins/Miautrix.Mail.Plugins.csproj": {
     "mtime": 1789680079.13105,
@@ -390,10 +390,10 @@
     "semantic_hash": "4df29669660961430cf7eeca6275a0f2"
   },
   "src/Miautrix.Mail.Security/TenantAuthorizationHelper.cs": {
-    "mtime": 1789944766.6511807,
-    "seen": 1789953160.138975,
-    "ast_hash": "bc1fbba2e698a57c28287e7a5f6ac1c5",
-    "semantic_hash": "bc1fbba2e698a57c28287e7a5f6ac1c5"
+    "mtime": 1790479673.7059374,
+    "seen": 1790482281.1119046,
+    "ast_hash": "19682a9e4dd765b7f0808e1599b4311e",
+    "semantic_hash": ""
   },
   "src/Miautrix.Mail.Seeder/Miautrix.Mail.Seeder.csproj": {
     "mtime": 1789787394.629844,
@@ -510,10 +510,10 @@
     "semantic_hash": "26887a302b0c7de5ed8644fa7e4b29e4"
   },
   "tests/Miautrix.Mail.SecurityTests/Isolation/IsolationTests.cs": {
-    "mtime": 1789944880.530299,
-    "seen": 1789953160.138975,
-    "ast_hash": "0ea0941de2db959204230b52ee33cdf3",
-    "semantic_hash": "0ea0941de2db959204230b52ee33cdf3"
+    "mtime": 1790480093.7387564,
+    "seen": 1790482281.1119046,
+    "ast_hash": "d885de63f4163e30173047a844255f6e",
+    "semantic_hash": ""
   },
   "tests/Miautrix.Mail.SecurityTests/Miautrix.Mail.SecurityTests.csproj": {
     "mtime": 1789702498.5869412,
@@ -582,9 +582,9 @@
     "semantic_hash": ""
   },
   "PMI_Project_Charter_and_Plan.md": {
-    "mtime": 1790194956.7328148,
-    "seen": 1790195025.1380236,
-    "ast_hash": "930f6cf9db0db231c767ae1bc816fd77",
+    "mtime": 1790482293.3491046,
+    "seen": 1790482327.3825746,
+    "ast_hash": "a920bb05d3256da7fece0e227fb393a3",
     "semantic_hash": ""
   },
   "README.md": {
@@ -1350,10 +1350,10 @@
     "semantic_hash": "23f0f19ad684f083d5df070dc3a4c002"
   },
   "admin/src/test/setup.ts": {
-    "mtime": 1789733015.1853814,
-    "seen": 1789953160.1279836,
-    "ast_hash": "b6047cb48430aab17d0c9a3cec1e4bb5",
-    "semantic_hash": "b6047cb48430aab17d0c9a3cec1e4bb5"
+    "mtime": 1790306475.3543499,
+    "seen": 1790470749.989645,
+    "ast_hash": "dffd5559f5bf05a5981408158058556c",
+    "semantic_hash": ""
   },
   "admin/src/types.ts": {
     "mtime": 1790273382.1512015,
@@ -1368,10 +1368,10 @@
     "semantic_hash": "0352474ba2918efe13895edbc3780d94"
   },
   "admin/tsconfig.json": {
-    "mtime": 1789733095.5587811,
-    "seen": 1789953160.1279836,
-    "ast_hash": "2acdbb597f2f7e17a0b180cd8a123f31",
-    "semantic_hash": "2acdbb597f2f7e17a0b180cd8a123f31"
+    "mtime": 1790303873.9836338,
+    "seen": 1790470749.989645,
+    "ast_hash": "6776bcc25f2880c9cea277b67c56342c",
+    "semantic_hash": ""
   },
   "admin/vite.config.ts": {
     "mtime": 1789782909.5023777,
@@ -1416,10 +1416,10 @@
     "semantic_hash": "c6ea5e34f1fb8de605d0932b6e451f88"
   },
   "src/Miautrix.Mail.Persistence/EfPermissionRepository.cs": {
-    "mtime": 1789944364.9698327,
-    "seen": 1789953160.1342707,
-    "ast_hash": "bed271d6c8457450452d65765bd3aa58",
-    "semantic_hash": "bed271d6c8457450452d65765bd3aa58"
+    "mtime": 1790479708.5115378,
+    "seen": 1790482281.1119046,
+    "ast_hash": "0451a3816def5fb3fc7902ebfa9fb09c",
+    "semantic_hash": ""
   },
   "src/Miautrix.Mail.Persistence/Migrations/20260918181732_AddMembershipAndRolePermissionFks.Designer.cs": {
     "mtime": 1789756678.1482651,
@@ -1452,10 +1452,10 @@
     "semantic_hash": "a651854a09bb71e02c42e79aa72c85b2"
   },
   "src/Miautrix.Mail.Web/Contracts/RequestDtos.cs": {
-    "mtime": 1789757443.6207583,
-    "seen": 1789953160.138975,
-    "ast_hash": "13c876f893355a63a132011c00f68ada",
-    "semantic_hash": "13c876f893355a63a132011c00f68ada"
+    "mtime": 1790474687.2689216,
+    "seen": 1790482281.1119046,
+    "ast_hash": "21d33c1b95aac9e89c196aab9ccabfc6",
+    "semantic_hash": ""
   },
   "src/Miautrix.Mail.Web/Contracts/RuleDtos.cs": {
     "mtime": 1789757457.2785625,
@@ -1746,16 +1746,16 @@
     "semantic_hash": "029f4905006c1fffd96bc863e2d98d3e"
   },
   "webmail/package.json": {
-    "mtime": 1789765812.2850497,
-    "seen": 1789953160.138975,
-    "ast_hash": "bd6b6c8d8dec0316e7e656035c1b105d",
-    "semantic_hash": "bd6b6c8d8dec0316e7e656035c1b105d"
+    "mtime": 1790300943.298489,
+    "seen": 1790470749.9902086,
+    "ast_hash": "d81e7dfa61a41250069dded65c136cd7",
+    "semantic_hash": ""
   },
   "webmail/src/App.tsx": {
-    "mtime": 1789914406.7364638,
-    "seen": 1789953160.138975,
-    "ast_hash": "9a3844ce25d8af66bf83408ab40691f4",
-    "semantic_hash": "9a3844ce25d8af66bf83408ab40691f4"
+    "mtime": 1790487038.2953024,
+    "seen": 1790487165.833674,
+    "ast_hash": "ddd9671240b93a481a35be8dc0e9bff4",
+    "semantic_hash": ""
   },
   "webmail/src/components/CalendarView.tsx": {
     "mtime": 1789772860.6370802,
@@ -1764,10 +1764,10 @@
     "semantic_hash": "053315080e59399b0a32e3273ddba655"
   },
   "webmail/src/components/ComposerView.tsx": {
-    "mtime": 1789772054.6048486,
-    "seen": 1789953160.138975,
-    "ast_hash": "9e47dc41927db5721337be704c4a15c8",
-    "semantic_hash": "9e47dc41927db5721337be704c4a15c8"
+    "mtime": 1790480061.5113268,
+    "seen": 1790482281.1119046,
+    "ast_hash": "653f3d40d5e324ffc09fc09d9aac3357",
+    "semantic_hash": ""
   },
   "webmail/src/components/ContactsView.tsx": {
     "mtime": 1789772060.5429862,
@@ -1776,10 +1776,10 @@
     "semantic_hash": "32d12924339c9b801cfbf5ec79b142bf"
   },
   "webmail/src/components/InboxView.tsx": {
-    "mtime": 1789857513.5001311,
-    "seen": 1789953160.138975,
-    "ast_hash": "8143983cc1f00c0d20fb806e272666b7",
-    "semantic_hash": "8143983cc1f00c0d20fb806e272666b7"
+    "mtime": 1790487038.0923789,
+    "seen": 1790487165.833674,
+    "ast_hash": "039a6f8f5e4f585bf5d307d85e5e28d4",
+    "semantic_hash": ""
   },
   "webmail/src/components/LoginView.tsx": {
     "mtime": 1789914179.2902248,
@@ -1794,10 +1794,10 @@
     "semantic_hash": "83d1321b10cd6b40f9b3b1fcfa21891d"
   },
   "webmail/src/components/SieveRulesView.tsx": {
-    "mtime": 1789772072.5732608,
-    "seen": 1789953160.138975,
-    "ast_hash": "2a9e53f2c34f48527a6c6921bb0e98da",
-    "semantic_hash": "2a9e53f2c34f48527a6c6921bb0e98da"
+    "mtime": 1790487038.3322265,
+    "seen": 1790487165.833674,
+    "ast_hash": "f08875b41cbbf79ed62764e3fd615568",
+    "semantic_hash": ""
   },
   "webmail/src/main.tsx": {
     "mtime": 1789765222.253921,
@@ -1824,10 +1824,10 @@
     "semantic_hash": "2b9a2baf78ecc9cb14fc15edd668f0a9"
   },
   "webmail/src/types.ts": {
-    "mtime": 1789772026.9272442,
-    "seen": 1789953160.138975,
-    "ast_hash": "2fcafd9553f3aeeb2e1bd9db08b33a10",
-    "semantic_hash": "2fcafd9553f3aeeb2e1bd9db08b33a10"
+    "mtime": 1790479785.1147802,
+    "seen": 1790482281.1119046,
+    "ast_hash": "093e4ebd0a8d90fc500ab96cb5e47231",
+    "semantic_hash": ""
   },
   "webmail/tsconfig.app.json": {
     "mtime": 1789772851.4184327,
@@ -2412,14 +2412,14 @@
     "semantic_hash": "615e235f15b4b41e3519977620c2aa10"
   },
   "publish/app/Miautrix.Mail.Web.deps.json": {
-    "mtime": 1790275357.2906659,
-    "seen": 1790276152.4586065,
+    "mtime": 1790480740.7627952,
+    "seen": 1790482281.1119046,
     "ast_hash": "aafcc212d0160dada7541ef0902ecbb9",
-    "semantic_hash": "aafcc212d0160dada7541ef0902ecbb9"
+    "semantic_hash": ""
   },
   "publish/app/Miautrix.Mail.Web.runtimeconfig.json": {
-    "mtime": 1790275356.9305084,
-    "seen": 1790276152.4586065,
+    "mtime": 1790480740.467987,
+    "seen": 1790482281.1119046,
     "ast_hash": "3ae02902fa0fc55749114bce10b575d1",
     "semantic_hash": "3ae02902fa0fc55749114bce10b575d1"
   },
@@ -3600,34 +3600,34 @@
     "semantic_hash": "4ae68f740258ecc114194700f7706207"
   },
   "src/Miautrix.Mail.Application/Mail/IMailboxService.cs": {
-    "mtime": 1789944778.0395002,
-    "seen": 1789953160.1325686,
-    "ast_hash": "c5460525ab4be70a30fdbe8361b80551",
-    "semantic_hash": "c5460525ab4be70a30fdbe8361b80551"
+    "mtime": 1790351119.3576314,
+    "seen": 1790470749.989645,
+    "ast_hash": "5d360c4bbbe5356da23dc794052b11ed",
+    "semantic_hash": ""
   },
   "src/Miautrix.Mail.Application/Mail/IMessageService.cs": {
-    "mtime": 1789789178.7482347,
-    "seen": 1789953160.1325686,
-    "ast_hash": "caa8ed8a65d8e565e38619bfb061ab24",
-    "semantic_hash": "caa8ed8a65d8e565e38619bfb061ab24"
+    "mtime": 1790474628.516958,
+    "seen": 1790482281.1119046,
+    "ast_hash": "82553effb61b14cb0ab4848f4d7d15b4",
+    "semantic_hash": ""
   },
   "src/Miautrix.Mail.Application/Mail/MailContracts.cs": {
-    "mtime": 1789789171.3696663,
-    "seen": 1789953160.1325686,
-    "ast_hash": "7ac6c45e6c4938ab71b71982e2c959fa",
-    "semantic_hash": "7ac6c45e6c4938ab71b71982e2c959fa"
+    "mtime": 1790479668.7200034,
+    "seen": 1790482281.1119046,
+    "ast_hash": "feb3c91c2a680dfb085670e0b2ec6998",
+    "semantic_hash": ""
   },
   "src/Miautrix.Mail.Application/Mail/MailboxService.cs": {
-    "mtime": 1789962371.0835676,
-    "seen": 1790276152.4586065,
-    "ast_hash": "5a7cc291dcd2e9c8aafe5f5057ba0c9f",
-    "semantic_hash": "5a7cc291dcd2e9c8aafe5f5057ba0c9f"
+    "mtime": 1790479777.4899585,
+    "seen": 1790482281.1119046,
+    "ast_hash": "1678a885c701835b516044be4876cf25",
+    "semantic_hash": ""
   },
   "src/Miautrix.Mail.Application/Mail/MessageService.cs": {
-    "mtime": 1789946016.9251735,
-    "seen": 1789953160.1325686,
-    "ast_hash": "3432d17d5dbd93825085c0d5789b1bdf",
-    "semantic_hash": "3432d17d5dbd93825085c0d5789b1bdf"
+    "mtime": 1790480131.004161,
+    "seen": 1790482281.1119046,
+    "ast_hash": "bd75e04128053052702cf4450700fba0",
+    "semantic_hash": ""
   },
   "src/Miautrix.Mail.Persistence/Migrations/20260920005737_AddBackupJobColumns.Designer.cs": {
     "mtime": 1789865857.662019,
@@ -3654,16 +3654,16 @@
     "semantic_hash": "ad5b8cc82fac95054d27def19b1177c3"
   },
   "src/Miautrix.Mail.Web/Controllers/MailboxController.cs": {
-    "mtime": 1789789367.2010732,
-    "seen": 1789953160.138975,
-    "ast_hash": "799982f4d9ec6f4516b01afd3380b1a4",
-    "semantic_hash": "799982f4d9ec6f4516b01afd3380b1a4"
+    "mtime": 1790351155.9903343,
+    "seen": 1790470749.9902086,
+    "ast_hash": "ff713882037b0dd9a44287cc712995e5",
+    "semantic_hash": ""
   },
   "src/Miautrix.Mail.Web/Controllers/MessageController.cs": {
-    "mtime": 1789789379.5480247,
-    "seen": 1789953160.138975,
-    "ast_hash": "2079287a48e9066af71aaf49f34d0bec",
-    "semantic_hash": "2079287a48e9066af71aaf49f34d0bec"
+    "mtime": 1790474701.146619,
+    "seen": 1790482281.1119046,
+    "ast_hash": "a6adf5da55ff30fcf0b7fb2d4561f3e2",
+    "semantic_hash": ""
   },
   "src/Miautrix.Mail.Web/Controllers/QuarantineController.cs": {
     "mtime": 1790188177.2478504,
@@ -3708,15 +3708,15 @@
     "semantic_hash": "628424aaf0552aa44d21af119e2d1b31"
   },
   "webmail/src/components/WebmailApiClient.ts": {
-    "mtime": 1789914179.1818173,
-    "seen": 1789953160.138975,
-    "ast_hash": "5d1f22dc0497c5b84c42c552bf44750c",
-    "semantic_hash": "5d1f22dc0497c5b84c42c552bf44750c"
+    "mtime": 1790478717.399894,
+    "seen": 1790482281.1119046,
+    "ast_hash": "f7fc3f6c4ccf45e2cb34f58ef064cf1c",
+    "semantic_hash": ""
   },
   "migrations.sql": {
     "mtime": 1789787693.1218731,
-    "seen": 1790133280.4271019,
-    "ast_hash": "",
+    "seen": 1790485394.4401312,
+    "ast_hash": "9902ae9c1aeb571bf0ef6b23d090b8a4",
     "semantic_hash": ""
   },
   "admin/src/components/ChangePasswordView.tsx": {
@@ -3827,12 +3827,6 @@
     "ast_hash": "615e235f15b4b41e3519977620c2aa10",
     "semantic_hash": "615e235f15b4b41e3519977620c2aa10"
   },
-  "publish/webmail/assets/index-9M21bitv.js": {
-    "mtime": 1790275367.7912188,
-    "seen": 1790276152.4586065,
-    "ast_hash": "7b49801f9ea028c74d476139d9e3e1f2",
-    "semantic_hash": "7b49801f9ea028c74d476139d9e3e1f2"
-  },
   "publish/webmail/images/icons/webmail/_extraction.json": {
     "mtime": 1789782761.9153214,
     "seen": 1790276152.4586065,
@@ -3841,9 +3835,9 @@
   },
   "publish/worker/Miautrix.Mail.Worker.deps.json": {
     "mtime": 1790250475.6804447,
-    "seen": 1790276152.4586065,
+    "seen": 1790482281.1119046,
     "ast_hash": "63b1401094195689b8a2c3e4e96b5b61",
-    "semantic_hash": "63b1401094195689b8a2c3e4e96b5b61"
+    "semantic_hash": ""
   },
   "publish/worker/Miautrix.Mail.Worker.runtimeconfig.json": {
     "mtime": 1790250475.7131782,
@@ -3853,21 +3847,21 @@
   },
   "scripts/init-db-permissions.sql": {
     "mtime": 1789839391.504161,
-    "seen": 1790133280.4271019,
-    "ast_hash": "",
+    "seen": 1790485394.4401312,
+    "ast_hash": "6d5cd9bd694bf2500127165a95b285bd",
     "semantic_hash": ""
   },
   "scripts/inject-flow-mail-test.ps1": {
-    "mtime": 1790087444.6428018,
-    "seen": 1790276152.4586065,
-    "ast_hash": "8787d460e9ce5db2273b13d15bfb3561",
-    "semantic_hash": "8787d460e9ce5db2273b13d15bfb3561"
+    "mtime": 1790333305.615791,
+    "seen": 1790470749.989645,
+    "ast_hash": "e7a699bd468865cd22da192621615e18",
+    "semantic_hash": ""
   },
   "scripts/inject-flow-mail-test.sh": {
-    "mtime": 1789963248.0899923,
-    "seen": 1790276152.4586065,
-    "ast_hash": "c5fd3c398aa122ed1fb8828e95edfea0",
-    "semantic_hash": "c5fd3c398aa122ed1fb8828e95edfea0"
+    "mtime": 1790296619.9483585,
+    "seen": 1790470749.989645,
+    "ast_hash": "dba961995a5eb7a1cd017d1b7322cda1",
+    "semantic_hash": ""
   },
   "scripts/lxc-install-worker-env.sh": {
     "mtime": 1790249450.4325428,
@@ -4019,33 +4013,27 @@
     "ast_hash": "da58794980f46ae58adcdd286bf72479",
     "semantic_hash": "da58794980f46ae58adcdd286bf72479"
   },
-  "empty.txt": {
-    "mtime": 1789964262.945804,
-    "seen": 1790031773.338431,
-    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
-    "semantic_hash": ""
-  },
   "publish/admin/index.html": {
-    "mtime": 1790192741.267577,
-    "seen": 1790194542.5774527,
-    "ast_hash": "282380914a6cfa8c265e87cd5139f212",
+    "mtime": 1790484897.2269816,
+    "seen": 1790485394.4401312,
+    "ast_hash": "d5310b45c39e380fb261d14205115cba",
     "semantic_hash": ""
   },
   "publish/webmail/index.html": {
-    "mtime": 1790192743.2388928,
-    "seen": 1790194542.5774527,
-    "ast_hash": "4ccd099f13855db6dc377a7cd156f8cc",
+    "mtime": 1790484899.6387777,
+    "seen": 1790485394.4401312,
+    "ast_hash": "b03fe119e0c58c1be56875a04ffa3265",
     "semantic_hash": ""
   },
   "publish/admin/images/Admin-Icons.jpg": {
-    "mtime": 1789782762.0064578,
-    "seen": 1790031773.338431,
+    "mtime": 1789782762.0,
+    "seen": 1790485394.4401312,
     "ast_hash": "a2c50d6aedfcbc2ad0cbdd4c4c463fd5",
     "semantic_hash": ""
   },
   "publish/admin/images/AdminGUI-Dashboard-Reference.jpg": {
-    "mtime": 1789782761.9968233,
-    "seen": 1790031773.338431,
+    "mtime": 1789782761.0,
+    "seen": 1790485394.4401312,
     "ast_hash": "6e7d0eda52a8b1ade5db15cdaa5132b6",
     "semantic_hash": ""
   },
@@ -4074,8 +4062,8 @@
     "semantic_hash": ""
   },
   "publish/admin/images/Miautrix-Login-Page-Reference.jpg": {
-    "mtime": 1789782762.0897164,
-    "seen": 1790031773.338431,
+    "mtime": 1789782762.0,
+    "seen": 1790485394.4401312,
     "ast_hash": "4f09b0f9cac7cf9a6500f557bc7da2f9",
     "semantic_hash": ""
   },
@@ -4098,50 +4086,50 @@
     "semantic_hash": ""
   },
   "publish/admin/images/_login_ref_small.png": {
-    "mtime": 1789782761.9946654,
-    "seen": 1790031773.338431,
+    "mtime": 1789782761.0,
+    "seen": 1790485394.4401312,
     "ast_hash": "0df972d2ea0136f4e541d23b42baa7b7",
     "semantic_hash": ""
   },
   "publish/admin/images/icons/admin/access-control-policies.png": {
     "mtime": 1789782762.0262814,
-    "seen": 1790031773.338431,
+    "seen": 1790482281.1119046,
     "ast_hash": "b511f74c3745d40c6497a52d2085260d",
     "semantic_hash": ""
   },
   "publish/admin/images/icons/admin/alert-configuration-critical.png": {
-    "mtime": 1789782762.016893,
-    "seen": 1790031773.338431,
+    "mtime": 1789782762.0,
+    "seen": 1790485394.4401312,
     "ast_hash": "a0eb0c78c3530bd0666f3618f45e7091",
     "semantic_hash": ""
   },
   "publish/admin/images/icons/admin/alert-configuration-warning.png": {
-    "mtime": 1789782762.0158947,
-    "seen": 1790031773.338431,
+    "mtime": 1789782762.0,
+    "seen": 1790485394.4401312,
     "ast_hash": "49aad0e46a60f2ea797ed1a19f7875fd",
     "semantic_hash": ""
   },
   "publish/admin/images/icons/admin/archive-compliance.png": {
-    "mtime": 1789782762.013889,
-    "seen": 1790031773.338431,
+    "mtime": 1789782762.0,
+    "seen": 1790485394.4401312,
     "ast_hash": "c2cb86da87c985011e95e64f78681522",
     "semantic_hash": ""
   },
   "publish/admin/images/icons/admin/backup-restore.png": {
     "mtime": 1789782762.0230782,
-    "seen": 1790031773.338431,
+    "seen": 1790482281.1119046,
     "ast_hash": "92b2d5ffda85a8efc8f8e8f0584eff53",
     "semantic_hash": ""
   },
   "publish/admin/images/icons/admin/dashboard-customization.png": {
-    "mtime": 1789782762.0181787,
-    "seen": 1790031773.338431,
+    "mtime": 1789782762.0,
+    "seen": 1790485394.4401312,
     "ast_hash": "c85d85f77cdc4c9af54c6a97bd4f8b0b",
     "semantic_hash": ""
   },
   "publish/admin/images/icons/admin/destructive-disable-user.png": {
     "mtime": 1789782762.0262814,
-    "seen": 1790031773.338431,
+    "seen": 1790482281.1119046,
     "ast_hash": "87342ce5107c1f913708468b9bdb71e2",
     "semantic_hash": ""
   },
@@ -4153,13 +4141,13 @@
   },
   "publish/admin/images/icons/admin/exchange-transport-service.png": {
     "mtime": 1789782762.0240843,
-    "seen": 1790031773.338431,
+    "seen": 1790482281.1119046,
     "ast_hash": "5a9c2363a9aaf311090aacef92f700b9",
     "semantic_hash": ""
   },
   "publish/admin/images/icons/admin/info-help-documentation.png": {
     "mtime": 1789782762.0181787,
-    "seen": 1790031773.338431,
+    "seen": 1790482281.1119046,
     "ast_hash": "66aa0947c77289f1a48ef067a965f5ea",
     "semantic_hash": ""
   },
@@ -4170,20 +4158,20 @@
     "semantic_hash": ""
   },
   "publish/admin/images/icons/admin/mail-flow-analytics.png": {
-    "mtime": 1789782762.0262814,
-    "seen": 1790031773.338431,
+    "mtime": 1789782762.0,
+    "seen": 1790485394.4401312,
     "ast_hash": "87635a3b3280140de76bba51ac82d0b5",
     "semantic_hash": ""
   },
   "publish/admin/images/icons/admin/mailbox-cloud-sync.png": {
-    "mtime": 1789782762.0230782,
-    "seen": 1790031773.338431,
+    "mtime": 1789782762.0,
+    "seen": 1790485394.4401312,
     "ast_hash": "5877f3375143c9fc50a83dabb3d462a0",
     "semantic_hash": ""
   },
   "publish/admin/images/icons/admin/mailbox-databases.png": {
     "mtime": 1789782762.0206776,
-    "seen": 1790031773.338431,
+    "seen": 1790482281.1119046,
     "ast_hash": "a78d2c0af4c274a2d9b9925afff745aa",
     "semantic_hash": ""
   },
@@ -4195,7 +4183,7 @@
   },
   "publish/admin/images/icons/admin/reporting-data-export.png": {
     "mtime": 1789782762.014892,
-    "seen": 1790031773.338431,
+    "seen": 1790482281.1119046,
     "ast_hash": "d73c5112bde2ba79d8415cbc76f0e163",
     "semantic_hash": ""
   },
@@ -4213,7 +4201,7 @@
   },
   "publish/admin/images/icons/admin/system-settings.png": {
     "mtime": 1789782762.0218651,
-    "seen": 1790031773.338431,
+    "seen": 1790482281.1119046,
     "ast_hash": "7cadf88b216a6f49caf76af51b508f4d",
     "semantic_hash": ""
   },
@@ -4225,7 +4213,7 @@
   },
   "publish/admin/images/icons/admin/user-permissions.png": {
     "mtime": 1789782762.0262814,
-    "seen": 1790031773.338431,
+    "seen": 1790482281.1119046,
     "ast_hash": "e91c6e8a4200e7eb77281f0b7846b2b6",
     "semantic_hash": ""
   },
@@ -4237,43 +4225,43 @@
   },
   "publish/admin/images/icons/webmail/align-justify.png": {
     "mtime": 1789782762.0420425,
-    "seen": 1790031773.338431,
+    "seen": 1790482281.1119046,
     "ast_hash": "2c932a13659f24a3fccc2d95c88170ad",
     "semantic_hash": ""
   },
   "publish/admin/images/icons/webmail/align-left.png": {
     "mtime": 1789782762.0583732,
-    "seen": 1790031773.338431,
+    "seen": 1790482281.1119046,
     "ast_hash": "cc5adba730b2d362c24867f070f4f947",
     "semantic_hash": ""
   },
   "publish/admin/images/icons/webmail/align-right.png": {
     "mtime": 1789782762.0627863,
-    "seen": 1790031773.338431,
+    "seen": 1790482281.1119046,
     "ast_hash": "8ad519e6de4ecf443e9bccfd46383526",
     "semantic_hash": ""
   },
   "publish/admin/images/icons/webmail/all.png": {
     "mtime": 1789782762.0396843,
-    "seen": 1790031773.338431,
+    "seen": 1790482281.1119046,
     "ast_hash": "2434c79bcbfa606997ec8850e6b83a12",
     "semantic_hash": ""
   },
   "publish/admin/images/icons/webmail/archive-box.png": {
     "mtime": 1789782762.0420425,
-    "seen": 1790031773.338431,
+    "seen": 1790482281.1119046,
     "ast_hash": "d0ec0e37ee97cb3cf7f2a29974814cce",
     "semantic_hash": ""
   },
   "publish/admin/images/icons/webmail/archive.png": {
     "mtime": 1789782762.057182,
-    "seen": 1790031773.338431,
+    "seen": 1790482281.1119046,
     "ast_hash": "c4c0681b6bc70e82838c5d0728c9cef7",
     "semantic_hash": ""
   },
   "publish/admin/images/icons/webmail/attach-file.png": {
     "mtime": 1789782762.0396843,
-    "seen": 1790031773.338431,
+    "seen": 1790482281.1119046,
     "ast_hash": "633f1dc26b03090d040c9aaa2f084aaa",
     "semantic_hash": ""
   },
@@ -4284,26 +4272,26 @@
     "semantic_hash": ""
   },
   "publish/admin/images/icons/webmail/bold.png": {
-    "mtime": 1789782762.0657864,
-    "seen": 1790031773.338431,
+    "mtime": 1789782762.0,
+    "seen": 1790485394.4401312,
     "ast_hash": "d204b48a27c57e498df29bb46a75a197",
     "semantic_hash": ""
   },
   "publish/admin/images/icons/webmail/calendar.png": {
     "mtime": 1789782762.0490923,
-    "seen": 1790031773.338431,
+    "seen": 1790482281.1119046,
     "ast_hash": "581cc52cc3540b2171851c94787306c8",
     "semantic_hash": ""
   },
   "publish/admin/images/icons/webmail/compose-envelope.png": {
     "mtime": 1789782762.036077,
-    "seen": 1790031773.338431,
+    "seen": 1790482281.1119046,
     "ast_hash": "c40fa8fdf19f8196ea564ba009b82260",
     "semantic_hash": ""
   },
   "publish/admin/images/icons/webmail/compose-pencil.png": {
     "mtime": 1789782762.0671868,
-    "seen": 1790031773.338431,
+    "seen": 1790482281.1119046,
     "ast_hash": "936a2344177a53c30906a9278381a971",
     "semantic_hash": ""
   },
@@ -4321,13 +4309,13 @@
   },
   "publish/admin/images/icons/webmail/drafts.png": {
     "mtime": 1789782762.056182,
-    "seen": 1790031773.338431,
+    "seen": 1790482281.1119046,
     "ast_hash": "356a7ed1a4e9fa73f356eba8da01ee0b",
     "semantic_hash": ""
   },
   "publish/admin/images/icons/webmail/encrypt.png": {
     "mtime": 1789782762.030686,
-    "seen": 1790031773.338431,
+    "seen": 1790482281.1119046,
     "ast_hash": "b3e440cefe6b462a16b873bec5fb2850",
     "semantic_hash": ""
   },
@@ -4339,7 +4327,7 @@
   },
   "publish/admin/images/icons/webmail/flag.png": {
     "mtime": 1789782762.0420425,
-    "seen": 1790031773.338431,
+    "seen": 1790482281.1119046,
     "ast_hash": "287c6b0fa24ded09dc17db54d5e06076",
     "semantic_hash": ""
   },
@@ -4374,14 +4362,14 @@
     "semantic_hash": ""
   },
   "publish/admin/images/icons/webmail/italic.png": {
-    "mtime": 1789782762.0627863,
-    "seen": 1790132511.1130657,
+    "mtime": 1789782762.0,
+    "seen": 1790485394.4401312,
     "ast_hash": "484af957e120d1e3ce1018e887bfd5e0",
     "semantic_hash": ""
   },
   "publish/admin/images/icons/webmail/link.png": {
-    "mtime": 1789782762.057182,
-    "seen": 1790031773.338431,
+    "mtime": 1789782762.0,
+    "seen": 1790485394.4401312,
     "ast_hash": "8a8fd444b5afe2d2f8f178abdfdd77b4",
     "semantic_hash": ""
   },
@@ -4392,8 +4380,8 @@
     "semantic_hash": ""
   },
   "publish/admin/images/icons/webmail/list-view.png": {
-    "mtime": 1789782762.0349991,
-    "seen": 1790031773.338431,
+    "mtime": 1789782762.0,
+    "seen": 1790485394.4401312,
     "ast_hash": "0a28088f675b13f43f1b287828b7e1db",
     "semantic_hash": ""
   },
@@ -4422,8 +4410,8 @@
     "semantic_hash": ""
   },
   "publish/admin/images/icons/webmail/preferences.png": {
-    "mtime": 1789782762.0470853,
-    "seen": 1790132511.1130657,
+    "mtime": 1789782762.0,
+    "seen": 1790485394.4401312,
     "ast_hash": "de04075a7084fdb13ded96d2848420d9",
     "semantic_hash": ""
   },
@@ -4464,20 +4452,20 @@
     "semantic_hash": ""
   },
   "publish/admin/images/icons/webmail/settings.png": {
-    "mtime": 1789782762.0420425,
-    "seen": 1790132511.1130657,
+    "mtime": 1789782762.0,
+    "seen": 1790485394.4401312,
     "ast_hash": "73ea7787204f50c1b7d233c7387a2556",
     "semantic_hash": ""
   },
   "publish/admin/images/icons/webmail/sidebar.png": {
-    "mtime": 1789782762.0557413,
-    "seen": 1790132511.1130657,
+    "mtime": 1789782762.0,
+    "seen": 1790485394.4401312,
     "ast_hash": "fdef7a0b9a0794ee64f4b510a92fcc51",
     "semantic_hash": ""
   },
   "publish/admin/images/icons/webmail/simple-view.png": {
-    "mtime": 1789782762.0637853,
-    "seen": 1790132511.1130657,
+    "mtime": 1789782762.0,
+    "seen": 1790485394.4401312,
     "ast_hash": "7dad600b38bb2881ba148e50aaa8c359",
     "semantic_hash": ""
   },
@@ -4488,20 +4476,20 @@
     "semantic_hash": ""
   },
   "publish/admin/images/icons/webmail/strikethrough.png": {
-    "mtime": 1789782762.0,
-    "seen": 1790194542.5774527,
+    "mtime": 1789782762.0647857,
+    "seen": 1790482281.1119046,
     "ast_hash": "ee11a3a153c8bbfb7f08c3ea1f643e6b",
     "semantic_hash": ""
   },
   "publish/admin/images/icons/webmail/text-color.png": {
-    "mtime": 1789782762.0,
-    "seen": 1790194542.5774527,
+    "mtime": 1789782762.0530155,
+    "seen": 1790470749.9902086,
     "ast_hash": "68324ff98823628a6b27e472c6482b29",
     "semantic_hash": ""
   },
   "publish/admin/images/icons/webmail/text-size.png": {
-    "mtime": 1789782762.0,
-    "seen": 1790031773.338431,
+    "mtime": 1789782762.0550945,
+    "seen": 1790470749.9902086,
     "ast_hash": "5979f9452d4d0c0180019b07654367b6",
     "semantic_hash": ""
   },
@@ -4513,13 +4501,13 @@
   },
   "publish/admin/images/icons/webmail/underline.png": {
     "mtime": 1789782762.030686,
-    "seen": 1790132511.1130657,
+    "seen": 1790482281.1119046,
     "ast_hash": "49eb28230d4119c36af99aceb06916ce",
     "semantic_hash": ""
   },
   "publish/admin/images/icons/webmail/unordered-list.png": {
-    "mtime": 1789782762.0,
-    "seen": 1790194542.5774527,
+    "mtime": 1789782762.0607862,
+    "seen": 1790470749.9902086,
     "ast_hash": "1ad1516cb1a4534b36f1ec57f6344db6",
     "semantic_hash": ""
   },
@@ -4548,20 +4536,20 @@
     "semantic_hash": ""
   },
   "publish/webmail/images/LogoIcon.png": {
-    "mtime": 1789782761.9326518,
-    "seen": 1790031773.338431,
+    "mtime": 1789782761.0,
+    "seen": 1790485394.4401312,
     "ast_hash": "9ea377c9d8010637b9de56ab08c505c1",
     "semantic_hash": ""
   },
   "publish/webmail/images/Miaurtix-Mail-Platform-Logo-trimmed.png": {
-    "mtime": 1789782761.9394276,
-    "seen": 1790031773.338431,
+    "mtime": 1789782761.0,
+    "seen": 1790485394.4401312,
     "ast_hash": "a5653c0232caf740e8326cbc5c2698a3",
     "semantic_hash": ""
   },
   "publish/webmail/images/Miaurtix-Mail-Platform-Logo.jpg": {
-    "mtime": 1789782761.9368725,
-    "seen": 1790031773.338431,
+    "mtime": 1789782761.0,
+    "seen": 1790485394.4401312,
     "ast_hash": "384eb0c83bb6972059e7966c6dbc8ee6",
     "semantic_hash": ""
   },
@@ -4650,14 +4638,14 @@
     "semantic_hash": ""
   },
   "publish/webmail/images/icons/admin/exchange-transport-service.png": {
-    "mtime": 1789782761.0,
-    "seen": 1790194542.5774527,
+    "mtime": 1789782761.8937588,
+    "seen": 1790470749.9902086,
     "ast_hash": "5a9c2363a9aaf311090aacef92f700b9",
     "semantic_hash": ""
   },
   "publish/webmail/images/icons/admin/info-help-documentation.png": {
-    "mtime": 1789782761.0,
-    "seen": 1790194542.5774527,
+    "mtime": 1789782761.888023,
+    "seen": 1790470749.9902086,
     "ast_hash": "66aa0947c77289f1a48ef067a965f5ea",
     "semantic_hash": ""
   },
@@ -4692,14 +4680,14 @@
     "semantic_hash": ""
   },
   "publish/webmail/images/icons/admin/reporting-data-export.png": {
-    "mtime": 1789782761.0,
-    "seen": 1790194542.5774527,
+    "mtime": 1789782761.8855119,
+    "seen": 1790470749.9902086,
     "ast_hash": "d73c5112bde2ba79d8415cbc76f0e163",
     "semantic_hash": ""
   },
   "publish/webmail/images/icons/admin/security-audit-logs.png": {
-    "mtime": 1789782761.0,
-    "seen": 1790194542.5774527,
+    "mtime": 1789782761.8947597,
+    "seen": 1790470749.9902086,
     "ast_hash": "d0c63cd6e04a4a4d271ef5dabc44f673",
     "semantic_hash": ""
   },
@@ -5010,8 +4998,8 @@
     "semantic_hash": ""
   },
   "publish/webmail/images/icons/webmail/underline.png": {
-    "mtime": 1789782761.9002557,
-    "seen": 1790132511.1187181,
+    "mtime": 1789782761.0,
+    "seen": 1790485394.4401312,
     "ast_hash": "49eb28230d4119c36af99aceb06916ce",
     "semantic_hash": ""
   },
@@ -5076,27 +5064,15 @@
     "semantic_hash": "d59306591dc4df7b218d36644d9d1509"
   },
   "src/Miautrix.Mail.Worker/InboundQueueDispatcher.cs": {
-    "mtime": 1790273369.124339,
-    "seen": 1790276152.4769993,
-    "ast_hash": "7e70523e351927fcad3b3bb79f01ba2d",
-    "semantic_hash": "7e70523e351927fcad3b3bb79f01ba2d"
+    "mtime": 1790428850.193384,
+    "seen": 1790470749.9902086,
+    "ast_hash": "18b5f709542c97486e3444f9759ab3a2",
+    "semantic_hash": ""
   },
   "docs/security.md": {
     "mtime": 1790106236.3841863,
     "seen": 1790132511.0867229,
     "ast_hash": "4de2bcda350caef242810067b260f96b",
-    "semantic_hash": ""
-  },
-  "notes.txt": {
-    "mtime": 1790112535.7323034,
-    "seen": 1790132511.0867229,
-    "ast_hash": "88209c5dc5b831aa59244829b8402146",
-    "semantic_hash": ""
-  },
-  "form.pdf": {
-    "mtime": 1645026658.0,
-    "seen": 1790132511.0867229,
-    "ast_hash": "72c4aa52d0cf3bdbeb9eaa90d26ed696",
     "semantic_hash": ""
   },
   "admin/src/components/AntiSpamScreen.test.tsx": {
@@ -5152,12 +5128,6 @@
     "seen": 1790276152.454039,
     "ast_hash": "539ce517be00c72c9d7c17a36aedc430",
     "semantic_hash": "539ce517be00c72c9d7c17a36aedc430"
-  },
-  "publish/admin/assets/index-7_LIhLyZ.js": {
-    "mtime": 1790275364.8594792,
-    "seen": 1790276152.4586065,
-    "ast_hash": "a8bcf6766a6511702fbedbf5d111156d",
-    "semantic_hash": "a8bcf6766a6511702fbedbf5d111156d"
   },
   "scripts/deploy-antimalware.ps1": {
     "mtime": 1790249811.441729,
@@ -5236,5 +5206,77 @@
     "seen": 1790276152.4800143,
     "ast_hash": "74413ea33d59964544164ae28d9c42e4",
     "semantic_hash": "74413ea33d59964544164ae28d9c42e4"
+  },
+  "src/Miautrix.Mail.Persistence/Migrations/20260925030558_AddFolderParentId.Designer.cs": {
+    "mtime": 1790305558.9762268,
+    "seen": 1790470749.9902086,
+    "ast_hash": "c5ca408f1cb99d75f070133599f14db2",
+    "semantic_hash": ""
+  },
+  "src/Miautrix.Mail.Persistence/Migrations/20260925030558_AddFolderParentId.cs": {
+    "mtime": 1790305592.6199691,
+    "seen": 1790470749.9902086,
+    "ast_hash": "c7415fa01cd7757667a9b118f07f2978",
+    "semantic_hash": ""
+  },
+  "src/Miautrix.Mail.Web/Controllers/AttachmentController.cs": {
+    "mtime": 1790437452.2649732,
+    "seen": 1790470749.9902086,
+    "ast_hash": "97c01482b95e3c5e95d5fc3198e2002c",
+    "semantic_hash": ""
+  },
+  "scripts/inject-antimalware-eicar-test.ps1.debughint.md": {
+    "mtime": 1790262252.1677475,
+    "seen": 1790470749.9902086,
+    "ast_hash": "d693590b23e95444ab4e8b4c2c74a539",
+    "semantic_hash": ""
+  },
+  "publish/admin/assets/index-7_LIhLyZ.js": {
+    "mtime": 1790484897.2269816,
+    "seen": 1790485394.4401312,
+    "ast_hash": "a8bcf6766a6511702fbedbf5d111156d",
+    "semantic_hash": ""
+  },
+  "src/Miautrix.Mail.Persistence/Migrations/20260927020255_UpdateFlagSystem.Designer.cs": {
+    "mtime": 1790474575.7063217,
+    "seen": 1790482281.1119046,
+    "ast_hash": "5a6dc7e3c7b4b3dda1aae35bde149f97",
+    "semantic_hash": ""
+  },
+  "src/Miautrix.Mail.Persistence/Migrations/20260927020255_UpdateFlagSystem.cs": {
+    "mtime": 1790474607.996271,
+    "seen": 1790482281.1119046,
+    "ast_hash": "395d7fa1264a8ecfb60bfbb651c4f5b5",
+    "semantic_hash": ""
+  },
+  "src/Miautrix.Mail.Web/Controllers/FlagSettingsController.cs": {
+    "mtime": 1790474706.4282584,
+    "seen": 1790482281.1119046,
+    "ast_hash": "d5a66aa81fb3a353e1dcb1c2ec4d34cd",
+    "semantic_hash": ""
+  },
+  "form.pdf": {
+    "mtime": 1790469713.9352784,
+    "seen": 1790482281.1119046,
+    "ast_hash": "72c4aa52d0cf3bdbeb9eaa90d26ed696",
+    "semantic_hash": ""
+  },
+  "publish/webmail/assets/index-BMFJJNIs.js": {
+    "mtime": 1790484899.635051,
+    "seen": 1790485394.4401312,
+    "ast_hash": "9031745c50e961dad94c30da1d6de387",
+    "semantic_hash": ""
+  },
+  "scripts/cleanup-test-mailboxes.sql": {
+    "mtime": 1790485914.348625,
+    "seen": 1790487165.833674,
+    "ast_hash": "dcb86bb7a299e192c2a432ea776041de",
+    "semantic_hash": ""
+  },
+  ".claude/plans/rosy-toasting-aurora.md": {
+    "mtime": 1790486639.4947429,
+    "seen": 1790487165.833674,
+    "ast_hash": "7c541c14a3402b44b534af9cc5680dfe",
+    "semantic_hash": ""
   }
 }

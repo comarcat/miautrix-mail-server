@@ -36,6 +36,7 @@ public class AppDbContext : DbContext
     public DbSet<MessageRecipient> MessageRecipients => Set<MessageRecipient>();
     public DbSet<MessageFlag> MessageFlags => Set<MessageFlag>();
     public DbSet<FlagAlertConfiguration> FlagAlertConfigurations => Set<FlagAlertConfiguration>();
+    public DbSet<MailSignature> MailSignatures => Set<MailSignature>();
     public DbSet<Attachment> Attachments => Set<Attachment>();
     public DbSet<Alias> Aliases => Set<Alias>();
     public DbSet<Group> Groups => Set<Group>();
@@ -268,6 +269,20 @@ public class AppDbContext : DbContext
             entity.Property(e => e.MailboxId).HasColumnName("mailbox_id");
             entity.Property(e => e.Flag).HasColumnName("flag");
             entity.Property(e => e.AlertConfigurationJson).HasColumnName("alert_configuration_json");
+        });
+
+        ConfigureTenantScoped<MailSignature>(modelBuilder, "mail_signatures");
+        modelBuilder.Entity<MailSignature>(entity =>
+        {
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.Name).HasColumnName("name").IsRequired();
+            entity.Property(e => e.ContentText).HasColumnName("content_text").IsRequired();
+            entity.Property(e => e.ContentHtml).HasColumnName("content_html");
+            entity.Property(e => e.IsDefault).HasColumnName("is_default");
+
+            entity.HasIndex(e => new { e.TenantId, e.UserId, e.Name })
+                .IsUnique()
+                .HasDatabaseName("uq_mail_signatures_tenant_id_user_id_name");
         });
 
         ConfigureTenantScoped<Attachment>(modelBuilder, "attachments");

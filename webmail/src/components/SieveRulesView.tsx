@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import type { SieveFilterRule } from '../types';
+import type { MailSignature, SieveFilterRule } from '../types';
 import { webmailClient } from './WebmailApiClient';
 
 const FLAG_COLORS = ['red', 'blue', 'green', 'orange', 'purple'] as const;
@@ -42,6 +42,21 @@ export const SieveRulesView: React.FC<SieveRulesViewProps> = ({ initialRules, ma
     }, {} as Record<FlagColor, FlagAlertConfig>),
   );
   const [isSavingFlagAlerts, setIsSavingFlagAlerts] = useState(false);
+  const [signatures, setSignatures] = useState<MailSignature[]>([]);
+  const [signatureName, setSignatureName] = useState('');
+  const [signatureContent, setSignatureContent] = useState('');
+  const [signatureHtml, setSignatureHtml] = useState('');
+  const [editingSignatureId, setEditingSignatureId] = useState<string | null>(null);
+  const [signatureDefault, setSignatureDefault] = useState(false);
+
+  const loadSignatures = async () => {
+    const res = await webmailClient.getSignatures().catch(() => ({ data: [] }));
+    setSignatures(res.data);
+  };
+
+  useEffect(() => {
+    void loadSignatures();
+  }, []);
 
   useEffect(() => {
     if (!mailboxId) return;
@@ -94,6 +109,36 @@ export const SieveRulesView: React.FC<SieveRulesViewProps> = ({ initialRules, ma
     } finally {
       setIsSavingFlagAlerts(false);
     }
+  };
+
+  const resetSignatureForm = () => {
+    setEditingSignatureId(null);
+    setSignatureName('');
+    setSignatureContent('');
+    setSignatureHtml('');
+    setSignatureDefault(false);
+  };
+
+  const handleSaveSignature = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!signatureName.trim()) return;
+    await webmailClient.saveSignature({
+      id: editingSignatureId ?? undefined,
+      name: signatureName.trim(),
+      contentText: signatureContent,
+      contentHtml: signatureHtml || undefined,
+      isDefault: signatureDefault,
+    });
+    resetSignatureForm();
+    await loadSignatures();
+  };
+
+  const handleEditSignature = (signature: MailSignature) => {
+    setEditingSignatureId(signature.id);
+    setSignatureName(signature.name);
+    setSignatureContent(signature.contentText);
+    setSignatureHtml(signature.contentHtml ?? '');
+    setSignatureDefault(signature.isDefault);
   };
 
   const handleAddRule = (e: React.FormEvent) => {
@@ -166,6 +211,42 @@ export const SieveRulesView: React.FC<SieveRulesViewProps> = ({ initialRules, ma
               </select>
             </div>
           </div>
+          <div className="card" style={{ marginBottom: '32px' }}>
+            <h3 style={{ fontSize: '1.25rem', marginBottom: '16px' }}>Signatures</h3>
+            <form onSubmit={handleSaveSignature} style={{ display: 'grid', gap: '12px', marginBottom: '16px' }}>
+              <input className="input-base" placeholder="Signature name" value={signatureName} onChange={(e) => setSignatureName(e.target.value)} />
+              <textarea className="input-base" placeholder="Plain-text signature fallback" rows={3} value={signatureContent} onChange={(e) => setSignatureContent(e.target.value)} />
+              <textarea className="input-base" placeholder="HTML signature (optional, supports formatting and images)" rows={5} value={signatureHtml} onChange={(e) => setSignatureHtml(e.target.value)} />
+              <label style={{ display: 'flex', gap: '8px', alignItems: 'center', fontSize: '13px' }}>
+                <input type="checkbox" checked={signatureDefault} onChange={(e) => setSignatureDefault(e.target.checked)} />
+                Use as default signature
+              </label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button type="submit" className="btn btn-primary" style={{ padding: '8px 16px' }}>
+                  {editingSignatureId ? 'Update Signature' : 'Create Signature'}
+                </button>
+                {editingSignatureId && <button type="button" className="btn btn-secondary" style={{ padding: '8px 16px' }} onClick={resetSignatureForm}>Cancel</button>}
+              </div>
+            </form>
+            <div style={{ display: 'grid', gap: '10px' }}>
+              {signatures.length === 0 ? (
+                <div style={{ color: 'var(--neutral-body)', fontSize: '13px' }}>No signatures configured.</div>
+              ) : signatures.map((signature) => (
+                <div key={signature.id} style={{ border: '1px solid var(--neutral-border)', borderRadius: 'var(--radius-sm)', padding: '12px', display: 'flex', justifyContent: 'space-between', gap: '12px' }}>
+                  <div>
+                    <div style={{ fontWeight: 600 }}>{signature.name} {signature.isDefault && <span className="security-badge">Default</span>}</div>
+                    <div style={{ whiteSpace: 'pre-wrap', color: 'var(--neutral-body)', fontSize: '13px', marginTop: '6px' }}>{signature.contentText}</div>{signature.contentHtml && <div style={{ marginTop: '6px', color: 'var(--neutral-body)', fontSize: '13px' }} dangerouslySetInnerHTML={{ __html: signature.contentHtml }} />}
+                  </div>
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-start' }}>
+                    <button type="button" className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '12px' }} onClick={() => handleEditSignature(signature)}>Edit</button>
+                    <button type="button" className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '12px' }} onClick={async () => { await webmailClient.setDefaultSignature(signature.id); await loadSignatures(); }}>Default</button>
+                    <button type="button" className="btn btn-ghost" style={{ padding: '4px 8px', fontSize: '12px', color: 'var(--accent-ruby)' }} onClick={async () => { await webmailClient.deleteSignature(signature.id); await loadSignatures(); }}>Delete</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div className="card" style={{ marginBottom: '32px' }}>
             <h3 style={{ fontSize: '1.25rem', marginBottom: '16px' }}>Create Sieve Rule</h3>
             <form onSubmit={handleAddRule}>

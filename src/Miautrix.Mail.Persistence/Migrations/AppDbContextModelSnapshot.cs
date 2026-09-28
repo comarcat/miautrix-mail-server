@@ -610,6 +610,39 @@ namespace Miautrix.Mail.Persistence.Migrations
                     b.ToTable("mail_flow_rules", (string)null);
                 });
 
+            modelBuilder.Entity("Miautrix.Mail.Domain.MailSignature", b =>
+                {
+                    b.HasBaseType("Miautrix.Mail.Domain.TenantScopedEntityBase");
+
+                    b.Property<string>("ContentHtml")
+                        .HasColumnType("text")
+                        .HasColumnName("content_html");
+
+                    b.Property<string>("ContentText")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("content_text");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_default");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasIndex("TenantId", "UserId", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("uq_mail_signatures_tenant_id_user_id_name");
+
+                    b.ToTable("mail_signatures", (string)null);
+                });
+
             modelBuilder.Entity("Miautrix.Mail.Domain.Mailbox", b =>
                 {
                     b.HasBaseType("Miautrix.Mail.Domain.TenantScopedEntityBase");

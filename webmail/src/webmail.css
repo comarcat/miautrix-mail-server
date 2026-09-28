@@ -850,7 +850,14 @@ h3 { font-size: 26px; line-height: 1.12; letter-spacing: -0.26px; }
   font-family: var(--font-body);
   font-weight: 300;
   font-size: 15px;
+  color: var(--deep-navy);
+  background: var(--pure-white);
+  caret-color: var(--deep-navy);
   outline: none;
+}
+.compose-input::placeholder {
+  color: var(--neutral-body);
+  opacity: 1;
 }
 .compose-input:focus {
   border-color: var(--iris-violet);
@@ -859,10 +866,13 @@ h3 { font-size: 26px; line-height: 1.12; letter-spacing: -0.26px; }
 
 .subject-input {
   border: none;
+  border-radius: var(--radius-sm);
   font-family: var(--font-body);
   font-weight: 400;
   font-size: 16px;
   color: var(--deep-navy);
+  background: var(--pure-white);
+  caret-color: var(--deep-navy);
   width: 100%;
   outline: none;
 }
@@ -880,6 +890,13 @@ h3 { font-size: 26px; line-height: 1.12; letter-spacing: -0.26px; }
   flex: 1;
   outline: none;
 }
+.compose-body em,
+.compose-body i,
+.reading-body em,
+.reading-body i {
+  font-style: italic !important;
+}
+
 .compose-body p {
   margin: 0 0 16px 0;
 }

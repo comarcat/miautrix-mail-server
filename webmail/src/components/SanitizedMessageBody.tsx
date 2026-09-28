@@ -13,7 +13,7 @@ export const sanitizeEmailHtml = (dirtyHtml: string, allowRemoteImages: boolean 
     FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form', 'link', 'base'],
     FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onfocus', 'onblur', 'formaction'],
     ALLOW_DATA_ATTR: false,
-    ADD_ATTR: ['target'],
+    ADD_ATTR: ['target', 'width'],
   });
 
   if (!allowRemoteImages) {

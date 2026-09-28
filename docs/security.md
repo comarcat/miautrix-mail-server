@@ -4,6 +4,9 @@ The Admin Security page now shows real identity/security invariants where they e
 
 ## Implemented now
 
+- Tenant-scoped mailbox/folder mutations use the shared mailbox authorization helper with write access.
+- Cross-tenant or inaccessible mailbox/folder resources preserve the project invariant: return 404 rather than disclosing existence with 403.
+- Webmail personal folders support recursive create/move/delete behavior; deleting custom folders with mails/messages requires explicit user confirmation in the UI.
 - Password hashing algorithm and Argon2id parameters are read from the Identity implementation.
 - Session lifetime is read from the session manager.
 - Lockout threshold/duration is centralized in `LockoutOptions`.

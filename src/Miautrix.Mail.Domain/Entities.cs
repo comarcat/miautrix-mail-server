@@ -195,6 +195,15 @@ public class FlagAlertConfiguration : TenantScopedEntityBase
     public string AlertConfigurationJson { get; set; } = string.Empty; // Alert settings for this flag
 }
 
+public class MailSignature : TenantScopedEntityBase
+{
+    public Guid UserId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string ContentText { get; set; } = string.Empty;
+    public string? ContentHtml { get; set; }
+    public bool IsDefault { get; set; }
+}
+
 public class Attachment : TenantScopedEntityBase
 {
     public Guid MessageId { get; set; }

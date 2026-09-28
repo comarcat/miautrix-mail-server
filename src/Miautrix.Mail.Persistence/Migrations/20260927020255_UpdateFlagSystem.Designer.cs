@@ -72,7 +72,7 @@ namespace Miautrix.Mail.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("TenantId")
-                        .HasDatabaseName("idx_license_events_tenant_id");
+                        .HasDatabaseName("idx_flag_alert_configurations_tenant_id");
 
                     b.ToTable((string)null);
 

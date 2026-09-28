@@ -2,12 +2,12 @@
 # Miautrix Mail Server
 
 **Document Version:** 1.0  
-**Date:** 2026-09-24  
+**Date:** 2026-09-27  
 **Project Sponsor:** Miautrix  
 **Project Lead / Architect:** Cristobal Arboleda  
 **Status:** Approved / Active Implementation & Production Integration
 
-**Last Updated:** 2026-09-24  
+**Last Updated:** 2026-09-27  
 
 ---
 
@@ -70,7 +70,7 @@ Miautrix Mail Server
 |---|---|---|---|---|
 | **M1: Core Foundation** | Scaffold, PostgreSQL schema, Seed data, Auth/MFA, RBAC, Audit | ✅ Complete | T1–T6 | `dotnet test --filter Category=Isolation\|Audit\|Identity` |
 | **M2: Mail Engine** | SMTP In/Out, SPF/DKIM/DMARC, Anti-Spam, IMAP, Sieve, FTS, Rules Engine | ✅ Complete | T7–T13 | `dotnet test --filter Category=Smtp\|Dkim\|Imap\|Rules` |
-| **M3: Surfaces & Client Apps** | OpenAPI REST endpoints, Web Admin, Webmail, CLI | 🔄 In Progress (shared-mailbox UI/live validation) | T14–T17 | API Integration tests & `pnpm test` |
+| **M3: Surfaces & Client Apps** | OpenAPI REST endpoints, Web Admin, Webmail, CLI | ✅ Complete | T14–T17 | API Integration tests & `pnpm test` |
 | **M4: Operational Readiness** | Desktop Client, Backup/Restore drills, Blue/Green symlink updater, License gates | 🔄 In Progress (production migration/live verification) | T18–T21 | Migration verification, service restart, live login and licensing tests |
 
 ### Active Execution Phase: Production Integration & Functional Delivery
@@ -81,7 +81,7 @@ Miautrix Mail Server
 | **#13** | Backend Authentication REST API | `/api/v1/auth/login`, `/me`, `/refresh`, `/logout`, `/change-password`; live login 500 traced to schema drift (`column m.name does not exist`), not credential validation. | #12 | ✅ Implemented / ✅ Live login verified post-migration (2026-09-20) |
 | **#14** | Backend Mailbox & Message REST API | `/api/v1/mailboxes`, folders, `/messages`, `/send`; mailbox-scoped reads/writes now authorize through shared central mailbox access helper before message operations. | #12 | ✅ Implemented |
 | **#15** | Backend Admin Management REST API | `/api/v1/domains`, `/users`, `/shared-mailboxes`, `/rules`, `/audit`; shared mailboxes are passwordless mailbox resources with delegate assignment endpoints. | #12 | ✅ Implemented |
-| **#16** | Functional Webmail Frontend | Full-width responsive layout, asset/icon paths, Auth/Mailbox REST wiring. | #13, #14 | ✅ Implemented / 🔄 Live retest after migration |
+| **#16** | Functional Webmail Frontend | Full-width responsive layout, Auth/Mailbox REST wiring, reply/forward actions, writable-mailbox sender fallback, rich composer toolbar, 30-second draft autosave, persisted draft attachments, inline image resize/persistence, mail signatures, and recursive personal folder create/move/delete with mails-inside confirmation. | #13, #14 | ✅ Implemented / ✅ Webmail folder+draft section closed 2026-09-27 |
 | **#17** | Functional Admin Console Frontend | Functional Admin UI including Users/Domains/Quarantine; quarantine supports domain/date filtering, 2-button row actions, and "suspected spam released" tag on delivery. | #13, #15 | ✅ Implemented |
 | **#18** | Automated Deployment & Live Verification | Build, migrate, publish Linux x64 Web, Worker, and AntiSpam binaries & SPAs, deploy to Debian LXC `10.11.1.51` behind `mail.miautrix.tech`, and verify end-to-end. | #16, #17 | ✅ Web + worker deploy verified 2026-09-21; ✅ Anti-malware “malware detected action=discard” verified 2026-09-24 |
 | **CF-01** | Cloudflare Workers transport per domain | Cloudflare can be selected per tenant-owned domain; external recipients delivered via tenant worker. Queue Retry and Quarantine Release send required diagnostic/tags. | #18 | ✅ Live verified 2026-09-21, ✅ Admin release workflow verified 2026-09-23 |
@@ -100,6 +100,7 @@ Each work package carries strict Acceptance Criteria under the EARS standard (*W
 6. **Shared Mailbox Identity Boundary:** Shared mailboxes are mailbox resources, not login identities. Creation does not require or process a password and does not create `User`, `UserCredential`, or `Membership` rows.
 7. **Delegate Authorization:** Shared mailbox delegates must be active same-tenant, exact-domain users. `read` delegates may read mailbox/folder/message/attachment content; `write` delegates may perform approved mutations such as mark-read, move, delete, and send.
 8. **Quarantine Lifecycle:** Discard updates quarantine status to `Discarded` without deleting database rows or `.eml` artifacts; **Anti-malware “malware detected action”** can alternatively **discard automatically from the SMTP queue** (no quarantine row) when enabled; Release queues the message for delivery with `[SPAM Supected-Released]` subject tagging and worker anti-spam bypass.
+9. **Webmail Draft/Folder UX:** Draft attachments persist across save/reopen/send/discard lifecycle; custom personal-folder mutations require write authorization through the shared helper; deleting folders with mails requires explicit user confirmation that warns about mails/messages inside.
 
 ---
 
@@ -112,6 +113,15 @@ Each work package carries strict Acceptance Criteria under the EARS standard (*W
 | **RSK-03** | Frontend code drift between Web Admin and Desktop App | Medium | Medium | Shared component library and single React application codebase bundled into Electron. |
 | **RSK-04** | Data loss during mailbox migrations or updates | Low | Critical | Strict forward-only migration pattern; verified automated backup/restore verification on staging before promotion. |
 | **RSK-05** | License service downtime locking out customers | Low | High | License enforcement design specifies fail-open behavior: mail flows continuously regardless of licensing server availability. |
+
+---
+
+## 5.1 Change Log
+
+| Date | Change | Verification |
+|---|---|---|
+| 2026-09-27 | Closed Webmail draft/composer/personal-folder section: persisted draft attachments, inline image sizing persistence, italic/editor cleanup, mail signatures, recursive personal-folder rendering, custom folder delete endpoint, and delete confirmation when mails/messages exist. | `dotnet build Miautrix.Mail.sln -warnaserror`; `pnpm --filter webmail build` |
+| 2026-09-27 | Refreshed knowledge references using graphify/codebase-memory and updated repository graph artifacts for current Webmail/API changes. | `graphify-out/GRAPH_REPORT.md`, `graphify-out/graph.json`, `graphify-out/manifest.json` |
 
 ---
 

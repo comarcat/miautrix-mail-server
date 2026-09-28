@@ -75,6 +75,12 @@ dependencies: ["lucide-react"]
 
 # Iris Pay
 
+## Current Implementation Notes
+
+- Webmail now includes persisted draft attachments, rich composer formatting, sanitized inline image sizing, mail signatures, and recursive personal-folder rendering.
+- Personal folders are rendered as a tree by `parentId`; root folders are only folders with no parent, and children remain under their actual parent even after drag/drop moves.
+- Custom folder deletion requires confirmation; when folder counts indicate mails/messages exist, the prompt explicitly warns that mails/messages are inside.
+
 ## AI Build Instructions
 
 > **Read this section before writing any code.** The rules below

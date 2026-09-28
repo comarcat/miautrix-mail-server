@@ -59,4 +59,15 @@ public interface IMailboxService
         Guid folderId,
         UpdateFolderParentRequest request,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes the given folder and its nested descendants.
+    /// If the folder contains messages, they are deleted permanently.
+    /// </summary>
+    Task<bool> DeleteFolderAsync(
+        Guid tenantId,
+        Guid userId,
+        Guid mailboxId,
+        Guid folderId,
+        CancellationToken cancellationToken = default);
 }

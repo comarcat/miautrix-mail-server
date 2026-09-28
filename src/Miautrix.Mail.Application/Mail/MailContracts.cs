@@ -60,6 +60,12 @@ public sealed record AttachmentDownloadDto(
     string ContentType,
     System.IO.Stream ContentStream);
 
+public sealed record AttachmentUploadInput(
+    string FileName,
+    string ContentType,
+    long SizeBytes,
+    System.IO.Stream ContentStream);
+
 public sealed record MessageDetailDto(
     Guid Id,
     Guid MailboxId,
@@ -74,7 +80,9 @@ public sealed record MessageDetailDto(
     string? BodyHtml,
     string RawHeaders,
     string? FlagColor,
-    IReadOnlyList<AttachmentDto> Attachments);
+    IReadOnlyList<AttachmentDto> Attachments,
+    IReadOnlyList<string>? Cc = null,
+    IReadOnlyList<string>? Bcc = null);
 
 public sealed record SendMessageRequest(
     string From,
@@ -90,6 +98,34 @@ public sealed record SendMessageResult(
     Guid? MessageId,
     Guid? QueueItemId,
     string Message);
+
+public sealed record DraftMessageRequest(
+    Guid? DraftId,
+    string From,
+    IReadOnlyList<string> To,
+    IReadOnlyList<string>? Cc,
+    IReadOnlyList<string>? Bcc,
+    string Subject,
+    string? BodyText,
+    string? BodyHtml);
+
+public sealed record DraftMessageResult(
+    bool Success,
+    Guid? DraftId,
+    string Message);
+
+public sealed record MailSignatureDto(
+    Guid Id,
+    string Name,
+    string ContentText,
+    string? ContentHtml,
+    bool IsDefault);
+
+public sealed record MailSignatureRequest(
+    string Name,
+    string ContentText,
+    string? ContentHtml,
+    bool IsDefault);
 
 public sealed record MessageListFilter(
     Guid? FolderId = null,

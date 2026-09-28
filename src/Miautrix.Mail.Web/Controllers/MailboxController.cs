@@ -146,4 +146,27 @@ public sealed class MailboxController : ControllerBase
             ApiJson.Options,
             statusCode: StatusCodes.Status200OK);
     }
+
+    [HttpDelete("{mailboxId:guid}/folders/{folderId:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ApiError), StatusCodes.Status404NotFound)]
+    public async Task<IResult> DeleteFolder(
+        Guid mailboxId,
+        Guid folderId,
+        CancellationToken cancellationToken = default)
+    {
+        var deleted = await _mailboxService.DeleteFolderAsync(
+            _context.CurrentTenantId,
+            _context.CurrentUserId,
+            mailboxId,
+            folderId,
+            cancellationToken);
+
+        if (!deleted)
+        {
+            return Results.NotFound();
+        }
+
+        return Results.NoContent();
+    }
 }

@@ -1445,6 +1445,7 @@
           "Miautrix.Mail.Identity": "1.0.0",
           "Miautrix.Mail.Infrastructure": "1.0.0",
           "Miautrix.Mail.Persistence": "1.0.0",
+          "Miautrix.Mail.Queue": "1.0.0",
           "Miautrix.Mail.Security": "1.0.0"
         },
         "runtime": {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { Mailbox, MailboxAccount, SharedMailboxGroup, EmailMessage, Contact, CalendarEvent, SieveFilterRule } from './types';
 import { InboxView } from './components/InboxView';
-import { ComposerView } from './components/ComposerView';
+import { ComposerView, type ComposeInitialState } from './components/ComposerView';
 import { ContactsView } from './components/ContactsView';
 import { CalendarView } from './components/CalendarView';
 import { SieveRulesView } from './components/SieveRulesView';
@@ -64,7 +64,13 @@ export const App: React.FC = () => {
   const [isLoadingData, setIsLoadingData] = useState<boolean>(false);
   const [selectedMailboxAccount, setSelectedMailboxAccount] = useState<string>('');
   const [activeFolderId, setActiveFolderId] = useState<string>('');
-  const refreshTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [composeInitialState, setComposeInitialState] = useState<ComposeInitialState>({ mode: 'new' });
+  const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    const username = currentUserEmail?.trim();
+    document.title = username ? `Miautrix WebMail - ${username}` : 'Miautrix WebMail - ';
+  }, [currentUserEmail]);
 
 
   const loadAppData = async () => {
@@ -235,12 +241,71 @@ export const App: React.FC = () => {
     return !account || account.kind !== 'shared' || account.accessLevel === 'write';
   };
 
+  const writableComposeMailboxId = () => {
+    if (selectedMailboxAccount && canWriteMailbox(selectedMailboxAccount)) return selectedMailboxAccount;
+    return mailboxAccounts.find((account) => account.kind !== 'shared')?.id ?? mailboxAccounts[0]?.id ?? '';
+  };
+
+  const escapeComposeHtml = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/\n/g, '<br/>');
+  const quoteMessage = (message: EmailMessage) =>
+    `\n\nOn ${message.receivedAt}, ${message.from.email} wrote:\n${(message.bodyText || message.snippet || '').split('\n').map((line) => `> ${line}`).join('\n')}`;
+  const quoteMessageHtml = (message: EmailMessage) => {
+    const bodyHtml = message.bodyHtml?.trim() || escapeComposeHtml(message.bodyText || message.snippet || '');
+    return `<div data-miautrix-quote-separator="true"><br></div><blockquote style="border-left:3px solid #cbd5e1;margin:0;padding-left:12px;color:#64748b"><div>On ${escapeComposeHtml(message.receivedAt)}, ${escapeComposeHtml(message.from.email)} wrote:</div>${bodyHtml}</blockquote>`;
+  };
+
+  const handleNewMessage = () => {
+    setComposeInitialState({ mode: 'new' });
+    setActiveTab('compose');
+  };
+
+  const handleReplyMessage = (message: EmailMessage) => {
+    setComposeInitialState({
+      mode: 'reply',
+      to: message.from.email,
+      cc: message.cc?.map((recipient) => recipient.email).join(', '),
+      subject: /^re:/i.test(message.subject) ? message.subject : `Re: ${message.subject}`,
+      body: quoteMessage(message),
+      bodyHtml: `<div><br></div>${quoteMessageHtml(message)}`,
+    });
+    setActiveTab('compose');
+  };
+
+  const handleForwardMessage = (message: EmailMessage) => {
+    setComposeInitialState({
+      mode: 'forward',
+      to: '',
+      subject: /^fwd?:/i.test(message.subject) ? message.subject : `Fwd: ${message.subject}`,
+      body: `\n\n---------- Forwarded message ----------\nFrom: ${message.from.email}\nTo: ${message.to.map((t) => t.email).join(', ')}\nDate: ${message.receivedAt}\nSubject: ${message.subject}${quoteMessage(message)}`,
+      bodyHtml: `<div><br></div><div data-miautrix-quote-separator="true"><br></div><blockquote style="border-left:3px solid #cbd5e1;margin:0;padding-left:12px;color:#64748b"><div>---------- Forwarded message ----------</div><div>From: ${escapeComposeHtml(message.from.email)}</div><div>To: ${escapeComposeHtml(message.to.map((t) => t.email).join(', '))}</div><div>Date: ${escapeComposeHtml(message.receivedAt)}</div><div>Subject: ${escapeComposeHtml(message.subject)}</div><br/>${message.bodyHtml?.trim() || escapeComposeHtml(message.bodyText || message.snippet || '')}</blockquote>`,
+    });
+    setActiveTab('compose');
+  };
+
+  const handleEditDraft = (message: EmailMessage) => {
+    setComposeInitialState({
+      mode: 'draft',
+      draftId: message.id,
+      mailboxId: message.mailboxId,
+      to: message.to.map((t) => t.email).join(', '),
+      cc: message.cc?.map((recipient) => recipient.email).join(', '),
+      subject: message.subject,
+      body: message.bodyText ?? '',
+      bodyHtml: message.bodyHtml || undefined,
+      attachments: message.attachments,
+    });
+    setActiveTab('compose');
+  };
+
   const handleMarkRead = async (messageId: string, isRead: boolean) => {
     if (!selectedMailboxAccount || !canWriteMailbox(selectedMailboxAccount)) return;
     await webmailClient.markRead(selectedMailboxAccount, messageId, isRead);
     setMessages((prev) =>
-      prev.map((m) => (m.id === messageId ? { ...m, isUnread: !isRead } : m))
+      prev.map((m) => (m.id === messageId ? { ...m, isUnread: !isRead } : m)),
     );
+
+    // Keep sidebar unread counters in sync.
+    await refreshFoldersForMailbox(selectedMailboxAccount);
   };
 
   const handleMoveMessage = async (messageId: string, targetFolderId: string) => {
@@ -259,6 +324,8 @@ export const App: React.FC = () => {
         retryDelayMs: 200,
       });
       setActiveFolderId(targetFolderId);
+
+      await refreshFoldersForMailbox(selectedMailboxAccount);
       return;
     }
 
@@ -267,17 +334,19 @@ export const App: React.FC = () => {
       retries: 3,
       retryDelayMs: 150,
     });
+
+    await refreshFoldersForMailbox(selectedMailboxAccount);
   };
 
   const handleMarkReadMany = async (messageIds: string[], isRead: boolean) => {
     if (!selectedMailboxAccount || !canWriteMailbox(selectedMailboxAccount) || messageIds.length === 0) return;
 
     await Promise.all(
-      messageIds.map((id) => webmailClient.markRead(selectedMailboxAccount, id, isRead))
+      messageIds.map((id) => webmailClient.markRead(selectedMailboxAccount, id, isRead)),
     );
 
     setMessages((prev) =>
-      prev.map((m) => (messageIds.includes(m.id) ? { ...m, isUnread: !isRead } : m))
+      prev.map((m) => (messageIds.includes(m.id) ? { ...m, isUnread: !isRead } : m)),
     );
 
     // Refresh for consistency (handles server-side ordering / counts / any missed optimistic updates).
@@ -286,6 +355,9 @@ export const App: React.FC = () => {
       retries: 1,
       retryDelayMs: 100,
     });
+
+    // Keep sidebar unread counters in sync.
+    await refreshFoldersForMailbox(selectedMailboxAccount);
   };
 
   const handleMoveMessages = async (messageIds: string[], targetFolderId: string) => {
@@ -294,7 +366,7 @@ export const App: React.FC = () => {
     const sourceFolderId = activeFolderId;
 
     await Promise.all(
-      messageIds.map((id) => webmailClient.moveMessage(selectedMailboxAccount, id, targetFolderId))
+      messageIds.map((id) => webmailClient.moveMessage(selectedMailboxAccount, id, targetFolderId)),
     );
 
     if (targetFolderId !== sourceFolderId) {
@@ -304,6 +376,8 @@ export const App: React.FC = () => {
         retryDelayMs: 200,
       });
       setActiveFolderId(targetFolderId);
+
+      await refreshFoldersForMailbox(selectedMailboxAccount);
       return;
     }
 
@@ -312,13 +386,15 @@ export const App: React.FC = () => {
       retries: 3,
       retryDelayMs: 150,
     });
+
+    await refreshFoldersForMailbox(selectedMailboxAccount);
   };
 
   const handleDeleteMessages = async (messageIds: string[], permanent: boolean = false) => {
     if (!selectedMailboxAccount || !canWriteMailbox(selectedMailboxAccount) || messageIds.length === 0) return;
 
     await Promise.all(
-      messageIds.map((id) => webmailClient.deleteMessage(selectedMailboxAccount, id, permanent))
+      messageIds.map((id) => webmailClient.deleteMessage(selectedMailboxAccount, id, permanent)),
     );
 
     await refreshMessagesForFolder(activeFolderId, {
@@ -326,6 +402,8 @@ export const App: React.FC = () => {
       retries: 2,
       retryDelayMs: 150,
     });
+
+    await refreshFoldersForMailbox(selectedMailboxAccount);
   };
 
   const handleFlagMessage = async (messageId: string, color: string | null) => {
@@ -338,9 +416,27 @@ export const App: React.FC = () => {
   };
 
 
+  const refreshFoldersForMailbox = async (mailboxId: string) => {
+    const account = mailboxAccounts.find((a) => a.id === mailboxId);
+    if (!account) return;
+
+    const folderRes = await webmailClient.getFolders(mailboxId).catch(() => ({ data: [] }));
+    const mapped: Mailbox[] = mapFolders(folderRes.data ?? [], account);
+
+    if (account.kind === 'shared') {
+      setSharedMailboxGroups((prev) =>
+        prev.map((g) => (g.account.id === mailboxId ? { ...g, folders: mapped } : g)),
+      );
+    } else {
+      setMailboxes(mapped);
+    }
+  };
+
   const handleRefreshMessages = async () => {
-    if (!activeFolderId) return;
-    await refreshMessagesForFolder(activeFolderId);
+    if (!activeFolderId || !selectedMailboxAccount) return;
+
+    await refreshMessagesForFolder(activeFolderId, { mailboxId: selectedMailboxAccount });
+    await refreshFoldersForMailbox(selectedMailboxAccount);
   };
 
   const setupAutoRefresh = () => {
@@ -355,9 +451,10 @@ export const App: React.FC = () => {
     const ms = safeMinutes * 60 * 1000;
 
     refreshTimerRef.current = setInterval(async () => {
-      if (activeFolderId) {
-        await refreshMessagesForFolder(activeFolderId);
-      }
+      if (!activeFolderId || !selectedMailboxAccount) return;
+
+      await refreshMessagesForFolder(activeFolderId, { mailboxId: selectedMailboxAccount });
+      await refreshFoldersForMailbox(selectedMailboxAccount);
     }, ms);
   };
 
@@ -418,6 +515,40 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleDeleteFolder = async (folderId: string) => {
+    if (!selectedMailboxAccount || !canWriteMailbox(selectedMailboxAccount)) return;
+
+    try {
+      await webmailClient.deleteFolder(selectedMailboxAccount, folderId);
+
+      const folderRes = await webmailClient.getFolders(selectedMailboxAccount);
+      const folders: Mailbox[] = folderRes.data.map((f: any) => ({
+        id: f.id,
+        name: f.name,
+        role: f.role || 'custom',
+        unreadEmails: f.unread_count ?? f.unreadEmails ?? 0,
+        totalEmails: f.total_count ?? f.totalEmails ?? 0,
+        icon: folderIconMap[f.role] || 'inbox.png',
+        parentId: f.parentId ?? f.parent_id ?? null,
+      }));
+
+      setMailboxes(folders);
+
+      // If we just deleted the active folder, jump to Inbox.
+      if (activeFolderId === folderId) {
+        const inbox = folders.find((f) => f.role === 'inbox') ?? folders[0];
+        if (inbox) {
+          setActiveFolderId(inbox.id);
+          // Load messages for the new folder.
+          void refreshMessagesForFolder(inbox.id, { mailboxId: selectedMailboxAccount });
+        }
+      }
+    } catch (err: any) {
+      console.error('Folder delete failed', { folderId, err });
+      alert(`Folder delete failed: ${err?.message ?? String(err)}`);
+    }
+  };
+
   // Keep prop type changes localized: InboxView will only use this via a callback when needed.
 
 
@@ -446,14 +577,17 @@ export const App: React.FC = () => {
     await handleMoveMessage(messageId, junkId);
   };
 
-  const handleSendEmail = async (msgData: { mailboxId: string; from: string; to: string; subject: string; body: string }) => {
+  const handleSendEmail = async (msgData: { mailboxId: string; from: string; to: string; cc?: string; bcc?: string; subject: string; body: string; bodyHtml?: string }) => {
     if (!canWriteMailbox(msgData.mailboxId)) return;
 
     await webmailClient.sendMessage(msgData.mailboxId, {
       from: msgData.from,
       to: msgData.to,
+      cc: msgData.cc,
+      bcc: msgData.bcc,
       subject: msgData.subject || '(No Subject)',
       body: msgData.body,
+      bodyHtml: msgData.bodyHtml,
     });
 
     setSelectedMailboxAccount(msgData.mailboxId);
@@ -519,7 +653,7 @@ export const App: React.FC = () => {
           </div>
           <div
             className={`wm-tab ${activeTab === 'compose' ? 'active' : ''}`}
-            onClick={() => setActiveTab('compose')}
+            onClick={handleNewMessage}
             role="button"
             tabIndex={0}
           >
@@ -574,9 +708,12 @@ export const App: React.FC = () => {
             currentFolderId={activeFolderId}
             currentMailboxId={selectedMailboxAccount}
             onFolderChange={handleFolderChange}
-            onComposeClick={() => setActiveTab('compose')}
+            onComposeClick={handleNewMessage}
             onOpenRulesClick={() => setActiveTab('rules')}
             onRefreshMessages={handleRefreshMessages}
+            onReplyMessage={handleReplyMessage}
+            onForwardMessage={handleForwardMessage}
+            onEditDraft={handleEditDraft}
             onMarkRead={handleMarkRead}
             onDeleteMessage={handleDeleteMessage}
             onArchiveSelected={handleArchiveSelected}
@@ -584,28 +721,34 @@ export const App: React.FC = () => {
             onMoveMessage={handleMoveMessage}
             onCreateFolder={handleCreateFolder}
             onMoveFolder={handleMoveFolder}
+            onDeleteFolder={handleDeleteFolder}
+            canWriteCurrentMailbox={canWriteMailbox(selectedMailboxAccount)}
+            quotaUsedBytes={mailboxes[0]?.usedBytes ?? 0}
+            quotaBytes={mailboxes[0]?.quotaBytes ?? 0}
             onMarkReadMany={handleMarkReadMany}
             onMoveMessages={handleMoveMessages}
             onDeleteMessages={handleDeleteMessages}
             onFlagMessage={handleFlagMessage}
-            canWriteCurrentMailbox={canWriteMailbox(selectedMailboxAccount)}
-            quotaUsedBytes={mailboxes[0]?.usedBytes ?? 0}
-            quotaBytes={mailboxes[0]?.quotaBytes ?? 0}
           />
 
         )}
         {activeTab === 'compose' && (
           <ComposerView
             accounts={mailboxAccounts.filter((account) => account.kind !== 'shared' || account.accessLevel === 'write')}
-            defaultAccountId={canWriteMailbox(selectedMailboxAccount) ? selectedMailboxAccount : mailboxAccounts[0]?.id || ''}
+            defaultAccountId={writableComposeMailboxId()}
+            initialState={composeInitialState}
             onDiscardClick={() => setActiveTab('inbox')}
             onSendClick={handleSendEmail}
+            onSent={handleRefreshMessages}
           />
         )}
         {activeTab === 'contacts' && (
           <ContactsView
             contacts={contacts}
-            onEmailContact={(_email) => setActiveTab('compose')}
+            onEmailContact={(email) => {
+              setComposeInitialState({ mode: 'new', to: email });
+              setActiveTab('compose');
+            }}
           />
         )}
         {activeTab === 'calendar' && (

@@ -53,6 +53,13 @@ const buildBodyFallbackHtml = (text?: string) => {
   return `<div style="color:var(--neutral-label); font-size:15px; line-height:1.6">${safe}</div>`;
 };
 
+const hydrateMessageDetail = async (message: EmailMessage) => {
+  if (message.bodyText?.trim() || message.bodyHtml?.trim()) return message;
+  return webmailClient.getMessageDetail(message.mailboxId, message.id)
+    .then((r) => r.data)
+    .catch(() => message);
+};
+
 interface InboxViewProps {
   mailboxes: Mailbox[];
   sharedMailboxGroups: SharedMailboxGroup[];
@@ -61,6 +68,9 @@ interface InboxViewProps {
   onComposeClick: () => void;
   onOpenRulesClick: () => void;
   onRefreshMessages: () => Promise<void>;
+  onReplyMessage: (message: EmailMessage) => void;
+  onForwardMessage: (message: EmailMessage) => void;
+  onEditDraft: (message: EmailMessage) => void;
   currentFolderId: string;
   currentMailboxId: string;
 
@@ -71,6 +81,11 @@ interface InboxViewProps {
   onMoveMessage: (messageId: string, targetFolderId: string) => void;
   onCreateFolder: (name: string, parentId?: string | null) => Promise<void>;
   onMoveFolder: (folderId: string, parentId: string | null) => Promise<void>;
+  onDeleteFolder: (folderId: string) => Promise<void>;
+
+  // If the backend returns these counts, InboxView can ask for confirmation with context.
+  // (If absent, it falls back to a generic confirmation.)
+  getFolderMessageCount?: (folderId: string) => number | undefined;
 
   // Bulk operations: one round trip per message, issued together by App.tsx.
   onMarkReadMany: (messageIds: string[], isRead: boolean) => Promise<void>;
@@ -182,6 +197,9 @@ export const InboxView: React.FC<InboxViewProps> = ({
   onComposeClick,
   onOpenRulesClick,
   onRefreshMessages,
+  onReplyMessage,
+  onForwardMessage,
+  onEditDraft,
   currentFolderId,
   currentMailboxId,
   onMarkRead,
@@ -191,6 +209,8 @@ export const InboxView: React.FC<InboxViewProps> = ({
   onMoveMessage,
   onCreateFolder,
   onMoveFolder,
+  onDeleteFolder,
+  getFolderMessageCount,
   onMarkReadMany,
   onMoveMessages,
   onDeleteMessages,
@@ -566,16 +586,118 @@ export const InboxView: React.FC<InboxViewProps> = ({
     toggleSharedMailboxCollapsed(mailboxId);
   };
 
+  const deleteFolderWithConfirm = async (folderId: string) => {
+    if (!canWriteCurrentMailbox) return;
+    const maybeCount = getFolderMessageCount?.(folderId);
+
+    const hasMails = typeof maybeCount === 'number' && maybeCount > 0;
+    const label = hasMails
+      ? `Delete this folder and ALL messages inside?${maybeCount != null ? ` (${maybeCount} messages)` : ''}`
+      : 'Delete this folder?';
+
+    const confirmed = window.confirm(label);
+    if (!confirmed) return;
+
+    await onDeleteFolder(folderId);
+  };
+
   const renderCustomFolderLinks = (folders: Mailbox[], mailboxId: string, parentId: string | null = null, level = 0): React.ReactNode =>
     sortCustomFolders(folders.filter((folder) => folder.role === 'custom' && (folder.parentId ?? null) === parentId))
       .map((folder) => (
         <React.Fragment key={folder.id}>
           <a
+            data-folder-id={folder.id}
             className={`wm-nav-item ${currentMailboxId === mailboxId && currentFolderId === folder.id ? 'active' : ''}`}
             href={`#${folder.id}`}
+            draggable={canWriteCurrentMailbox}
+            onDragStart={(e) => {
+              if (!canWriteCurrentMailbox) return;
+              e.dataTransfer.setData('application/x-miautrix-folder-id', folder.id);
+              e.dataTransfer.effectAllowed = 'move';
+            }}
             onClick={(e) => {
               e.preventDefault();
               onFolderChange(mailboxId, folder.id);
+            }}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (!canWriteCurrentMailbox) return;
+
+              const personalFolders = mailboxes.filter((f) => f.role === 'custom');
+              const action = prompt(
+                `Folder “${folder.name}”: type a command\n\nType:\n 1) move\n 2) delete\n\n(Then press Enter)`
+              );
+
+              if (action === null) return;
+
+              const cmd = action.trim().toLowerCase();
+
+              if (cmd === 'delete' || cmd === 'remove') {
+                void deleteFolderWithConfirm(folder.id);
+                return;
+              }
+
+              // default: move
+              const parentName = prompt(
+                `Move folder “${folder.name}” under which personal folder?\n\nLeave blank for root.\n\nExamples: ${personalFolders
+                  .slice(0, 8)
+                  .map((f) => f.name)
+                  .join(', ')}`,
+              );
+
+              if (parentName === null) return;
+
+              const trimmed = parentName.trim();
+              let newParentId: string | null = null;
+              if (trimmed.length > 0) {
+                const match = personalFolders.find(
+                  (f) => f.id !== folder.id && f.name.toLowerCase() === trimmed.toLowerCase(),
+                );
+                if (!match) {
+                  alert('Parent folder not found.');
+                  return;
+                }
+                newParentId = match.id;
+              }
+
+              onMoveFolder(folder.id, newParentId).catch((err) => {
+                console.error('Failed to move folder', { folderId: folder.id, parentId: newParentId, err });
+                alert(`Failed to move folder: ${err?.message ?? String(err)}`);
+              });
+            }}
+            onDragOver={(e) => {
+              if (!canWriteCurrentMailbox) return;
+              e.preventDefault();
+              e.stopPropagation();
+              e.currentTarget.classList.add('drag-over');
+            }}
+            onDragLeave={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              e.currentTarget.classList.remove('drag-over');
+            }}
+            onDrop={(e) => {
+              if (!canWriteCurrentMailbox) return;
+              e.preventDefault();
+              e.stopPropagation();
+              e.currentTarget.classList.remove('drag-over');
+
+              const movedFolderId = e.dataTransfer.getData('application/x-miautrix-folder-id');
+              if (!movedFolderId) return;
+
+              const targetId = (e.currentTarget as HTMLElement).closest('[data-folder-id]')?.getAttribute('data-folder-id');
+              const parentId = targetId ?? folder.id;
+
+              if (movedFolderId === parentId) {
+                alert('Folder cannot be moved inside itself.');
+                return;
+              }
+
+              onMoveFolder(movedFolderId, parentId).catch((err) => {
+                console.error('Failed to move folder', { folderId: movedFolderId, parentId, err });
+                alert(`Failed to move folder: ${err?.message ?? String(err)}`);
+              });
             }}
           >
             <div className="wm-nav-icon" style={{ paddingLeft: `${20 + level * 14}px` }}>
@@ -621,7 +743,22 @@ export const InboxView: React.FC<InboxViewProps> = ({
             aria-label="Refresh"
             onClick={onRefreshMessages}
           >
-            <img src="/images/icons/webmail/refresh.png" alt="Refresh" />
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M21 12a9 9 0 0 1-9 9" />
+              <path d="M3 12a9 9 0 0 1 9-9" />
+              <polyline points="21 3 21 12 12 12" />
+              <polyline points="3 21 3 12 12 12" />
+            </svg>
           </button>
           <button
             type="button"
@@ -810,95 +947,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
               </button>
             </div>
 
-            {sortCustomFolders(mailboxes.filter((f) => f.role === 'custom'))
-              .map((mb) => (
-                <a
-                  key={mb.id}
-                  className={`wm-nav-item ${currentFolderId === mb.id ? 'active' : ''}`}
-                  href={`#${mb.id}`}
-                  draggable={canWriteCurrentMailbox}
-                  onDragStart={(e) => {
-                    if (!canWriteCurrentMailbox) return;
-                    e.dataTransfer.setData('application/x-miautrix-folder-id', mb.id);
-                    e.dataTransfer.effectAllowed = 'move';
-                  }}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    onFolderChange(mb.mailboxId ?? currentMailboxId, mb.id);
-                  }}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (!canWriteCurrentMailbox) return;
-
-                    const personalFolders = mailboxes.filter((f) => f.role === 'custom');
-                    const parentName = prompt(
-                      `Move folder “${mb.name}” under which personal folder?\n\nLeave blank for root.\n\nExamples: ${personalFolders
-                        .slice(0, 8)
-                        .map((f) => f.name)
-                        .join(', ')}`,
-                    );
-
-                    if (parentName === null) return;
-
-                    const trimmed = parentName.trim();
-                    let parentId: string | null = null;
-                    if (trimmed.length > 0) {
-                      const match = personalFolders.find(
-                        (f) => f.id !== mb.id && f.name.toLowerCase() === trimmed.toLowerCase(),
-                      );
-                      if (!match) {
-                        alert('Parent folder not found.');
-                        return;
-                      }
-                      parentId = match.id;
-                    }
-
-                    onMoveFolder(mb.id, parentId).catch((err) => {
-                      console.error('Failed to move folder', { folderId: mb.id, parentId, err });
-                      alert(`Failed to move folder: ${err?.message ?? String(err)}`);
-                    });
-                  }}
-                  onDragOver={(e) => {
-                    if (!canWriteCurrentMailbox) return;
-                    e.preventDefault();
-                    e.currentTarget.classList.add('drag-over');
-                  }}
-                  onDragLeave={(e) => {
-                    e.currentTarget.classList.remove('drag-over');
-                  }}
-                  onDrop={(e) => {
-                    if (!canWriteCurrentMailbox) return;
-                    e.preventDefault();
-                    e.currentTarget.classList.remove('drag-over');
-                    const movedFolderId = e.dataTransfer.getData('application/x-miautrix-folder-id');
-                    if (movedFolderId) {
-                      if (movedFolderId === mb.id) {
-                        alert('Folder cannot be moved inside itself.');
-                        return;
-                      }
-
-                      onMoveFolder(movedFolderId, mb.id).catch((err) => {
-                        console.error('Failed to move folder', {
-                          folderId: movedFolderId,
-                          parentId: mb.id,
-                          err,
-                        });
-                        alert(`Failed to move folder: ${err?.message ?? String(err)}`);
-                      });
-                      return;
-                    }
-
-                    const messageId = e.dataTransfer.getData('text/plain');
-                    if (messageId) onMoveMessage(messageId, mb.id);
-                  }}
-                >
-                  <div className="wm-nav-icon" style={{ paddingLeft: mb.parentId ? '20px' : '0' }}>
-                    <img src={`/images/icons/webmail/inbox.png`} alt="" />
-                    <span>{mb.name}</span>
-                  </div>
-                </a>
-              ))}
+            {renderCustomFolderLinks(mailboxes, currentMailboxId)}
           </div>
 
           {sharedMailboxGroups.length > 0 && (
@@ -1093,6 +1142,12 @@ export const InboxView: React.FC<InboxViewProps> = ({
                     }}
                     onClick={() => {
                       setSelectedMessageId(msg.id);
+                      const activeFolderRole = [...mailboxes, ...sharedMailboxGroups.flatMap((group) => group.folders)]
+                        .find((folder) => folder.id === currentFolderId)?.role;
+                      if (activeFolderRole === 'drafts') {
+                        void hydrateMessageDetail(msg).then(onEditDraft);
+                        return;
+                      }
                       if (canWriteCurrentMailbox && msg.isUnread) onMarkRead(msg.id, true);
                     }}
                     onContextMenu={(e) => {
@@ -1170,8 +1225,38 @@ export const InboxView: React.FC<InboxViewProps> = ({
         <main id="wm-print-email" className="reading-col" aria-label="Reading Pane">
           {displayedMessage ? (
             <>
-              <div className="reading-header">
-                <h1 className="reading-title">{displayedMessage.subject}</h1>
+              <div className="reading-header" style={{ paddingBottom: '14px' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+                  <h1 className="reading-title" style={{ marginBottom: '10px' }}>{displayedMessage.subject}</h1>
+                  <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ padding: '6px 12px', fontSize: '13px' }}
+                      onClick={() => {
+                        void (async () => {
+                          const full = await hydrateMessageDetail(displayedMessage);
+                          onReplyMessage(full);
+                        })();
+                      }}
+                    >
+                      Reply
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ padding: '6px 12px', fontSize: '13px' }}
+                      onClick={() => {
+                        void (async () => {
+                          const full = await hydrateMessageDetail(displayedMessage);
+                          onForwardMessage(full);
+                        })();
+                      }}
+                    >
+                      Forward
+                    </button>
+                  </div>
+                </div>
 
                 <div className="sender-card">
                   <div className="sender-details">
@@ -1208,6 +1293,16 @@ export const InboxView: React.FC<InboxViewProps> = ({
                       <div style={{ fontSize: '13px', color: 'var(--neutral-body)' }}>
                         To: {displayedMessage.to.map((t) => t.email).join(', ')}
                       </div>
+                      {displayedMessage.cc && displayedMessage.cc.length > 0 && (
+                        <div style={{ fontSize: '13px', color: 'var(--neutral-body)' }}>
+                          Cc: {displayedMessage.cc.map((t) => t.email).join(', ')}
+                        </div>
+                      )}
+                      {displayedMessage.bcc && displayedMessage.bcc.length > 0 && (
+                        <div style={{ fontSize: '13px', color: 'var(--neutral-body)' }}>
+                          Bcc: {displayedMessage.bcc.map((t) => t.email).join(', ')}
+                        </div>
+                      )}
                     </div>
                   </div>
 

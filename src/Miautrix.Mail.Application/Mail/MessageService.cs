@@ -152,6 +152,11 @@ public sealed class MessageService : IMessageService
             a.ContentType,
             a.SizeBytes,
             $"/api/v1/messages/{messageId}/attachments/{a.Id}")).ToList();
+        var recipients = await _db.MessageRecipients
+            .Where(r => r.TenantId == tenantId && r.MessageId == messageId)
+            .ToListAsync(cancellationToken);
+        var cc = recipients.Where(r => r.Type.Equals("cc", StringComparison.OrdinalIgnoreCase)).Select(r => r.Address).ToList();
+        var bcc = recipients.Where(r => r.Type.Equals("bcc", StringComparison.OrdinalIgnoreCase)).Select(r => r.Address).ToList();
 
         return new MessageDetailDto(
             message.Id,
@@ -167,7 +172,9 @@ public sealed class MessageService : IMessageService
             message.BodyHtml,
             message.RawHeaders,
             flagColor,
-            attachmentDtos);
+            attachmentDtos,
+            cc,
+            bcc);
     }
 
     public async Task<bool> MarkReadAsync(
@@ -360,11 +367,133 @@ public sealed class MessageService : IMessageService
         return new AttachmentDownloadDto(attachment.FileName, attachment.ContentType, stream);
     }
 
-    public async Task<SendMessageResult> SendMessageAsync(
+    private async Task<Message?> GetDraftForWriteAsync(
+        Guid tenantId,
+        Guid userId,
+        Guid mailboxId,
+        Guid draftId,
+        CancellationToken cancellationToken)
+    {
+        var mailbox = await _db.Mailboxes
+            .FirstOrDefaultAsync(m => m.TenantId == tenantId && m.Id == mailboxId, cancellationToken);
+
+        if (mailbox is null)
+        {
+            return null;
+        }
+
+        _auth.AssertMailboxAccess(tenantId, userId, mailbox, requireWrite: true);
+
+        var draftsFolder = await GetOrCreateDraftsFolderAsync(tenantId, mailboxId, cancellationToken);
+
+        return await _db.Messages
+            .FirstOrDefaultAsync(m =>
+                m.TenantId == tenantId &&
+                m.MailboxId == mailboxId &&
+                m.FolderId == draftsFolder.Id &&
+                m.Id == draftId,
+                cancellationToken);
+    }
+
+    public async Task<AttachmentDto?> UploadDraftAttachmentAsync(
+        Guid tenantId,
+        Guid userId,
+        Guid mailboxId,
+        Guid draftId,
+        AttachmentUploadInput input,
+        CancellationToken cancellationToken = default)
+    {
+        if (input.SizeBytes <= 0 || input.ContentStream is null)
+        {
+            throw new ArgumentException("Attachment content is required.");
+        }
+
+        var draft = await GetDraftForWriteAsync(tenantId, userId, mailboxId, draftId, cancellationToken);
+        if (draft is null)
+        {
+            return null;
+        }
+
+        var fileName = System.IO.Path.GetFileName(input.FileName?.Trim() ?? string.Empty);
+        if (string.IsNullOrWhiteSpace(fileName))
+        {
+            fileName = "attachment";
+        }
+
+        var contentType = string.IsNullOrWhiteSpace(input.ContentType)
+            ? "application/octet-stream"
+            : input.ContentType.Trim();
+
+        var stored = await _storage.StoreAsync(input.ContentStream, cancellationToken);
+        var now = DateTimeOffset.UtcNow;
+        var attachment = new Attachment
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            MessageId = draft.Id,
+            FileName = fileName,
+            ContentType = contentType,
+            SizeBytes = stored.SizeBytes,
+            ContentHash = stored.ContentHash,
+            StoragePath = stored.StoragePath,
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+
+        _db.Attachments.Add(attachment);
+        draft.SizeBytes += stored.SizeBytes;
+        draft.UpdatedAt = now;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return ToAttachmentDto(attachment);
+    }
+
+    public async Task<bool> DeleteDraftAttachmentAsync(
+        Guid tenantId,
+        Guid userId,
+        Guid mailboxId,
+        Guid draftId,
+        Guid attachmentId,
+        CancellationToken cancellationToken = default)
+    {
+        var draft = await GetDraftForWriteAsync(tenantId, userId, mailboxId, draftId, cancellationToken);
+        if (draft is null)
+        {
+            return false;
+        }
+
+        var attachment = await _db.Attachments.FirstOrDefaultAsync(a =>
+            a.TenantId == tenantId &&
+            a.MessageId == draft.Id &&
+            a.Id == attachmentId,
+            cancellationToken);
+
+        if (attachment is null)
+        {
+            return false;
+        }
+
+        _db.Attachments.Remove(attachment);
+        draft.SizeBytes = Math.Max(0, draft.SizeBytes - attachment.SizeBytes);
+        draft.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    public Task<SendMessageResult> SendMessageAsync(
         Guid tenantId,
         Guid userId,
         Guid mailboxId,
         SendMessageRequest request,
+        CancellationToken cancellationToken = default) =>
+        SendMessageInternalAsync(tenantId, userId, mailboxId, request, Array.Empty<Attachment>(), cancellationToken);
+
+    private async Task<SendMessageResult> SendMessageInternalAsync(
+        Guid tenantId,
+        Guid userId,
+        Guid mailboxId,
+        SendMessageRequest request,
+        IReadOnlyList<Attachment> sourceAttachments,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(request.From) || request.To is null || !request.To.Any())
@@ -380,7 +509,7 @@ public sealed class MessageService : IMessageService
 
         var bodyContent = request.BodyText ?? request.BodyHtml ?? string.Empty;
         var rawContent = $"From: {request.From}\r\nTo: {string.Join(", ", request.To)}\r\nSubject: {request.Subject}\r\nDate: {DateTimeOffset.UtcNow:R}\r\n\r\n{bodyContent}";
-        var sizeBytes = Encoding.UTF8.GetByteCount(rawContent);
+        var sizeBytes = Encoding.UTF8.GetByteCount(rawContent) + sourceAttachments.Sum(a => a.SizeBytes);
         var contentHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(rawContent))).ToLowerInvariant();
 
         var messageId = Guid.NewGuid();
@@ -407,27 +536,63 @@ public sealed class MessageService : IMessageService
         };
 
         _db.Messages.Add(message);
+        AddAttachmentCopies(tenantId, sourceAttachments, messageId);
 
-        // Add recipients
-        foreach (var to in request.To)
+        // Add recipients, preserving To/Cc/Bcc for message details and outbound delivery.
+        foreach (var (address, type) in request.To.Select(address => (address, "to"))
+            .Concat((request.Cc ?? Array.Empty<string>()).Select(address => (address, "cc")))
+            .Concat((request.Bcc ?? Array.Empty<string>()).Select(address => (address, "bcc"))))
         {
             _db.MessageRecipients.Add(new MessageRecipient
             {
-                Id = Guid.NewGuid(),
-                TenantId = tenantId,
-                MessageId = messageId,
-                Type = "to",
-                Address = to,
-                CreatedAt = DateTimeOffset.UtcNow,
-                UpdatedAt = DateTimeOffset.UtcNow
+                Id = Guid.NewGuid(), TenantId = tenantId, MessageId = messageId,
+                Type = type, Address = address, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow
             });
         }
 
         Guid? firstQueueItemId = null;
+        var deliveryRecipients = request.To
+            .Concat(request.Cc ?? Array.Empty<string>())
+            .Concat(request.Bcc ?? Array.Empty<string>())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var localRecipients = await _db.Mailboxes
+            .Where(m => m.TenantId == tenantId && deliveryRecipients.Select(r => r.Trim().ToLower()).Contains(m.Address.ToLower()))
+            .ToDictionaryAsync(m => m.Address.ToLower(), cancellationToken);
 
-        // Add SmtpQueue items for outbound delivery
-        foreach (var recipient in request.To)
+        foreach (var recipient in deliveryRecipients)
         {
+            var normalizedRecipient = recipient.Trim().ToLowerInvariant();
+            if (localRecipients.TryGetValue(normalizedRecipient, out var recipientMailbox))
+            {
+                var inboxFolder = await GetOrCreateInboxFolderAsync(tenantId, recipientMailbox.Id, cancellationToken);
+                var deliveredMessageId = Guid.NewGuid();
+                _db.Messages.Add(new Message
+                {
+                    Id = deliveredMessageId,
+                    TenantId = tenantId,
+                    MailboxId = recipientMailbox.Id,
+                    FolderId = inboxFolder.Id,
+                    Sender = request.From,
+                    Recipient = recipient,
+                    Subject = request.Subject,
+                    Date = DateTimeOffset.UtcNow,
+                    ContentHash = contentHash,
+                    StoragePath = $"/storage/mail/{tenantId}/{recipientMailbox.Id}/{deliveredMessageId}.eml",
+                    SizeBytes = sizeBytes,
+                    Flags = string.Empty,
+                    IsRead = false,
+                    BodyText = request.BodyText,
+                    BodyHtml = request.BodyHtml,
+                    RawHeaders = $"From: {request.From}\nTo: {recipient}\nSubject: {request.Subject}",
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    UpdatedAt = DateTimeOffset.UtcNow
+                });
+                AddAttachmentCopies(tenantId, sourceAttachments, deliveredMessageId);
+                recipientMailbox.UsedBytes += sizeBytes;
+                continue;
+            }
+
             var queueItem = new SmtpQueueItem
             {
                 Id = Guid.NewGuid(),
@@ -466,6 +631,7 @@ public sealed class MessageService : IMessageService
                     var personalSentFolder = await GetOrCreateSentFolderAsync(tenantId, personalMailbox.Id, cancellationToken);
                     var personalMessageId = Guid.NewGuid();
                     _db.Messages.Add(CloneSentMessage(message, personalMessageId, personalMailbox.Id, personalSentFolder.Id));
+                    AddAttachmentCopies(tenantId, sourceAttachments, personalMessageId);
                     personalMailbox.UsedBytes += sizeBytes;
                 }
             }
@@ -476,29 +642,73 @@ public sealed class MessageService : IMessageService
         return new SendMessageResult(true, messageId, firstQueueItemId, "Message sent and queued for delivery.");
     }
 
-    private async Task<Folder> GetOrCreateSentFolderAsync(Guid tenantId, Guid mailboxId, CancellationToken cancellationToken)
-    {
-        var sentFolder = await _db.Folders
-            .FirstOrDefaultAsync(f => f.TenantId == tenantId && f.MailboxId == mailboxId && f.Role == "sent", cancellationToken);
+    private Task<Folder> GetOrCreateSentFolderAsync(Guid tenantId, Guid mailboxId, CancellationToken cancellationToken) =>
+        GetOrCreateSystemFolderAsync(tenantId, mailboxId, "sent", "Sent", cancellationToken);
 
-        if (sentFolder is not null)
+    private Task<Folder> GetOrCreateInboxFolderAsync(Guid tenantId, Guid mailboxId, CancellationToken cancellationToken) =>
+        GetOrCreateSystemFolderAsync(tenantId, mailboxId, "inbox", "Inbox", cancellationToken);
+
+    private async Task<Folder> GetOrCreateSystemFolderAsync(Guid tenantId, Guid mailboxId, string role, string name, CancellationToken cancellationToken)
+    {
+        var folder = await _db.Folders
+            .FirstOrDefaultAsync(f => f.TenantId == tenantId && f.MailboxId == mailboxId && f.Role == role, cancellationToken);
+
+        if (folder is not null)
         {
-            return sentFolder;
+            return folder;
         }
 
-        sentFolder = new Folder
+        folder = new Folder
         {
             Id = Guid.NewGuid(),
             TenantId = tenantId,
             MailboxId = mailboxId,
-            Name = "Sent",
-            Role = "sent",
+            Name = name,
+            Role = role,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow
         };
-        _db.Folders.Add(sentFolder);
-        return sentFolder;
+        _db.Folders.Add(folder);
+        return folder;
     }
+
+    private void AddAttachmentCopies(Guid tenantId, IReadOnlyList<Attachment> sourceAttachments, Guid messageId)
+    {
+        foreach (var source in sourceAttachments)
+        {
+            _db.Attachments.Add(new Attachment
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                MessageId = messageId,
+                FileName = source.FileName,
+                ContentType = source.ContentType,
+                SizeBytes = source.SizeBytes,
+                ContentHash = source.ContentHash,
+                StoragePath = source.StoragePath,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow
+            });
+        }
+    }
+
+    private async Task<IReadOnlyList<Attachment>> LoadAttachmentsForMessageAsync(
+        Guid tenantId,
+        Guid messageId,
+        CancellationToken cancellationToken)
+    {
+        return await _db.Attachments
+            .Where(a => a.TenantId == tenantId && a.MessageId == messageId)
+            .ToListAsync(cancellationToken);
+    }
+
+    private static AttachmentDto ToAttachmentDto(Attachment attachment) => new(
+        attachment.Id,
+        attachment.MessageId,
+        attachment.FileName,
+        attachment.ContentType,
+        attachment.SizeBytes,
+        $"/api/v1/messages/{attachment.MessageId}/attachments/{attachment.Id}");
 
     private static Message CloneSentMessage(Message source, Guid messageId, Guid mailboxId, Guid folderId) => new()
     {
@@ -521,6 +731,270 @@ public sealed class MessageService : IMessageService
         CreatedAt = DateTimeOffset.UtcNow,
         UpdatedAt = DateTimeOffset.UtcNow
     };
+
+    public async Task<DraftMessageResult> UpsertDraftAsync(
+        Guid tenantId,
+        Guid userId,
+        Guid mailboxId,
+        DraftMessageRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.From))
+        {
+            return new DraftMessageResult(false, request.DraftId, "From address is required.");
+        }
+
+        var mailbox = await _db.Mailboxes
+            .FirstOrDefaultAsync(m => m.TenantId == tenantId && m.Id == mailboxId, cancellationToken);
+        _auth.AssertMailboxAccess(tenantId, userId, mailbox, requireWrite: true);
+
+        var draftsFolder = await GetOrCreateDraftsFolderAsync(tenantId, mailboxId, cancellationToken);
+        var now = DateTimeOffset.UtcNow;
+        var recipients = request.To is { Count: > 0 } ? string.Join(", ", request.To) : string.Empty;
+        var bodyContent = request.BodyText ?? request.BodyHtml ?? string.Empty;
+        var rawContent = $"From: {request.From}\r\nTo: {recipients}\r\nSubject: {request.Subject}\r\nDate: {now:R}\r\n\r\n{bodyContent}";
+        var sizeBytes = Encoding.UTF8.GetByteCount(rawContent);
+        var contentHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(rawContent))).ToLowerInvariant();
+
+        Message? draft = null;
+        if (request.DraftId.HasValue)
+        {
+            draft = await _db.Messages.FirstOrDefaultAsync(m =>
+                m.TenantId == tenantId &&
+                m.MailboxId == mailboxId &&
+                m.FolderId == draftsFolder.Id &&
+                m.Id == request.DraftId.Value,
+                cancellationToken);
+        }
+
+        if (draft is null)
+        {
+            draft = new Message
+            {
+                Id = request.DraftId ?? Guid.NewGuid(),
+                TenantId = tenantId,
+                MailboxId = mailboxId,
+                FolderId = draftsFolder.Id,
+                CreatedAt = now
+            };
+            _db.Messages.Add(draft);
+        }
+
+        draft.Sender = request.From;
+        draft.Recipient = recipients;
+        draft.Subject = string.IsNullOrWhiteSpace(request.Subject) ? "(No Subject)" : request.Subject;
+        draft.Date = now;
+        draft.ContentHash = contentHash;
+        draft.StoragePath = $"/storage/mail/{tenantId}/{mailboxId}/{draft.Id}.eml";
+        if (draft.Id != request.DraftId) {
+            draft.SizeBytes = sizeBytes;
+        }
+        draft.Flags = "\\Draft";
+        draft.IsRead = true;
+        draft.BodyText = request.BodyText;
+        draft.BodyHtml = request.BodyHtml;
+        draft.RawHeaders = $"From: {request.From}\nTo: {recipients}\nSubject: {draft.Subject}";
+        draft.UpdatedAt = now;
+
+        _db.MessageRecipients.RemoveRange(_db.MessageRecipients.Where(r => r.TenantId == tenantId && r.MessageId == draft.Id));
+        foreach (var (address, type) in (request.To ?? Array.Empty<string>()).Select(address => (address, "to"))
+            .Concat((request.Cc ?? Array.Empty<string>()).Select(address => (address, "cc")))
+            .Concat((request.Bcc ?? Array.Empty<string>()).Select(address => (address, "bcc"))))
+        {
+            _db.MessageRecipients.Add(new MessageRecipient
+            {
+                Id = Guid.NewGuid(), TenantId = tenantId, MessageId = draft.Id,
+                Type = type, Address = address, CreatedAt = now, UpdatedAt = now
+            });
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
+        return new DraftMessageResult(true, draft.Id, "Draft saved.");
+    }
+
+    public async Task<SendMessageResult> SendDraftAsync(
+        Guid tenantId,
+        Guid userId,
+        Guid mailboxId,
+        Guid draftId,
+        DraftMessageRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var saved = await UpsertDraftAsync(tenantId, userId, mailboxId, request with { DraftId = draftId }, cancellationToken);
+        if (!saved.Success || saved.DraftId is null)
+        {
+            return new SendMessageResult(false, null, null, saved.Message);
+        }
+
+        var draftAttachments = await LoadAttachmentsForMessageAsync(tenantId, saved.DraftId.Value, cancellationToken);
+
+        var result = await SendMessageInternalAsync(
+            tenantId,
+            userId,
+            mailboxId,
+            new SendMessageRequest(
+                request.From,
+                request.To,
+                request.Cc,
+                request.Bcc,
+                request.Subject,
+                request.BodyText,
+                request.BodyHtml),
+            draftAttachments,
+            cancellationToken);
+
+        if (result.Success)
+        {
+            await DiscardDraftAsync(tenantId, userId, mailboxId, saved.DraftId.Value, cancellationToken);
+        }
+
+        return result;
+    }
+
+    public async Task<bool> DiscardDraftAsync(
+        Guid tenantId,
+        Guid userId,
+        Guid mailboxId,
+        Guid draftId,
+        CancellationToken cancellationToken = default)
+    {
+        var mailbox = await _db.Mailboxes
+            .FirstOrDefaultAsync(m => m.TenantId == tenantId && m.Id == mailboxId, cancellationToken);
+        _auth.AssertMailboxAccess(tenantId, userId, mailbox, requireWrite: true);
+
+        var draftsFolder = await GetOrCreateDraftsFolderAsync(tenantId, mailboxId, cancellationToken);
+        var draft = await _db.Messages.FirstOrDefaultAsync(m =>
+            m.TenantId == tenantId &&
+            m.MailboxId == mailboxId &&
+            m.FolderId == draftsFolder.Id &&
+            m.Id == draftId,
+            cancellationToken);
+
+        if (draft is null) return false;
+        await HardDeleteMessageAsync(tenantId, draft, cancellationToken);
+        return true;
+    }
+
+    private async Task<Folder> GetOrCreateDraftsFolderAsync(Guid tenantId, Guid mailboxId, CancellationToken cancellationToken)
+    {
+        var draftsFolder = await _db.Folders
+            .FirstOrDefaultAsync(f => f.TenantId == tenantId && f.MailboxId == mailboxId && f.Role == "drafts", cancellationToken);
+
+        if (draftsFolder is not null)
+        {
+            return draftsFolder;
+        }
+
+        draftsFolder = new Folder
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            MailboxId = mailboxId,
+            Name = "Drafts",
+            Role = "drafts",
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+        _db.Folders.Add(draftsFolder);
+        return draftsFolder;
+    }
+
+    public async Task<IReadOnlyList<MailSignatureDto>> ListSignaturesAsync(
+        Guid tenantId,
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _db.MailSignatures
+            .Where(s => s.TenantId == tenantId && s.UserId == userId)
+            .OrderByDescending(s => s.IsDefault)
+            .ThenBy(s => s.Name)
+            .Select(s => new MailSignatureDto(s.Id, s.Name, s.ContentText, s.ContentHtml, s.IsDefault))
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<MailSignatureDto> UpsertSignatureAsync(
+        Guid tenantId,
+        Guid userId,
+        MailSignatureRequest request,
+        Guid? signatureId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var now = DateTimeOffset.UtcNow;
+        MailSignature? signature = null;
+        if (signatureId.HasValue)
+        {
+            signature = await _db.MailSignatures.FirstOrDefaultAsync(s =>
+                s.TenantId == tenantId && s.UserId == userId && s.Id == signatureId.Value,
+                cancellationToken);
+        }
+
+        if (signature is null)
+        {
+            signature = new MailSignature
+            {
+                Id = signatureId ?? Guid.NewGuid(),
+                TenantId = tenantId,
+                UserId = userId,
+                CreatedAt = now
+            };
+            _db.MailSignatures.Add(signature);
+        }
+
+        if (request.IsDefault)
+        {
+            await _db.MailSignatures
+                .Where(s => s.TenantId == tenantId && s.UserId == userId && s.Id != signature.Id)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(s => s.IsDefault, false)
+                    .SetProperty(s => s.UpdatedAt, now),
+                    cancellationToken);
+        }
+
+        signature.Name = string.IsNullOrWhiteSpace(request.Name) ? "Signature" : request.Name.Trim();
+        signature.ContentText = request.ContentText ?? string.Empty;
+        signature.ContentHtml = request.ContentHtml;
+        signature.IsDefault = request.IsDefault;
+        signature.UpdatedAt = now;
+
+        await _db.SaveChangesAsync(cancellationToken);
+        return new MailSignatureDto(signature.Id, signature.Name, signature.ContentText, signature.ContentHtml, signature.IsDefault);
+    }
+
+    public async Task<bool> DeleteSignatureAsync(
+        Guid tenantId,
+        Guid userId,
+        Guid signatureId,
+        CancellationToken cancellationToken = default)
+    {
+        var signature = await _db.MailSignatures.FirstOrDefaultAsync(s =>
+            s.TenantId == tenantId && s.UserId == userId && s.Id == signatureId,
+            cancellationToken);
+        if (signature is null) return false;
+        _db.MailSignatures.Remove(signature);
+        await _db.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    public async Task<bool> SetDefaultSignatureAsync(
+        Guid tenantId,
+        Guid userId,
+        Guid signatureId,
+        CancellationToken cancellationToken = default)
+    {
+        var signature = await _db.MailSignatures.FirstOrDefaultAsync(s =>
+            s.TenantId == tenantId && s.UserId == userId && s.Id == signatureId,
+            cancellationToken);
+        if (signature is null) return false;
+
+        var now = DateTimeOffset.UtcNow;
+        await _db.MailSignatures
+            .Where(s => s.TenantId == tenantId && s.UserId == userId)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(s => s.IsDefault, s => s.Id == signatureId)
+                .SetProperty(s => s.UpdatedAt, now),
+                cancellationToken);
+        return true;
+    }
 
     public async Task<bool> SetFlagAsync(
         Guid tenantId,

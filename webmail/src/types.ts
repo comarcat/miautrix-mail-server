@@ -53,6 +53,10 @@ export interface EmailMessage {
     name: string;
     email: string;
   }>;
+  bcc?: Array<{
+    name: string;
+    email: string;
+  }>;
   subject: string;
   snippet: string;
   bodyHtml: string;
@@ -104,6 +108,14 @@ export interface CalendarEvent {
   location?: string;
   organizer: string;
   status: 'confirmed' | 'tentative' | 'cancelled';
+}
+
+export interface MailSignature {
+  id: string;
+  name: string;
+  contentText: string;
+  contentHtml?: string | null;
+  isDefault: boolean;
 }
 
 export interface SieveFilterRule {
