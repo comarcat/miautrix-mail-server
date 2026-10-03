@@ -1,9 +1,9 @@
 # Miautrix Mail Server
 ## Final Architecture & Software Design Specification
 
-**Document status:** Architecture Review Draft  
+**Document status:** Architecture Final — Version 1.0 Complete  
 **Version:** 1.0  
-**Date:** 2026-09-03  
+**Date:** 2026-10-03  
 **Author:** Miautrix / Cristobal Arboleda  
 **Target platform:** Windows Server, Linux, Debian, Proxmox, Docker/OCI  
 **Primary technology:** C# / .NET 10 LTS  

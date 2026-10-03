@@ -91,7 +91,8 @@ public sealed record SendMessageRequest(
     IReadOnlyList<string>? Bcc,
     string Subject,
     string? BodyText,
-    string? BodyHtml);
+    string? BodyHtml,
+    IReadOnlyList<Mime.MimeAttachment>? Attachments = null);
 
 public sealed record SendMessageResult(
     bool Success,

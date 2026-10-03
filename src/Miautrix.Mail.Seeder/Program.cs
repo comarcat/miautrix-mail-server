@@ -51,6 +51,62 @@ public static class Program
         "member"
     ];
 
+    /// <summary>
+    /// Permissions held by each non-owner system role. The owner is seeded with the whole
+    /// catalogue; every other role is listed explicitly so that adding a permission to the
+    /// catalogue never hands it to every role by accident.
+    /// </summary>
+    /// <remarks>
+    /// <c>mailbox.read</c> is load-bearing far beyond reading mail: every calendar endpoint
+    /// asserts it before doing anything else, and <c>mailbox.update</c> is what authorizes
+    /// sending. A role holding neither can sign in and then do nothing — its own mail still
+    /// opens, because owning the mailbox satisfies <c>AssertMailboxAccess</c> on its own,
+    /// while the entire calendar answers 404.
+    /// </remarks>
+    private static readonly Dictionary<string, string[]> RolePermissionGrants = new(StringComparer.Ordinal)
+    {
+        ["admin"] =
+        [
+            "mailbox.read",
+            "mailbox.update",
+            "mailbox.create",
+            "mailbox.delete",
+            "user.view",
+            "user.invite",
+            "user.manage",
+            "domain.view",
+            "queue.view",
+            "queue.retry",
+            "audit.view",
+            "quarantine.view",
+            "quarantine.manage",
+            "rule.view",
+            "rule.manage",
+            "sieve.edit",
+            "system.view"
+        ],
+        ["operator"] =
+        [
+            "mailbox.read",
+            "mailbox.update",
+            "domain.view",
+            "queue.view",
+            "queue.retry",
+            "audit.view",
+            "quarantine.view",
+            "rule.view",
+            "sieve.edit",
+            "system.view"
+        ],
+        ["member"] =
+        [
+            "mailbox.read",
+            "mailbox.update",
+            "rule.view",
+            "sieve.edit"
+        ]
+    };
+
     public static async Task<int> Main(string[] args)
     {
         Console.WriteLine("[Miautrix.Mail.Seeder] Starting database seeder...");
@@ -66,6 +122,24 @@ public static class Program
             .Options;
 
         using var db = new AppDbContext(options);
+
+        // --permissions-only reconciles roles and permissions for tenants that already exist
+        // and touches nothing else. Use it against a live database: a full run would also
+        // create the default tenant, its domain, and the bootstrap admin account with its
+        // well-known initial password, none of which reconciling a missing grant should do
+        // to production.
+        if (args.Contains("--permissions-only", StringComparer.OrdinalIgnoreCase))
+        {
+            var existingTenants = await db.Tenants.ToListAsync();
+            Console.WriteLine($"[Miautrix.Mail.Seeder] Reconciling roles and permissions for {existingTenants.Count} existing tenant(s).");
+            foreach (var existingTenant in existingTenants)
+            {
+                await SeedPermissionsAndRolesAsync(db, existingTenant);
+            }
+
+            Console.WriteLine("[Miautrix.Mail.Seeder] Role/permission reconciliation completed successfully.");
+            return 0;
+        }
 
         // 1. Seed or retrieve Default Tenant
         var defaultTenantSlug = "default";
@@ -118,118 +192,22 @@ public static class Program
             Console.WriteLine($"[Miautrix.Mail.Seeder] Default domain exists: {defaultDomainName} ({domain.Id})");
         }
 
-        // 3. Seed Permissions for Tenant
-        var existingPermissionIds = (await db.Permissions
-            .Where(p => p.TenantId == tenant.Id)
-            .Select(p => p.Id)
-            .ToListAsync())
-            .ToHashSet();
-
-        var newPermissions = new List<Permission>();
-        var permissionMap = new Dictionary<string, Guid>();
-
-        foreach (var permName in PermissionCatalogue)
+        // 3-5. Roles and permissions for EVERY tenant, not just the default one.
+        //
+        // Seeding only the default tenant left every other tenant with roles holding no
+        // permissions at all. Signing in still worked, and a user's own mail still opened —
+        // owning the mailbox satisfies AssertMailboxAccess on its own — but every calendar
+        // endpoint answers 404, because AssertPermission("mailbox.read") has no such
+        // fallback. A tenant is therefore only usable once this has run against it.
+        var tenants = await db.Tenants.ToListAsync();
+        foreach (var seededTenant in tenants)
         {
-            var permId = DeterministicGuid(tenant.Id, $"permission:{permName}");
-            permissionMap[permName] = permId;
-
-            if (!existingPermissionIds.Contains(permId))
-            {
-                newPermissions.Add(new Permission
-                {
-                    Id = permId,
-                    TenantId = tenant.Id,
-                    Code = permName,
-                    Name = permName,
-                    CreatedAt = DateTimeOffset.UtcNow,
-                    UpdatedAt = DateTimeOffset.UtcNow
-                });
-            }
+            await SeedPermissionsAndRolesAsync(db, seededTenant);
         }
 
-        if (newPermissions.Count > 0)
-        {
-            db.Permissions.AddRange(newPermissions);
-            await db.SaveChangesAsync();
-            Console.WriteLine($"[Miautrix.Mail.Seeder] Seeded {newPermissions.Count} new permissions.");
-        }
-        else
-        {
-            Console.WriteLine("[Miautrix.Mail.Seeder] All permissions already present in catalogue.");
-        }
-
-        // 4. Seed System Roles for Tenant
-        var existingRoleIds = (await db.Roles
-            .Where(r => r.TenantId == tenant.Id)
-            .Select(r => r.Id)
-            .ToListAsync())
-            .ToHashSet();
-
-        var newRoles = new List<Role>();
-        var roleMap = new Dictionary<string, Guid>();
-
-        foreach (var roleName in SystemRoles)
-        {
-            var roleId = DeterministicGuid(tenant.Id, $"role:{roleName}");
-            roleMap[roleName] = roleId;
-
-            if (!existingRoleIds.Contains(roleId))
-            {
-                newRoles.Add(new Role
-                {
-                    Id = roleId,
-                    TenantId = tenant.Id,
-                    Code = roleName,
-                    Name = roleName,
-                    CreatedAt = DateTimeOffset.UtcNow,
-                    UpdatedAt = DateTimeOffset.UtcNow
-                });
-            }
-        }
-
-        if (newRoles.Count > 0)
-        {
-            db.Roles.AddRange(newRoles);
-            await db.SaveChangesAsync();
-            Console.WriteLine($"[Miautrix.Mail.Seeder] Seeded {newRoles.Count} system roles.");
-        }
-        else
-        {
-            Console.WriteLine("[Miautrix.Mail.Seeder] All system roles already present.");
-        }
-
-        // 5. Seed Role Permissions (Owner gets all permissions)
-        var ownerRoleId = roleMap["owner"];
-        var existingRolePermIds = (await db.RolePermissions
-            .Where(rp => rp.TenantId == tenant.Id)
-            .Select(rp => rp.Id)
-            .ToListAsync())
-            .ToHashSet();
-
-        var newRolePermissions = new List<RolePermission>();
-        foreach (var (permName, permId) in permissionMap)
-        {
-            var rolePermId = DeterministicGuid(tenant.Id, $"roleperm:{ownerRoleId}:{permId}");
-            if (!existingRolePermIds.Contains(rolePermId))
-            {
-                newRolePermissions.Add(new RolePermission
-                {
-                    Id = rolePermId,
-                    TenantId = tenant.Id,
-                    RoleId = ownerRoleId,
-                    PermissionId = permId,
-                    CreatedAt = DateTimeOffset.UtcNow,
-                    UpdatedAt = DateTimeOffset.UtcNow
-                });
-            }
-        }
-
-        if (newRolePermissions.Count > 0)
-        {
-            db.RolePermissions.AddRange(newRolePermissions);
-            await db.SaveChangesAsync();
-            Console.WriteLine($"[Miautrix.Mail.Seeder] Seeded {newRolePermissions.Count} role permissions for Owner role.");
-        }
+        // The bootstrap admin keeps its owner membership; its role id is derived exactly the
+        // way SeedPermissionsAndRolesAsync derived it above.
+        var ownerRoleId = DeterministicGuid(tenant.Id, "role:owner");
 
         // 6. Seed Default Admin User (admin@miautrix.org)
         var adminEmail = "admin@miautrix.org";
@@ -374,6 +352,151 @@ public static class Program
         Console.WriteLine("[Miautrix.Mail.Seeder] Seed completed successfully.");
 
         return 0;
+    }
+
+    /// <summary>
+    /// Seeds the permission catalogue, the four system roles, and the role→permission grants
+    /// for a single tenant. Idempotent: every row id is derived deterministically from the
+    /// tenant id, so re-running adds only what is genuinely missing.
+    /// </summary>
+    private static async Task SeedPermissionsAndRolesAsync(AppDbContext db, Tenant tenant)
+    {
+        // Match on Code, never on the deterministic id alone. A tenant seeded by an older
+        // build — or by a script — can already hold roles and permissions under different
+        // ids. Inventing parallel rows would leave the existing membership bound to a role
+        // that still has no permissions, which is the exact defect being repaired.
+        var permissionMap = new Dictionary<string, Guid>(StringComparer.Ordinal);
+        foreach (var existing in await db.Permissions
+            .Where(p => p.TenantId == tenant.Id)
+            .Select(p => new { p.Id, p.Code })
+            .ToListAsync())
+        {
+            permissionMap.TryAdd(existing.Code, existing.Id);
+        }
+
+        var newPermissions = new List<Permission>();
+        foreach (var permName in PermissionCatalogue)
+        {
+            if (permissionMap.ContainsKey(permName))
+            {
+                continue;
+            }
+
+            var permId = DeterministicGuid(tenant.Id, $"permission:{permName}");
+            permissionMap[permName] = permId;
+            newPermissions.Add(new Permission
+            {
+                Id = permId,
+                TenantId = tenant.Id,
+                Code = permName,
+                Name = permName,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow
+            });
+        }
+
+        if (newPermissions.Count > 0)
+        {
+            db.Permissions.AddRange(newPermissions);
+            await db.SaveChangesAsync();
+            Console.WriteLine($"[Miautrix.Mail.Seeder] Tenant {tenant.Slug}: seeded {newPermissions.Count} new permissions.");
+        }
+
+        var roleMap = new Dictionary<string, Guid>(StringComparer.Ordinal);
+        foreach (var existing in await db.Roles
+            .Where(r => r.TenantId == tenant.Id)
+            .Select(r => new { r.Id, r.Code })
+            .ToListAsync())
+        {
+            roleMap.TryAdd(existing.Code, existing.Id);
+        }
+
+        var newRoles = new List<Role>();
+        foreach (var roleName in SystemRoles)
+        {
+            if (roleMap.ContainsKey(roleName))
+            {
+                continue;
+            }
+
+            var roleId = DeterministicGuid(tenant.Id, $"role:{roleName}");
+            roleMap[roleName] = roleId;
+            newRoles.Add(new Role
+            {
+                Id = roleId,
+                TenantId = tenant.Id,
+                Code = roleName,
+                Name = roleName,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow
+            });
+        }
+
+        if (newRoles.Count > 0)
+        {
+            db.Roles.AddRange(newRoles);
+            await db.SaveChangesAsync();
+            Console.WriteLine($"[Miautrix.Mail.Seeder] Tenant {tenant.Slug}: seeded {newRoles.Count} system roles.");
+        }
+
+        // Role permissions: owner gets the whole catalogue, the rest their explicit grant.
+        var existingRolePerms = (await db.RolePermissions
+            .Where(rp => rp.TenantId == tenant.Id)
+            .Select(rp => new { rp.RoleId, rp.PermissionId })
+            .ToListAsync())
+            .Select(rp => (RoleId: rp.RoleId, PermissionId: rp.PermissionId))
+            .ToHashSet();
+
+        var grants = new Dictionary<string, IEnumerable<string>>(StringComparer.Ordinal)
+        {
+            ["owner"] = PermissionCatalogue
+        };
+        foreach (var (roleCode, permissions) in RolePermissionGrants)
+        {
+            grants[roleCode] = permissions;
+        }
+
+        var newRolePermissions = new List<RolePermission>();
+        foreach (var (roleCode, permissions) in grants)
+        {
+            if (!roleMap.TryGetValue(roleCode, out var roleId))
+            {
+                continue;
+            }
+
+            foreach (var permName in permissions)
+            {
+                if (!permissionMap.TryGetValue(permName, out var permId))
+                {
+                    // A grant naming a permission outside the catalogue is a coding error, not
+                    // a data condition. Throw rather than quietly seeding a weaker role.
+                    throw new InvalidOperationException(
+                        $"Role '{roleCode}' grants permission '{permName}', which is not in the permission catalogue.");
+                }
+
+                if (existingRolePerms.Contains((roleId, permId)))
+                {
+                    continue;
+                }
+
+                newRolePermissions.Add(new RolePermission
+                {
+                    Id = DeterministicGuid(tenant.Id, $"roleperm:{roleId}:{permId}"),
+                    TenantId = tenant.Id,
+                    RoleId = roleId,
+                    PermissionId = permId,
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    UpdatedAt = DateTimeOffset.UtcNow
+                });
+            }
+        }
+
+        if (newRolePermissions.Count > 0)
+        {
+            db.RolePermissions.AddRange(newRolePermissions);
+            await db.SaveChangesAsync();
+            Console.WriteLine($"[Miautrix.Mail.Seeder] Tenant {tenant.Slug}: seeded {newRolePermissions.Count} role permissions.");
+        }
     }
 
     private static Guid DeterministicGuid(Guid namespaceId, string value)

@@ -3,6 +3,7 @@ using System;
 using Miautrix.Mail.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Miautrix.Mail.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260928215214_AddCalendarSchedulingAndSubscriptions")]
+    partial class AddCalendarSchedulingAndSubscriptions
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -69,7 +72,7 @@ namespace Miautrix.Mail.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("TenantId")
-                        .HasDatabaseName("idx_license_events_tenant_id");
+                        .HasDatabaseName("idx_calendar_subscriptions_tenant_id");
 
                     b.ToTable((string)null);
 
@@ -234,20 +237,6 @@ namespace Miautrix.Mail.Persistence.Migrations
                     b.Property<string>("Organizer")
                         .HasColumnType("text")
                         .HasColumnName("organizer");
-
-                    b.Property<string>("RecurrenceFrequency")
-                        .HasColumnType("text")
-                        .HasColumnName("recurrence_frequency");
-
-                    b.Property<int>("RecurrenceInterval")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(1)
-                        .HasColumnName("recurrence_interval");
-
-                    b.Property<DateTimeOffset?>("RecurrenceUntil")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("recurrence_until");
 
                     b.Property<int>("Sequence")
                         .ValueGeneratedOnAdd()

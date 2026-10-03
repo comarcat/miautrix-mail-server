@@ -34,7 +34,7 @@
           "cloudflare_worker",
           "external_recipient"
         ],
-        "note": "Mail pipeline with local protocol listeners, queue dispatch, and optional Cloudflare Worker relay per domain."
+        "note": "Mail pipeline with local protocol listeners, queue dispatch, optional Cloudflare Worker relay per domain, and public calendar RSVP links that submit protected attendee responses."
       },
       {
         "id": "storage-state",
@@ -124,7 +124,7 @@
       "id": "webmail",
       "type": "frontend",
       "label": "Webmail",
-      "sublabel": "Iris Pay UI",
+      "sublabel": "Webmail + Calendar RSVP"
       "pos": [
         240,
         440

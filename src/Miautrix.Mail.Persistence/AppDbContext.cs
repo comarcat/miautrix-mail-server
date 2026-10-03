@@ -40,6 +40,7 @@ public class AppDbContext : DbContext
     public DbSet<Contact> Contacts => Set<Contact>();
     public DbSet<CalendarEvent> CalendarEvents => Set<CalendarEvent>();
     public DbSet<CalendarEventAttendee> CalendarEventAttendees => Set<CalendarEventAttendee>();
+    public DbSet<CalendarSubscription> CalendarSubscriptions => Set<CalendarSubscription>();
     public DbSet<Attachment> Attachments => Set<Attachment>();
     public DbSet<Alias> Aliases => Set<Alias>();
     public DbSet<Group> Groups => Set<Group>();
@@ -316,10 +317,15 @@ public class AppDbContext : DbContext
             entity.Property(e => e.StartTime).HasColumnName("start_time");
             entity.Property(e => e.EndTime).HasColumnName("end_time");
             entity.Property(e => e.Location).HasColumnName("location");
+            entity.Property(e => e.Description).HasColumnName("description");
             entity.Property(e => e.Organizer).HasColumnName("organizer");
             entity.Property(e => e.Status).HasColumnName("status").IsRequired();
             entity.Property(e => e.Visibility).HasColumnName("visibility").IsRequired();
             entity.Property(e => e.ShowAs).HasColumnName("show_as").IsRequired();
+            entity.Property(e => e.RecurrenceFrequency).HasColumnName("recurrence_frequency");
+            entity.Property(e => e.RecurrenceInterval).HasColumnName("recurrence_interval").HasDefaultValue(1);
+            entity.Property(e => e.RecurrenceUntil).HasColumnName("recurrence_until");
+            entity.Property(e => e.Sequence).HasColumnName("sequence").HasDefaultValue(0).IsRequired();
 
             entity.HasIndex(e => new { e.TenantId, e.UserId, e.StartTime })
                 .HasDatabaseName("idx_calendar_events_tenant_id_user_id_start_time");
@@ -353,6 +359,19 @@ public class AppDbContext : DbContext
                 .IsUnique()
                 .HasFilter("token_hash IS NOT NULL")
                 .HasDatabaseName("uq_calendar_event_attendees_token_hash");
+        });
+
+        ConfigureTenantScoped<CalendarSubscription>(modelBuilder, "calendar_subscriptions");
+        modelBuilder.Entity<CalendarSubscription>(entity =>
+        {
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.TargetUserId).HasColumnName("target_user_id");
+
+            entity.HasIndex(e => new { e.TenantId, e.UserId })
+                .HasDatabaseName("idx_calendar_subscriptions_tenant_id_user_id");
+            entity.HasIndex(e => new { e.TenantId, e.UserId, e.TargetUserId })
+                .IsUnique()
+                .HasDatabaseName("uq_calendar_subscriptions_tenant_id_user_id_target_user_id");
         });
 
         ConfigureTenantScoped<Attachment>(modelBuilder, "attachments");

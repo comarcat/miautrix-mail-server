@@ -51,6 +51,49 @@ public sealed class CalendarController : ControllerBase
         return Results.Json(new ApiResponse<CalendarEventDto>(calendarEvent), ApiJson.Options, statusCode: StatusCodes.Status201Created);
     }
 
+    [HttpGet("directory")]
+    [ProducesResponseType(typeof(ApiResponse<IReadOnlyList<DirectoryParticipantDto>>), StatusCodes.Status200OK)]
+    public async Task<IResult> Directory(CancellationToken cancellationToken = default)
+    {
+        var participants = await _calendar.ListDirectoryParticipantsAsync(_context.CurrentTenantId, _context.CurrentUserId, cancellationToken);
+        return Results.Json(new ApiResponse<IReadOnlyList<DirectoryParticipantDto>>(participants), ApiJson.Options, statusCode: StatusCodes.Status200OK);
+    }
+
+    [HttpGet("subscriptions")]
+    [ProducesResponseType(typeof(ApiResponse<IReadOnlyList<SubscriptionDto>>), StatusCodes.Status200OK)]
+    public async Task<IResult> ListSubscriptions(CancellationToken cancellationToken = default)
+    {
+        var subscriptions = await _calendar.ListSubscriptionsAsync(_context.CurrentTenantId, _context.CurrentUserId, cancellationToken);
+        return Results.Json(new ApiResponse<IReadOnlyList<SubscriptionDto>>(subscriptions), ApiJson.Options, statusCode: StatusCodes.Status200OK);
+    }
+
+    [HttpPost("subscriptions")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ApiError), StatusCodes.Status404NotFound)]
+    public async Task<IResult> AddSubscription([FromBody] SubscriptionRequest request, CancellationToken cancellationToken = default)
+    {
+        var added = await _calendar.AddSubscriptionAsync(_context.CurrentTenantId, _context.CurrentUserId, request, cancellationToken);
+        return added ? Results.NoContent() : Results.NotFound();
+    }
+
+    [HttpDelete("subscriptions/{targetUserId:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ApiError), StatusCodes.Status404NotFound)]
+    public async Task<IResult> DeleteSubscription(Guid targetUserId, CancellationToken cancellationToken = default)
+    {
+        var removed = await _calendar.DeleteSubscriptionAsync(_context.CurrentTenantId, _context.CurrentUserId, targetUserId, cancellationToken);
+        return removed ? Results.NoContent() : Results.NotFound();
+    }
+
+    [HttpPost("availability/compare")]
+    [ProducesResponseType(typeof(ApiResponse<AvailabilityCompareDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiError), StatusCodes.Status404NotFound)]
+    public async Task<IResult> CompareAvailability([FromBody] AvailabilityCompareRequest request, CancellationToken cancellationToken = default)
+    {
+        var comparison = await _calendar.CompareAvailabilityAsync(_context.CurrentTenantId, _context.CurrentUserId, request, cancellationToken);
+        return Results.Json(new ApiResponse<AvailabilityCompareDto>(comparison), ApiJson.Options, statusCode: StatusCodes.Status200OK);
+    }
+
     [HttpPut("events/{eventId:guid}")]
     [ProducesResponseType(typeof(ApiResponse<CalendarEventDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiError), StatusCodes.Status404NotFound)]
@@ -97,6 +140,28 @@ public sealed class CalendarController : ControllerBase
     public async Task<IResult> AcceptProposal(Guid eventId, Guid attendeeId, CancellationToken cancellationToken = default)
     {
         var calendarEvent = await _calendar.AcceptRescheduleProposalAsync(_context.CurrentTenantId, _context.CurrentUserId, eventId, attendeeId, cancellationToken);
+        return calendarEvent is null
+            ? Results.NotFound()
+            : Results.Json(new ApiResponse<CalendarEventDto>(calendarEvent), ApiJson.Options, statusCode: StatusCodes.Status200OK);
+    }
+
+    [HttpPost("events/{eventId:guid}/attendees/{attendeeId:guid}/decline-proposal")]
+    [ProducesResponseType(typeof(ApiResponse<CalendarEventDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiError), StatusCodes.Status404NotFound)]
+    public async Task<IResult> DeclineProposal(Guid eventId, Guid attendeeId, CancellationToken cancellationToken = default)
+    {
+        var calendarEvent = await _calendar.DeclineRescheduleProposalAsync(_context.CurrentTenantId, _context.CurrentUserId, eventId, attendeeId, cancellationToken);
+        return calendarEvent is null
+            ? Results.NotFound()
+            : Results.Json(new ApiResponse<CalendarEventDto>(calendarEvent), ApiJson.Options, statusCode: StatusCodes.Status200OK);
+    }
+
+    [HttpPost("events/{eventId:guid}/rsvp")]
+    [ProducesResponseType(typeof(ApiResponse<CalendarEventDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiError), StatusCodes.Status404NotFound)]
+    public async Task<IResult> Rsvp(Guid eventId, [FromBody] CalendarRsvpRequest request, CancellationToken cancellationToken = default)
+    {
+        var calendarEvent = await _calendar.RespondToEventAsync(_context.CurrentTenantId, _context.CurrentUserId, eventId, request, cancellationToken);
         return calendarEvent is null
             ? Results.NotFound()
             : Results.Json(new ApiResponse<CalendarEventDto>(calendarEvent), ApiJson.Options, statusCode: StatusCodes.Status200OK);

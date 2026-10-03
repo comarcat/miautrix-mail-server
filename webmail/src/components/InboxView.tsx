@@ -437,6 +437,10 @@ export const InboxView: React.FC<InboxViewProps> = ({
 
   const handleBulkDelete = async (permanent: boolean) => {
     if (!canWriteCurrentMailbox || selectedIds.length === 0) return;
+    if (selectedIds.includes(selectedMessageId)) {
+      setSelectedMessageId('');
+      setDetailMessage(null);
+    }
     await onDeleteMessages(selectedIds, permanent);
     clearSelection();
   };
@@ -1261,7 +1265,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
                 <div className="sender-card">
                   <div className="sender-details">
                     <div className="sender-avatar">
-                      {currentMessage.from.name
+                      {(displayedMessage.from.name || displayedMessage.from.email)
                         .split(' ')
                         .map((n) => n[0])
                         .join('')

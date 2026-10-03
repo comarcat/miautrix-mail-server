@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Miautrix.Mail.Application.Mail;
 
 public sealed record ContactDto(
@@ -9,7 +11,8 @@ public sealed record ContactDto(
     string? Phone,
     string Book,
     string? Kind = null,
-    bool CanEdit = false);
+    bool CanEdit = false,
+    bool IsService = false);
 
 public sealed record ContactRequest(
     string Name,
@@ -42,14 +45,51 @@ public sealed record CalendarEventDto(
     DateTimeOffset StartTime,
     DateTimeOffset EndTime,
     string? Location,
+    string? Description,
     string? Organizer,
     string Status,
     string Visibility,
     string ShowAs,
+    bool IsOwn,
+    bool CanEdit,
+    string? RecurrenceFrequency = null,
+    int RecurrenceInterval = 1,
+    DateTimeOffset? RecurrenceUntil = null,
     IReadOnlyList<CalendarAttendeeDto>? Attendees = null);
+
+public sealed record DirectoryParticipantDto(
+    Guid UserId,
+    string DisplayName,
+    string Email,
+    string Kind);
+
+public sealed record SubscriptionDto(
+    Guid UserId,
+    string DisplayName,
+    string Email);
+
+public sealed record SubscriptionRequest(
+    Guid UserId);
+
+public sealed record AvailabilityCompareRequest(
+    DateTimeOffset StartTime,
+    DateTimeOffset EndTime,
+    IReadOnlyList<Guid> ParticipantIds);
+
+public sealed record AvailabilityCompareDto(
+    IReadOnlyList<CalendarAvailabilityDto> Participants,
+    IReadOnlyList<CalendarConflictDto> Conflicts,
+    bool AllAvailable);
+
+public sealed record CalendarConflictDto(
+    Guid ParticipantId,
+    string ParticipantName,
+    DateTimeOffset StartTime,
+    DateTimeOffset EndTime);
 
 public sealed record CalendarEventRequest(
     string Title,
+    string? Description,
     DateTimeOffset StartTime,
     DateTimeOffset EndTime,
     string? Location,
@@ -58,7 +98,10 @@ public sealed record CalendarEventRequest(
     string Visibility,
     string ShowAs,
     IReadOnlyList<CalendarInviteeRequest>? Invitees = null,
-    bool? SendInvitations = null);
+    bool? SendInvitations = null,
+    string? RecurrenceFrequency = null,
+    int RecurrenceInterval = 1,
+    DateTimeOffset? RecurrenceUntil = null);
 
 public sealed record CalendarInvitationViewDto(
     string Title,
@@ -71,10 +114,10 @@ public sealed record CalendarInvitationViewDto(
     bool CanRespond);
 
 public sealed record CalendarRsvpRequest(
-    string Response,
-    DateTimeOffset? ProposedStartTime = null,
-    DateTimeOffset? ProposedEndTime = null,
-    string? Note = null);
+    [property: JsonPropertyName("response")] string Response,
+    [property: JsonPropertyName("proposed_start_time")] DateTimeOffset? ProposedStartTime = null,
+    [property: JsonPropertyName("proposed_end_time")] DateTimeOffset? ProposedEndTime = null,
+    [property: JsonPropertyName("note")] string? Note = null);
 
 public sealed record CalendarAvailabilityDto(
     Guid UserId,

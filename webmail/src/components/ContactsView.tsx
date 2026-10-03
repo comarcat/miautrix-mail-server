@@ -79,7 +79,11 @@ export const ContactsView: React.FC<ContactsViewProps> = ({ contacts, onContacts
       c.name.toLowerCase().includes(search.toLowerCase()) ||
       c.email.toLowerCase().includes(search.toLowerCase()) ||
       (c.organization ?? '').toLowerCase().includes(search.toLowerCase());
-    return matchesBook && matchesSearch;
+    // Personal entries may omit kind; directory entries must be user mailboxes, excluding service accounts.
+    const isAllowed = !c.isService && (c.book === 'personal'
+      ? !c.kind || c.kind === 'user'
+      : c.kind === 'user');
+    return matchesBook && matchesSearch && isAllowed;
   });
 
   return (

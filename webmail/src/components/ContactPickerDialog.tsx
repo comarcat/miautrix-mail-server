@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { Contact } from '../types';
 
 type RecipientField = 'to' | 'cc' | 'bcc';
@@ -10,9 +11,15 @@ interface ContactPickerDialogProps {
   currentValue: string;
   onApply: (emails: string[]) => void;
   onClose: () => void;
+  title?: string;
+  description?: string;
+  contactFilter?: (contact: Contact) => boolean;
+  noBackdrop?: boolean;
 }
 
 const fieldLabel = { to: 'To', cc: 'Cc', bcc: 'Bcc' } satisfies Record<RecipientField, string>;
+
+const isUserMailboxContact = (contact: Contact) => !contact.isService;
 
 const parseEmails = (value: string) => new Set(
   value
@@ -21,7 +28,18 @@ const parseEmails = (value: string) => new Set(
     .filter(Boolean),
 );
 
-export const ContactPickerDialog: React.FC<ContactPickerDialogProps> = ({ open, target, contacts, currentValue, onApply, onClose }) => {
+export const ContactPickerDialog: React.FC<ContactPickerDialogProps> = ({
+  open,
+  target,
+  contacts,
+  currentValue,
+  onApply,
+  onClose,
+  title,
+  description,
+  contactFilter,
+  noBackdrop,
+}) => {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
@@ -35,11 +53,13 @@ export const ContactPickerDialog: React.FC<ContactPickerDialogProps> = ({ open, 
   const uniqueContacts = useMemo(() => {
     const byEmail = new Map<string, Contact>();
     contacts.forEach((contact) => {
+      if (!isUserMailboxContact(contact)) return;
+      if (contactFilter && !contactFilter(contact)) return;
       const email = contact.email.trim().toLowerCase();
       if (email && !byEmail.has(email)) byEmail.set(email, { ...contact, email });
     });
     return [...byEmail.values()].sort((a, b) => a.name.localeCompare(b.name) || a.email.localeCompare(b.email));
-  }, [contacts]);
+  }, [contacts, contactFilter]);
 
   const filteredContacts = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -67,13 +87,12 @@ export const ContactPickerDialog: React.FC<ContactPickerDialogProps> = ({ open, 
 
   const selectedCount = selected.size;
 
-  return (
-    <div className="wm-modal-backdrop" role="presentation" onMouseDown={onClose}>
-      <div className="wm-modal-panel contact-picker-dialog" role="dialog" aria-modal="true" aria-label={`Select ${fieldLabel[target]} recipients`} onMouseDown={(e) => e.stopPropagation()}>
+  const content = (
+    <div className="wm-modal-panel contact-picker-dialog" role="dialog" aria-modal="true" aria-label={`Select ${fieldLabel[target]} recipients`} onMouseDown={(e) => e.stopPropagation()}>
         <div className="wm-modal-header">
           <div>
-            <h2>Select contacts for {fieldLabel[target]}</h2>
-            <p>Choose from Personal Contacts and Company Directory.</p>
+            <h2>{title ?? `Select contacts for ${fieldLabel[target]}`}</h2>
+            <p>{description ?? 'Choose from Personal Contacts and Company Directory.'}</p>
           </div>
           <button type="button" className="btn btn-ghost" onClick={onClose}>Close</button>
         </div>
@@ -119,6 +138,21 @@ export const ContactPickerDialog: React.FC<ContactPickerDialogProps> = ({ open, 
           </div>
         </div>
       </div>
-    </div>
+  );
+
+  if (noBackdrop) {
+      return createPortal(
+          <div style={{ position: 'fixed', inset: 0, zIndex: 1200, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+            {content}
+          </div>,
+          document.body
+      );
+  }
+
+  return createPortal(
+    <div className="wm-modal-backdrop" role="presentation" onMouseDown={onClose}>
+      {content}
+    </div>,
+    document.body
   );
 };

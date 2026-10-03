@@ -1,8 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import type { MailSignature, SieveFilterRule } from '../types';
 import { webmailClient } from './WebmailApiClient';
+import { readWorkHours, writeWorkHours } from './workHours';
 
 const FLAG_COLORS = ['red', 'blue', 'green', 'orange', 'purple'] as const;
+const WORK_DAY_OPTIONS = [
+  { value: 1, label: 'Mon' },
+  { value: 2, label: 'Tue' },
+  { value: 3, label: 'Wed' },
+  { value: 4, label: 'Thu' },
+  { value: 5, label: 'Fri' },
+  { value: 6, label: 'Sat' },
+  { value: 0, label: 'Sun' },
+] as const;
 type FlagColor = (typeof FLAG_COLORS)[number];
 
 const FLAG_LABELS: Record<FlagColor, string> = {
@@ -36,6 +46,7 @@ export const SieveRulesView: React.FC<SieveRulesViewProps> = ({ initialRules, ma
     const stored = window.localStorage.getItem('miautrix_webmail_refresh_interval');
     return stored ? (stored as any) : '5m';
   });
+  const [workHours, setWorkHours] = useState(() => readWorkHours());
   const [flagAlerts, setFlagAlerts] = useState<Record<FlagColor, FlagAlertConfig>>(() =>
     FLAG_COLORS.reduce((acc, color) => {
       acc[color] = { enabled: false, title: `${FLAG_LABELS[color]} flagged email`, message: '' };
@@ -111,6 +122,20 @@ export const SieveRulesView: React.FC<SieveRulesViewProps> = ({ initialRules, ma
     setRefreshInterval(val);
     window.localStorage.setItem('miautrix_webmail_refresh_interval', val);
     window.dispatchEvent(new Event('miautrix:webmail:refresh-interval-changed'));
+  };
+
+  // The calendar dims the hours outside this window and scrolls to the start of it.
+  const handleWorkHoursChange = (start: string, end: string, workDays = workHours.workDays) => {
+    writeWorkHours(start, end, workDays);
+    setWorkHours(readWorkHours());
+  };
+
+  const handleWorkDayToggle = (day: number) => {
+    const selected = new Set(workHours.workDays);
+    if (selected.has(day)) selected.delete(day);
+    else selected.add(day);
+    const next = [...selected].sort();
+    handleWorkHoursChange(workHours.startLabel, workHours.endLabel, next);
   };
 
   const saveFlagAlerts = async () => {
@@ -244,6 +269,55 @@ export const SieveRulesView: React.FC<SieveRulesViewProps> = ({ initialRules, ma
                 <option value="30m">30 Minutes</option>
               </select>
             </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '16px' }}>
+              <div style={{ flex: '0 0 200px' }}>
+                <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--deep-navy)' }}>
+                  Calendar Working Hours
+                </label>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input
+                  className="input-base"
+                  type="time"
+                  aria-label="Working hours start"
+                  style={{ width: '130px' }}
+                  value={workHours.startLabel}
+                  onChange={(e) => handleWorkHoursChange(e.target.value, workHours.endLabel)}
+                />
+                <span style={{ color: 'var(--neutral-label)', fontSize: '13px' }}>to</span>
+                <input
+                  className="input-base"
+                  type="time"
+                  aria-label="Working hours end"
+                  style={{ width: '130px' }}
+                  value={workHours.endLabel}
+                  onChange={(e) => handleWorkHoursChange(workHours.startLabel, e.target.value)}
+                />
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '16px' }}>
+              <div style={{ flex: '0 0 200px' }}>
+                <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--deep-navy)' }}>
+                  Calendar Work Days
+                </label>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+                {WORK_DAY_OPTIONS.map((day) => (
+                  <label key={day.value} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px' }}>
+                    <input
+                      type="checkbox"
+                      checked={workHours.workDays.includes(day.value)}
+                      onChange={() => handleWorkDayToggle(day.value)}
+                      style={{ accentColor: 'var(--iris-violet)' }}
+                    />
+                    {day.label}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <p style={{ fontSize: '12px', color: 'var(--neutral-label)', margin: '8px 0 0 0' }}>
+              The calendar dims the hours and days outside this schedule and opens the week and day views at the start of it.
+            </p>
           </div>
           <div className="card" style={{ marginBottom: '32px' }}>
             <h3 style={{ fontSize: '1.25rem', marginBottom: '16px' }}>Signatures</h3>

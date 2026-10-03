@@ -8,6 +8,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Miautrix.Mail.Application.Mail.Mime;
 using Miautrix.Mail.Domain;
 using Miautrix.Mail.Persistence;
 using Miautrix.Mail.Security;
@@ -514,10 +515,21 @@ public sealed class MessageService : IMessageService
 
         var sentFolder = await GetOrCreateSentFolderAsync(tenantId, mailboxId, cancellationToken);
 
-        var bodyContent = request.BodyText ?? request.BodyHtml ?? string.Empty;
-        var rawContent = $"From: {request.From}\r\nTo: {string.Join(", ", request.To)}\r\nSubject: {request.Subject}\r\nDate: {DateTimeOffset.UtcNow:R}\r\n\r\n{bodyContent}";
-        var sizeBytes = Encoding.UTF8.GetByteCount(rawContent) + sourceAttachments.Sum(a => a.SizeBytes);
-        var contentHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(rawContent))).ToLowerInvariant();
+        var now = DateTimeOffset.UtcNow;
+        var generatedAttachments = request.Attachments ?? Array.Empty<MimeAttachment>();
+        var storedMimeAttachments = await LoadMimeAttachmentsAsync(sourceAttachments, cancellationToken);
+        var built = MimeMessageBuilder.Build(new MimeMessageRequest(
+            request.From,
+            request.To,
+            request.Cc,
+            request.Bcc,
+            request.Subject,
+            request.BodyText,
+            request.BodyHtml,
+            storedMimeAttachments.Concat(generatedAttachments).ToList(),
+            now));
+        var sizeBytes = built.SizeBytes;
+        var contentHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(built.RawMessage))).ToLowerInvariant();
 
         var messageId = Guid.NewGuid();
         var message = new Message
@@ -529,7 +541,7 @@ public sealed class MessageService : IMessageService
             Sender = request.From,
             Recipient = string.Join(", ", request.To),
             Subject = request.Subject,
-            Date = DateTimeOffset.UtcNow,
+            Date = now,
             ContentHash = contentHash,
             StoragePath = $"/storage/mail/{tenantId}/{mailboxId}/{messageId}.eml",
             SizeBytes = sizeBytes,
@@ -537,13 +549,14 @@ public sealed class MessageService : IMessageService
             IsRead = true,
             BodyText = request.BodyText,
             BodyHtml = request.BodyHtml,
-            RawHeaders = $"From: {request.From}\nTo: {string.Join(", ", request.To)}\nSubject: {request.Subject}",
-            CreatedAt = DateTimeOffset.UtcNow,
-            UpdatedAt = DateTimeOffset.UtcNow
+            RawHeaders = built.TopLevelHeaders,
+            CreatedAt = now,
+            UpdatedAt = now
         };
 
         _db.Messages.Add(message);
         AddAttachmentCopies(tenantId, sourceAttachments, messageId);
+        await AddGeneratedAttachmentCopiesAsync(tenantId, generatedAttachments, messageId, cancellationToken);
 
         // Add recipients, preserving To/Cc/Bcc for message details and outbound delivery.
         foreach (var (address, type) in request.To.Select(address => (address, "to"))
@@ -583,7 +596,7 @@ public sealed class MessageService : IMessageService
                     Sender = request.From,
                     Recipient = recipient,
                     Subject = request.Subject,
-                    Date = DateTimeOffset.UtcNow,
+                    Date = now,
                     ContentHash = contentHash,
                     StoragePath = $"/storage/mail/{tenantId}/{recipientMailbox.Id}/{deliveredMessageId}.eml",
                     SizeBytes = sizeBytes,
@@ -591,11 +604,12 @@ public sealed class MessageService : IMessageService
                     IsRead = false,
                     BodyText = request.BodyText,
                     BodyHtml = request.BodyHtml,
-                    RawHeaders = $"From: {request.From}\nTo: {recipient}\nSubject: {request.Subject}",
-                    CreatedAt = DateTimeOffset.UtcNow,
-                    UpdatedAt = DateTimeOffset.UtcNow
+                    RawHeaders = built.TopLevelHeaders,
+                    CreatedAt = now,
+                    UpdatedAt = now
                 });
                 AddAttachmentCopies(tenantId, sourceAttachments, deliveredMessageId);
+                await AddGeneratedAttachmentCopiesAsync(tenantId, generatedAttachments, deliveredMessageId, cancellationToken);
                 recipientMailbox.UsedBytes += sizeBytes;
                 continue;
             }
@@ -607,7 +621,7 @@ public sealed class MessageService : IMessageService
                 Sender = request.From,
                 Recipient = recipient,
                 Subject = request.Subject,
-                RawMessage = rawContent,
+                RawMessage = built.RawMessage,
                 Status = "Pending",
                 Attempts = 0,
                 NextAttemptAt = DateTimeOffset.UtcNow,
@@ -639,6 +653,7 @@ public sealed class MessageService : IMessageService
                     var personalMessageId = Guid.NewGuid();
                     _db.Messages.Add(CloneSentMessage(message, personalMessageId, personalMailbox.Id, personalSentFolder.Id));
                     AddAttachmentCopies(tenantId, sourceAttachments, personalMessageId);
+                    await AddGeneratedAttachmentCopiesAsync(tenantId, generatedAttachments, personalMessageId, cancellationToken);
                     personalMailbox.UsedBytes += sizeBytes;
                 }
             }
@@ -797,6 +812,47 @@ public sealed class MessageService : IMessageService
         }
     }
 
+    private async Task AddGeneratedAttachmentCopiesAsync(Guid tenantId, IReadOnlyList<MimeAttachment> attachments, Guid messageId, CancellationToken cancellationToken)
+    {
+        foreach (var attachment in attachments)
+        {
+            await using var stream = new MemoryStream(attachment.Content);
+            var stored = await _storage.StoreAsync(stream, cancellationToken);
+            _db.Attachments.Add(new Attachment
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                MessageId = messageId,
+                FileName = string.IsNullOrWhiteSpace(attachment.FileName) ? "attachment" : Path.GetFileName(attachment.FileName),
+                ContentType = string.IsNullOrWhiteSpace(attachment.ContentType) ? "application/octet-stream" : attachment.ContentType,
+                SizeBytes = stored.SizeBytes,
+                ContentHash = stored.ContentHash,
+                StoragePath = stored.StoragePath,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow
+            });
+        }
+    }
+
+    private async Task<IReadOnlyList<MimeAttachment>> LoadMimeAttachmentsAsync(IReadOnlyList<Attachment> attachments, CancellationToken cancellationToken)
+    {
+        var result = new List<MimeAttachment>();
+        foreach (var attachment in attachments)
+        {
+            await using var stream = await _storage.OpenReadAsync(attachment.ContentHash, cancellationToken);
+            if (stream is null)
+            {
+                throw new InvalidOperationException($"Attachment content for {attachment.FileName} could not be found.");
+            }
+
+            using var memory = new MemoryStream();
+            await stream.CopyToAsync(memory, cancellationToken);
+            result.Add(new MimeAttachment(attachment.FileName, attachment.ContentType, memory.ToArray()));
+        }
+
+        return result;
+    }
+
     private async Task<IReadOnlyList<Attachment>> LoadAttachmentsForMessageAsync(
         Guid tenantId,
         Guid messageId,
@@ -856,10 +912,18 @@ public sealed class MessageService : IMessageService
         var draftsFolder = await GetOrCreateDraftsFolderAsync(tenantId, mailboxId, cancellationToken);
         var now = DateTimeOffset.UtcNow;
         var recipients = request.To is { Count: > 0 } ? string.Join(", ", request.To) : string.Empty;
-        var bodyContent = request.BodyText ?? request.BodyHtml ?? string.Empty;
-        var rawContent = $"From: {request.From}\r\nTo: {recipients}\r\nSubject: {request.Subject}\r\nDate: {now:R}\r\n\r\n{bodyContent}";
-        var sizeBytes = Encoding.UTF8.GetByteCount(rawContent);
-        var contentHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(rawContent))).ToLowerInvariant();
+        var built = MimeMessageBuilder.Build(new MimeMessageRequest(
+            request.From,
+            request.To ?? Array.Empty<string>(),
+            request.Cc,
+            request.Bcc,
+            request.Subject,
+            request.BodyText,
+            request.BodyHtml,
+            Array.Empty<MimeAttachment>(),
+            now));
+        var sizeBytes = built.SizeBytes;
+        var contentHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(built.RawMessage))).ToLowerInvariant();
 
         Message? draft = null;
         if (request.DraftId.HasValue)
@@ -898,7 +962,7 @@ public sealed class MessageService : IMessageService
         draft.IsRead = true;
         draft.BodyText = request.BodyText;
         draft.BodyHtml = request.BodyHtml;
-        draft.RawHeaders = $"From: {request.From}\nTo: {recipients}\nSubject: {draft.Subject}";
+        draft.RawHeaders = built.TopLevelHeaders;
         draft.UpdatedAt = now;
 
         _db.MessageRecipients.RemoveRange(_db.MessageRecipients.Where(r => r.TenantId == tenantId && r.MessageId == draft.Id));

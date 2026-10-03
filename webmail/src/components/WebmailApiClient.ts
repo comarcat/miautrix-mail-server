@@ -1,4 +1,4 @@
-import type { Mailbox, EmailMessage, RawEmailMessage, Contact, CalendarEvent, SieveFilterRule, MailSignature, EmailAttachment, CalendarAvailability } from '../types';
+import type { Mailbox, EmailMessage, RawEmailMessage, Contact, CalendarEvent, SieveFilterRule, MailSignature, EmailAttachment, CalendarAvailability, DirectoryParticipant, Subscription, AvailabilityCompare } from '../types';
 
 const normalizeEmailAttachment = (a: any): EmailAttachment => ({
   id: a.id,
@@ -541,6 +541,7 @@ export class WebmailApiClient {
       phone: item.phone ?? undefined,
       book: item.book ?? 'personal',
       kind: item.kind ?? null,
+      isService: item.isService ?? item.is_service ?? false,
       canEdit: item.canEdit ?? item.can_edit ?? false,
     };
   }
@@ -557,6 +558,9 @@ export class WebmailApiClient {
       status: item.status ?? 'confirmed',
       visibility: item.visibility ?? 'private',
       showAs: item.showAs ?? item.show_as ?? 'busy',
+      description: item.description ?? null,
+      isOwn: item.isOwn ?? item.is_own ?? false,
+      canEdit: item.canEdit ?? item.can_edit ?? false,
       attendees: (item.attendees ?? []).map((a: any) => ({
         id: a.id,
         email: a.email,
@@ -569,6 +573,9 @@ export class WebmailApiClient {
         proposedEndTime: a.proposedEndTime ?? a.proposed_end_time ?? null,
         proposalNote: a.proposalNote ?? a.proposal_note ?? null,
       })),
+      recurrenceFrequency: item.recurrenceFrequency ?? item.recurrence_frequency ?? null,
+      recurrenceInterval: item.recurrenceInterval ?? item.recurrence_interval ?? 1,
+      recurrenceUntil: item.recurrenceUntil ?? item.recurrence_until ?? null,
     };
   }
 
@@ -659,11 +666,91 @@ export class WebmailApiClient {
     };
   }
 
+  // The calendar directory returns snake_case DTOs like every other endpoint, so it
+  // needs the same explicit mapping: without it `userId`/`displayName` are undefined
+  // and the resource dropdown renders blank rows.
+  private normalizeDirectoryParticipant(item: any): DirectoryParticipant {
+    return {
+      userId: item.userId ?? item.user_id ?? '',
+      displayName: item.displayName ?? item.display_name ?? item.email ?? '',
+      email: item.email ?? '',
+      kind: item.kind === 'resource' ? 'resource' : 'user',
+    };
+  }
+
+  async getDirectoryParticipants(): Promise<{ data: DirectoryParticipant[] }> {
+    const res = await this.request<any>('/calendar/directory');
+    return {
+      data: this.normalizeArray<any>(res).data.map((item) => this.normalizeDirectoryParticipant(item)),
+    };
+  }
+
+  async getSubscriptions(): Promise<{ data: Subscription[] }> {
+    const res = await this.request<any>('/calendar/subscriptions');
+    return {
+      data: this.normalizeArray<any>(res).data.map((item) => ({
+        userId: item.userId ?? item.user_id ?? '',
+        displayName: item.displayName ?? item.display_name ?? item.email ?? '',
+        email: item.email ?? '',
+      })),
+    };
+  }
+
+  async addSubscription(userId: string): Promise<void> {
+    await this.request('/calendar/subscriptions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId }),
+    });
+  }
+
+  async deleteSubscription(targetUserId: string): Promise<void> {
+    await this.request(`/calendar/subscriptions/${targetUserId}`, { method: 'DELETE' });
+  }
+
+  async compareAvailability(startTime: string, endTime: string, participantIds: string[]): Promise<{ data: AvailabilityCompare }> {
+    const res = await this.request<any>('/calendar/availability/compare', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        start_time: startTime,
+        end_time: endTime,
+        participant_ids: participantIds,
+      }),
+    });
+    // Mapped like every other calendar read: the dialog indexes `conflicts` directly,
+    // so an unmapped payload is a blank panel at best and a render crash at worst.
+    const raw = res?.data ?? res;
+    return {
+      data: {
+        participants: (raw?.participants ?? []).map((p: any) => ({
+          userId: p.userId ?? p.user_id,
+          displayName: p.displayName ?? p.display_name ?? p.email,
+          email: p.email,
+          busy: (p.busy ?? []).map((b: any) => ({
+            startTime: b.startTime ?? b.start_time,
+            endTime: b.endTime ?? b.end_time,
+            showAs: b.showAs ?? b.show_as ?? 'busy',
+            title: b.title ?? null,
+          })),
+        })),
+        conflicts: (raw?.conflicts ?? []).map((c: any) => ({
+          participantId: c.participantId ?? c.participant_id,
+          participantName: c.participantName ?? c.participant_name ?? '',
+          startTime: c.startTime ?? c.start_time,
+          endTime: c.endTime ?? c.end_time,
+        })),
+        allAvailable: !!(raw?.allAvailable ?? raw?.all_available),
+      },
+    };
+  }
+
   // The API contract is snake_case (ApiJson.Options uses SnakeCaseLower) and rejects
   // unknown members, so request bodies are serialized explicitly rather than passed through.
   private static calendarEventBody(event: Omit<CalendarEvent, 'id'>) {
     return JSON.stringify({
       title: event.title,
+      description: event.description ?? null,
       start_time: event.startTime,
       end_time: event.endTime,
       location: event.location ?? null,
@@ -677,6 +764,9 @@ export class WebmailApiClient {
         role: invitee.role ?? 'required',
       })),
       send_invitations: event.sendInvitations ?? true,
+      recurrence_frequency: event.recurrenceFrequency ?? null,
+      recurrence_interval: event.recurrenceInterval ?? 1,
+      recurrence_until: event.recurrenceUntil ?? null,
     });
   }
 
@@ -702,8 +792,28 @@ export class WebmailApiClient {
     await this.request(`/calendar/events/${eventId}`, { method: 'DELETE' });
   }
 
+  // Re-sends the iCalendar REQUEST to every attendee of an event that has already been saved.
+  async resendInvitations(eventId: string): Promise<void> {
+    await this.request(`/calendar/events/${eventId}/invitations`, { method: 'POST' });
+  }
+
+  async rsvpEvent(eventId: string, request: { response: string; proposed_start_time?: string; proposed_end_time?: string; note?: string }): Promise<{ data: CalendarEvent }> {
+    const res = await this.request<any>(`/calendar/events/${eventId}/rsvp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+    return { data: this.normalizeCalendarEvent(res?.data ?? res) };
+  }
+
   async acceptRescheduleProposal(eventId: string, attendeeId: string): Promise<void> {
     await this.request(`/calendar/events/${eventId}/attendees/${attendeeId}/accept-proposal`, {
+      method: 'POST',
+    });
+  }
+
+  async declineRescheduleProposal(eventId: string, attendeeId: string): Promise<void> {
+    await this.request(`/calendar/events/${eventId}/attendees/${attendeeId}/decline-proposal`, {
       method: 'POST',
     });
   }

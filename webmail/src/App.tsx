@@ -51,6 +51,7 @@ export const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isInitializing, setIsInitializing] = useState<boolean>(true);
   const [currentUserEmail, setCurrentUserEmail] = useState<string>('');
+  const [currentUserId, setCurrentUserId] = useState<string>('');
   const [currentUserRoles, setCurrentUserRoles] = useState<string[]>([]);
   const [mustChangePassword, setMustChangePassword] = useState<boolean>(false);
 
@@ -143,6 +144,7 @@ export const App: React.FC = () => {
         const res = await webmailClient.me();
         const userEmail = res.data.email || '';
         setCurrentUserEmail(userEmail);
+        setCurrentUserId(res.data.id ?? '');
         webmailClient.setTenantId(res.data.tenant_id ?? res.data.tenantId ?? null);
         webmailClient.setUserId(res.data.id ?? null);
 
@@ -388,9 +390,11 @@ export const App: React.FC = () => {
       messageIds.map((id) => webmailClient.deleteMessage(selectedMailboxAccount, id, permanent)),
     );
 
+    setMessages((prev) => prev.filter((message) => !messageIds.includes(message.id)));
+
     await refreshMessagesForFolder(activeFolderId, {
-      retryOnEmpty: true,
-      retries: 2,
+      retryOnEmpty: false,
+      retries: 1,
       retryDelayMs: 150,
     });
 
@@ -605,6 +609,7 @@ export const App: React.FC = () => {
         onLoginSuccess={async (user) => {
           const userEmail = user.email || '';
           setCurrentUserEmail(userEmail);
+          setCurrentUserId(user.id ?? '');
           webmailClient.setTenantId(user.tenant_id ?? user.tenantId ?? null);
           webmailClient.setUserId(user.id ?? null);
 
@@ -625,6 +630,7 @@ export const App: React.FC = () => {
         onChanged={async () => {
           const res = await webmailClient.me();
           setCurrentUserEmail(res.data.email || currentUserEmail);
+          setCurrentUserId(res.data.id ?? '');
           const flag = !!(res.data.must_change_password ?? res.data.mustChangePassword);
           setMustChangePassword(flag);
             setCurrentUserRoles((res.data.roles ?? []).map((role: string) => role.toLowerCase()));
@@ -729,7 +735,7 @@ export const App: React.FC = () => {
         )}
         {activeTab === 'compose' && (
           <ComposerView
-            accounts={mailboxAccounts.filter((account) => account.kind !== 'shared' || account.accessLevel === 'write')}
+            accounts={mailboxAccounts.filter((account) => account.address === currentUserEmail || (account.kind === 'shared' && account.accessLevel === 'write'))}
             defaultAccountId={writableComposeMailboxId()}
             initialState={composeInitialState}
             contacts={contacts}
@@ -755,6 +761,8 @@ export const App: React.FC = () => {
             events={events}
             onEventsChanged={(nextEvents) => setEvents(nextEvents)}
             currentUserEmail={currentUserEmail}
+            currentUserId={currentUserId}
+            currentUserRoles={currentUserRoles}
             contacts={contacts}
             mailboxAccounts={mailboxAccounts}
           />

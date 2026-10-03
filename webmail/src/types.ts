@@ -99,6 +99,7 @@ export interface Contact {
   phone?: string;
   book: 'personal' | 'directory';
   kind?: 'user' | 'shared' | 'group' | string | null;
+  isService?: boolean;
   canEdit?: boolean;
 }
 
@@ -134,7 +135,39 @@ export interface CalendarEvent {
   showAs?: 'free' | 'busy' | 'tentative' | 'out_of_office';
   attendees?: CalendarAttendee[];
   invitees?: CalendarInvitee[];
+  description?: string | null;
+  isOwn?: boolean;
+  canEdit?: boolean;
   sendInvitations?: boolean;
+  recurrenceFrequency?: 'none' | 'daily' | 'weekly' | 'monthly' | null;
+  recurrenceInterval?: number;
+  recurrenceUntil?: string | null;
+}
+
+export interface DirectoryParticipant {
+  userId: string;
+  displayName: string;
+  email: string;
+  kind: 'user' | 'resource';
+}
+
+export interface Subscription {
+  userId: string;
+  displayName: string;
+  email: string;
+}
+
+export interface AvailabilityCompare {
+  participants: CalendarAvailability[];
+  conflicts: CalendarConflict[];
+  allAvailable: boolean;
+}
+
+export interface CalendarConflict {
+  participantId: string;
+  participantName: string;
+  startTime: string;
+  endTime: string;
 }
 
 export interface CalendarAvailability {

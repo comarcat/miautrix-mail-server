@@ -3,6 +3,7 @@ using System;
 using Miautrix.Mail.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Miautrix.Mail.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261001113313_CalendarEventRecurrence")]
+    partial class CalendarEventRecurrence
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -236,18 +239,13 @@ namespace Miautrix.Mail.Persistence.Migrations
                         .HasColumnName("organizer");
 
                     b.Property<string>("RecurrenceFrequency")
-                        .HasColumnType("text")
-                        .HasColumnName("recurrence_frequency");
+                        .HasColumnType("text");
 
                     b.Property<int>("RecurrenceInterval")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(1)
-                        .HasColumnName("recurrence_interval");
+                        .HasColumnType("integer");
 
                     b.Property<DateTimeOffset?>("RecurrenceUntil")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("recurrence_until");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("Sequence")
                         .ValueGeneratedOnAdd()

@@ -224,10 +224,15 @@ public class CalendarEvent : TenantScopedEntityBase
     public DateTimeOffset StartTime { get; set; }
     public DateTimeOffset EndTime { get; set; }
     public string? Location { get; set; }
+    public string? Description { get; set; }
     public string? Organizer { get; set; }
     public string Status { get; set; } = "confirmed";
     public string Visibility { get; set; } = "private";
     public string ShowAs { get; set; } = "busy";
+    public string? RecurrenceFrequency { get; set; }
+    public int RecurrenceInterval { get; set; } = 1;
+    public DateTimeOffset? RecurrenceUntil { get; set; }
+    public int Sequence { get; set; }
 }
 
 public class CalendarEventAttendee : TenantScopedEntityBase
@@ -245,6 +250,12 @@ public class CalendarEventAttendee : TenantScopedEntityBase
     public DateTimeOffset? ProposedEndTime { get; set; }
     public string? ProposalNote { get; set; }
     public Guid? MirroredEventId { get; set; }
+}
+
+public class CalendarSubscription : TenantScopedEntityBase
+{
+    public Guid UserId { get; set; }
+    public Guid TargetUserId { get; set; }
 }
 
 public class Attachment : TenantScopedEntityBase

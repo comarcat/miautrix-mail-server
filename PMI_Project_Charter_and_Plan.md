@@ -2,12 +2,12 @@
 # Miautrix Mail Server
 
 **Document Version:** 1.0  
-**Date:** 2026-09-27  
+**Date:** 2026-10-03  
 **Project Sponsor:** Miautrix  
 **Project Lead / Architect:** Cristobal Arboleda  
-**Status:** Approved / Active Implementation & Production Integration
+**Status:** **Version 1.0 Complete / Approved**
 
-**Last Updated:** 2026-09-27  
+**Last Updated:** 2026-10-03  
 
 ---
 
@@ -71,9 +71,11 @@ Miautrix Mail Server
 | **M1: Core Foundation** | Scaffold, PostgreSQL schema, Seed data, Auth/MFA, RBAC, Audit | ✅ Complete | T1–T6 | `dotnet test --filter Category=Isolation\|Audit\|Identity` |
 | **M2: Mail Engine** | SMTP In/Out, SPF/DKIM/DMARC, Anti-Spam, IMAP, Sieve, FTS, Rules Engine | ✅ Complete | T7–T13 | `dotnet test --filter Category=Smtp\|Dkim\|Imap\|Rules` |
 | **M3: Surfaces & Client Apps** | OpenAPI REST endpoints, Web Admin, Webmail, CLI | ✅ Complete | T14–T17 | API Integration tests & `pnpm test` |
-| **M4: Operational Readiness** | Desktop Client, Backup/Restore drills, Blue/Green symlink updater, License gates | 🔄 In Progress (production migration/live verification) | T18–T21 | Migration verification, service restart, live login and licensing tests |
+| **M4: Operational Readiness** | Desktop Client, Backup/Restore drills, Blue/Green symlink updater, License gates, calendar invitations, Webmail stability | ✅ Complete — Version 1.0 closed 2026-10-03 | T18–T21 | `dotnet build Miautrix.Mail.sln -warnaserror`; calendar invitation unit tests; live/manual verification checklist |
 
 ### Active Execution Phase: Production Integration & Functional Delivery
+
+**Version 1.0 closure note (2026-10-03):** Core project scope is complete. The final stabilization pass closed the painful calendar/Webmail defects that blocked signoff: public RSVP actions, reschedule proposal links, explicit UTC schedule wording, and inbox bulk-delete white-screen prevention.
 
 | Task ID | Task Description | Scope & Acceptance | Blocked By | Status |
 |---|---|---|---|---|
@@ -121,6 +123,7 @@ Each work package carries strict Acceptance Criteria under the EARS standard (*W
 
 | Date | Change | Verification |
 |---|---|---|
+| 2026-10-03 | **Version 1.0 completed.** Closed the calendar/Webmail stabilization work: public RSVP uses link-style accept/tentative/decline actions with a protected POST submission; reschedule requests generate organizer Accept/Decline proposal links; invitation and proposal email times explicitly identify UTC with local-PC display guidance; bulk inbox deletion clears stale detail state and safely renders an empty folder. | `dotnet build Miautrix.Mail.sln -warnaserror`; `dotnet test tests/Miautrix.Mail.UnitTests/Miautrix.Mail.UnitTests.csproj --filter CalendarInvitationBuilder` (6 passed); manual post-deploy checklist in `CALENDAR_WEBMAIL_FINAL_SOLUTION_2026-10-03.md` |
 | 2026-09-28 | Closed Webmail contacts/address-book section: Company Directory lists tenant mailbox/group addresses, owner/admin directory edits persist name/organization/department/phone, sent recipients autosave to Personal Contacts, and compose/reply/forward forms include a reusable contact picker for To/Cc/Bcc. | `dotnet build Miautrix.Mail.sln -warnaserror`; `pnpm --filter webmail exec vitest run src/tests/App.test.tsx -t "navigates to Compose view"`; `pnpm --filter webmail build` |
 | 2026-09-27 | Closed Webmail draft/composer/personal-folder section: persisted draft attachments, inline image sizing persistence, italic/editor cleanup, mail signatures, recursive personal-folder rendering, custom folder delete endpoint, and delete confirmation when mails/messages exist. | `dotnet build Miautrix.Mail.sln -warnaserror`; `pnpm --filter webmail build` |
 | 2026-09-27 | Refreshed knowledge references using graphify/codebase-memory and updated repository graph artifacts for current Webmail/API changes. | `graphify-out/GRAPH_REPORT.md`, `graphify-out/graph.json`, `graphify-out/manifest.json` |

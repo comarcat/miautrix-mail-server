@@ -465,6 +465,7 @@ export const ComposerView: React.FC<ComposerViewProps> = ({ accounts, defaultAcc
         open={!!contactPickerTarget}
         target={contactPickerTarget}
         contacts={contacts}
+        contactFilter={(contact) => contact.kind !== 'service'}
         currentValue={currentRecipientValue()}
         onApply={applyContactSelection}
         onClose={() => setContactPickerTarget(null)}

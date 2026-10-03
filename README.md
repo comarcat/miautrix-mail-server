@@ -6,11 +6,14 @@ Self-hosted, multi-tenant mail platform designed as a modular monolith in .NET 1
 
 - **Architecture Diagram:** [`architecture.html`](architecture.html) (interactive diagram with showcase quality profile)
 - **Architecture Blueprint:** [`blueprints/miautrix-mail-server/blueprint.md`](blueprints/miautrix-mail-server/blueprint.md)
-- **Charter & Plan:** [`PMI_Project_Charter_and_Plan.md`](PMI_Project_Charter_and_Plan.md)
+- **Charter & Plan:** [`PMI_Project_Charter_and_Plan.md`](PMI_Project_Charter_and_Plan.md) — Version 1.0 complete (2026-10-03)
+- **Calendar/Webmail final solution:** [`CALENDAR_WEBMAIL_FINAL_SOLUTION_2026-10-03.md`](CALENDAR_WEBMAIL_FINAL_SOLUTION_2026-10-03.md)
 - **Admin UI Specification:** [`DESIGN-Admin.md`](DESIGN-Admin.md) — Comprehensive technical design for the Admin Website
 - **Webmail UI Specification:** [`DESIGN-WEBMAIL.md`](DESIGN-WEBMAIL.md) — Comprehensive technical design for the Webmail Frontend
 
 ## 🚀 Project Status
+
+**Version 1.0 is complete as of 2026-10-03.** The final closure pass fixed public calendar RSVP actions, reschedule proposal links, explicit UTC schedule-email wording, and Webmail bulk-delete empty-inbox stability.
 
 Tasks completed and verified (T1–T13):
 
@@ -32,7 +35,7 @@ Tasks completed and verified (T1–T13):
 | **T14** | API contract and OpenAPI | ✅ Done | `dotnet test --filter Category=Api` |
 | **T15** | Web Admin GUI | ✅ Done | `pnpm --filter admin build && pnpm test` |
 | **T16** | Webmail Client | ✅ Done | `pnpm --filter webmail build && pnpm test` |
-| **T17–T21** | CLI, Desktop, Backup, Operations | ⏳ In Queue | Surface & operational buildout |
+| **T17–T21** | CLI, Desktop, Backup, Operations, Version 1.0 stabilization | ✅ Done | `dotnet build Miautrix.Mail.sln -warnaserror`; calendar invitation unit tests; final manual production checklist |
 
 ## 🛠️ Deploying & Updating
 

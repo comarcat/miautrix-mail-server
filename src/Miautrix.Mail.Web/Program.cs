@@ -83,9 +83,18 @@ public class Program
         builder.Services.AddScoped<IMailboxService, MailboxService>();
         builder.Services.AddScoped<IMessageService, MessageService>();
         builder.Services.AddScoped<IContactService, ContactService>();
-        builder.Services.AddSingleton(new CalendarInvitationOptions
+        builder.Services.AddSingleton(sp =>
         {
-            PublicBaseUrl = Environment.GetEnvironmentVariable("MIAUTRIX_PUBLIC_BASE_URL") ?? string.Empty
+            var url = Environment.GetEnvironmentVariable("MIAUTRIX_PUBLIC_BASE_URL");
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                var context = sp.GetRequiredService<IHttpContextAccessor>().HttpContext;
+                if (context != null)
+                {
+                    url = $"{context.Request.Scheme}://{context.Request.Host}";
+                }
+            }
+            return new CalendarInvitationOptions { PublicBaseUrl = url ?? string.Empty };
         });
         builder.Services.AddScoped<ICalendarService, CalendarService>();
         builder.Services.AddScoped<ISieveRuleService, SieveRuleService>();

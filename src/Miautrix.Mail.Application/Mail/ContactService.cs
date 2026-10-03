@@ -28,10 +28,31 @@ public sealed class ContactService : IContactService
 
         var directoryDomain = GetDomainPart(userEmail);
 
-        var directory = (await _db.Mailboxes
-            .Where(m => m.TenantId == tenantId && m.IsActive)
-            .OrderBy(m => m.Name)
-            .ThenBy(m => m.Address)
+        var directoryRows = await _db.Mailboxes
+            .Where(m => m.TenantId == tenantId && m.IsActive && m.Kind == "user")
+            .GroupJoin(
+                _db.Users.Where(u => u.TenantId == tenantId && u.IsActive),
+                m => m.Address.ToLower(),
+                u => u.Email.ToLower(),
+                (mailbox, users) => new { Mailbox = mailbox, User = users.FirstOrDefault() })
+            .Where(row => row.User != null && !row.User.IsService)
+            .OrderBy(row => row.Mailbox.Name)
+            .ThenBy(row => row.Mailbox.Address)
+            .Select(row => new
+            {
+                row.Mailbox.Id,
+                row.Mailbox.Name,
+                row.Mailbox.Address,
+                row.Mailbox.Organization,
+                row.Mailbox.Department,
+                row.Mailbox.Phone,
+                row.Mailbox.Kind,
+                IsService = row.User!.IsService
+            })
+            .ToListAsync(cancellationToken);
+
+        var directory = directoryRows
+            .Where(m => string.Equals(GetDomainPart(m.Address), directoryDomain, StringComparison.OrdinalIgnoreCase))
             .Select(m => new ContactDto(
                 m.Id,
                 string.IsNullOrWhiteSpace(m.Name) ? m.Address : m.Name,
@@ -41,9 +62,8 @@ public sealed class ContactService : IContactService
                 m.Phone,
                 "directory",
                 m.Kind,
-                false))
-            .ToListAsync(cancellationToken))
-            .Where(c => string.Equals(GetDomainPart(c.Email), directoryDomain, StringComparison.OrdinalIgnoreCase))
+                false,
+                m.IsService))
             .ToList();
 
         var groups = (await _db.Groups
@@ -59,6 +79,7 @@ public sealed class ContactService : IContactService
                 null,
                 "directory",
                 "group",
+                false,
                 false))
             .ToListAsync(cancellationToken))
             .Where(c => string.Equals(GetDomainPart(c.Email), directoryDomain, StringComparison.OrdinalIgnoreCase))
@@ -131,7 +152,12 @@ public sealed class ContactService : IContactService
         mailbox.UpdatedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(cancellationToken);
 
-        return new ContactDto(mailbox.Id, mailbox.Name, mailbox.Address, mailbox.Organization, mailbox.Department, mailbox.Phone, "directory", mailbox.Kind, true);
+        var isService = await _db.Users
+            .Where(u => u.TenantId == tenantId && u.Email.ToLower() == mailbox.Address.ToLower())
+            .Select(u => u.IsService)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return new ContactDto(mailbox.Id, mailbox.Name, mailbox.Address, mailbox.Organization, mailbox.Department, mailbox.Phone, "directory", mailbox.Kind, true, isService);
     }
 
     public async Task<bool> DeleteContactAsync(Guid tenantId, Guid userId, Guid contactId, CancellationToken cancellationToken = default)
