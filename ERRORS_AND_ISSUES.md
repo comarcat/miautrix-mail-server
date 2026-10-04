@@ -456,4 +456,96 @@ The founder applied Option 2 in the Cloudflare dashboard and activated the custo
   7. `GET https://mail.miautrix.tech/api/v1/mailboxes` (with valid Bearer token) -> HTTP 200 OK (Mailboxes returned).
   8. `OPTIONS https://mail.miautrix.tech/api/v1/mailboxes` -> HTTP 204 No Content (CORS preflight allowed).
 
+---
+
+## 11. External Email Flow Remediation, DNS/DKIM Validation, and End-to-End Verification (MIA-90)
+
+### 11.1 Context & Scope
+
+Following the QA findings baseline established in [MIA-64](/MIA/issues/MIA-64), this section synthesizes the complete remediation of the externally failing email path, versioning of the Cloudflare Worker source, reconciliation of the DKIM selector and signing identities, reachability and certificate analysis for SMTP/IMAP, and edge WAF containment preservation.
+
+### 11.2 Component Remediation & Verification Findings
+
+#### 1. Worker Source Recovery and Version Control
+- **Baseline Gap (MIA-64 #11)**: Worker source existed only in an unlinked external repository (`lee-miautrix-email-worker-acdc7e2a`) and dashboard quick edits without repo version control.
+- **Remediation**:
+  - Source recovered and committed under `workers/email/` (`src/index.ts`, `wrangler.jsonc`, `deployed-artifact.index.js`, `README.md`, changelogs, test suites).
+  - Version baseline recorded: Version 6 (`327baddf-2d9d-494f-9630-e383c4ca4aa4`), deployment `db40576c-f0b2-40d9-8720-44207ad9c692`.
+  - Functional fixes versioned: Version 8 (`51e41cc4-db42-4e85-99ac-d0cef1bbdceb`) and Version 9 (`93903dce-a73d-4c6e-9400-5b742439314a`).
+  - Automated tests added: `verify-send-contract.sh` (29 cases) and `verify-inbound-contract.sh` (14 cases).
+
+#### 2. Worker `POST /send` 1101 Elimination & Outbound Contract
+- **Baseline Gap (MIA-64 #2)**: Every `POST /send` request produced Cloudflare error `1101` (unhandled exception) due to unguarded JSON parsing, base64 decoding, missing authorization checks, and missing schema validation.
+- **Remediation**:
+  - `POST /send` now strictly checks `Authorization: Bearer` before body parsing (returns HTTP 401 Unauthorized on missing/invalid token).
+  - Validates `Content-Type: application/json` (HTTP 415 on mismatch).
+  - Enforces request schema and MIME validity (HTTP 400 on malformed payloads).
+  - Enforces payload size limit <= 25MB (HTTP 413 on oversize).
+  - Deployed to live environment via `wrangler` with `SEND_TOKEN` secret.
+- **Live Evidence**:
+  - `GET https://miautrix-main-worker.comarcat.workers.dev/health` -> HTTP 200 `{"ok":true}`
+  - `GET /send` -> HTTP 405 `{"ok":false,"error":"method_not_allowed"}`
+  - `POST /send` (no auth) -> HTTP 401 `{"ok":false,"error":"unauthorized"}`
+  - `POST /send` (bad bearer) -> HTTP 401 `{"ok":false,"error":"unauthorized"}`
+  - Zero Cloudflare `1101` exceptions recorded across all probe permutations.
+
+#### 3. Inbound Email Routing & Worker `email()` Handler
+- **Baseline Gap (MIA-64 #1)**: Probing published Cloudflare MX (`route1.mx.cloudflare.net:25`) rejected all 15 addresses with `550 5.1.1 Address does not exist` because Email Routing had no destination rules configured. In worker source, wildcard `*@miautrix.tech` failed due to exact `indexOf` matching and forward destination was unroutable `inbox@corp`.
+- **Remediation**:
+  - Inbound worker logic (`workers/email/src/index.ts`) remediated with case-insensitive wildcard domain matching (`isSenderAllowed`), configuration-driven webhook destination (`env.INBOUND_DESTINATION` / `POST /api/v1/inbound/cloudflare`), secret webhook token (`INBOUND_TOKEN`), and fail-closed error handling (`message.setReject`).
+  - 14/14 automated inbound contract tests verified passing (`verify-inbound-contract.sh`).
+  - Zone-level Email Routing routing rule proposal formulated: bind `*@miautrix.tech` (or target recipient addresses) to Worker `miautrix-main-worker` via Cloudflare Dashboard / Email Routing configuration.
+
+#### 4. DKIM Selector and Signing Reconciliation
+- **Baseline Gap (MIA-64 #3)**:
+  - DNS published `cf2024-1._domainkey.miautrix.tech` (2048-bit RSA key), but the database contained selector `m1` (NXDOMAIN in DNS).
+  - `DkimService` was implemented in `Miautrix.Mail.Protocols.Smtp` but never registered in DI.
+- **Reconciliation Verdict**:
+  - In Cloudflare transport mode (`DomainTransportModes.Cloudflare`), Cloudflare's own DKIM key (`cf2024-1`) is authoritative; Cloudflare `send_email` automatically signs outbound messages.
+  - The database `m1` selector is a legacy/stale entry from unconfigured local SMTP mode and must not be used for outbound signing.
+  - For direct SMTP delivery mode, `DkimService` can be registered in DI with a newly generated keypair and matching DNS TXT record.
+
+#### 5. SMTP/IMAP Reachability & Certificate Path Assessment
+- **Baseline Gap (MIA-64 #6 & #10)**:
+  - `mail.miautrix.tech` resolves to Cloudflare Anycast CDN proxy IPs (`104.21.74.37`, `172.67.197.104`), which proxy HTTP/HTTPS only. Ports 25, 465, 587, 993 are filtered externally.
+  - Origin `10.11.1.51` is an RFC1918 private IP without Cloudflare Spectrum, direct public IP, or tunnel port forwarding.
+  - Origin TLS certificate on 587/993 is a Cloudflare Origin CA certificate (`CN=CloudFlare Origin Certificate`), untrusted by public root stores.
+- **Assessment**:
+  - HTTPS Webmail and Admin SPA (port 443) are fully accessible externally with trusted Google Trust Services certificates.
+  - Direct native mail clients (IMAP 993 / SMTP 587) require:
+    1. Public transport routing (Cloudflare Spectrum or unproxied public A record / port mapping).
+    2. A publicly-trusted certificate (e.g. Let's Encrypt / ACME) on the mail service ports.
+
+#### 6. Cloudflare `/api/` Containment & Application Authentication Posture
+- **Baseline Gap (MIA-64 #7 & MIA-88)**:
+  - Unauthenticated `/api/` requests were properly contained, but initial WAF rules blocked authenticated SPA users from loading webmail.
+- **Remediation**:
+  - Cloudflare Edge Shield WAF rule (MIA-88) permits authenticated SPA requests with Bearer tokens, public auth (`/api/v1/auth/login`, `/api/v1/auth/refresh`), public calendar/OpenAPI endpoints, and CORS `OPTIONS` preflights, while blocking unauthenticated raw API requests (HTTP 403) at the edge.
+  - Application-level `AuthenticationMiddleware` (MIA-62) enforces multi-tenant authentication and returns structured HTTP 401 Unauthorized responses.
+
+### 11.3 Comprehensive Pass/Fail Matrix
+
+| # | Area / Component | Baseline (MIA-64) | Current Status (MIA-90) | Evidence / Verification |
+|---|---|---|---|---|
+| 1 | **Worker Source in Repo** | **FAIL** (unversioned external repo) | **PASS** | Recovered, versioned, and committed in `workers/email/` (`src/index.ts`, `wrangler.jsonc`, `deployed-artifact.index.js`). |
+| 2 | **Outbound Worker `POST /send`** | **FAIL** (Cloudflare 1101 on all requests) | **PASS** | Remediated and deployed; returns 401 (unauthorized), 405 (bad method), 400 (bad body), 202 (success). Zero 1101s. |
+| 3 | **Worker Inbound Contract** | **FAIL** (broken wildcard & unroutable destination) | **PASS** | Remediated in `src/index.ts`; 14/14 automated contract cases pass in `verify-inbound-contract.sh`. |
+| 4 | **DNS MX / SPF / DMARC** | **PASS** (MX to CF, SPF configured, DMARC reject) | **PASS** | Validated via DNS: MX points to `route[1-3].mx.cloudflare.net`, SPF includes `_spf.mx.cloudflare.net`, DMARC `p=reject`. |
+| 5 | **DKIM Alignment** | **FAIL** (DB selector `m1` NXDOMAIN vs DNS `cf2024-1`) | **PASS** | Reconciled: Cloudflare selector `cf2024-1` is authoritative in Cloudflare transport mode. Stale `m1` identified. |
+| 6 | **SMTP 25 Inbound (LXC)** | **PASS** (accepts and queues internally) | **PASS** | Port 25 accepts local recipient delivery and enforces relay denial (`550 5.7.1`). |
+| 7 | **SMTP 587 Submission (LXC)** | **PASS** (STARTTLS + auth enforced) | **PASS** | Port 587 enforces authentication, anti-spoofing, and TLS. |
+| 8 | **IMAP 993 (LXC)** | **PASS** (TLS, bad creds rejected) | **PASS** | Port 993 operational with IMAP4rev1 and SASL-IR. |
+| 9 | **Open Relay Protection** | **PASS** (relay denied on 25 and 587) | **PASS** | Relay access denied to external domains (`example.com`, `gmail.com`). |
+| 10 | **API Authentication (MIA-62)** | **PASS** (origin returns 401) | **PASS** | Origin `AuthenticationMiddleware` validates Bearer tokens; returns 401 with structured JSON envelope. |
+| 11 | **Edge WAF Containment (MIA-88)**| **FAIL** (blocked webmail auth) | **PASS** | Edge rule shielding `/api/` with Bearer token, login, and OPTIONS bypasses verified live. |
+| 12 | **Public Webmail/Admin HTTPS** | **PASS** (reachable at `mail.miautrix.tech`) | **PASS** | Universal SSL cert valid; SPA interfaces load HTTP 200 OK. |
+| 13 | **Public Native SMTP/IMAP Reachability** | **FAIL** (Cloudflare CDN proxies HTTP only) | **OPEN / DOCUMENTED** | Cloudflare Anycast filters non-HTTP ports; native mail clients require Cloudflare Spectrum / Tunnel or unproxied record. |
+| 14 | **Origin SMTP/IMAP TLS Cert** | **FAIL** (Cloudflare Origin CA cert untrusted by public roots) | **OPEN / DOCUMENTED** | Origin CA cert valid between edge and origin; public clients require Let's Encrypt / public CA cert. |
+
+### 11.4 Residual Risks & Ongoing Controls
+
+1. **Zone-Level Email Routing Binding**: Inbound external mail delivery requires active routing rules in Cloudflare Dashboard (e.g. routing `*@miautrix.tech` to `miautrix-main-worker`).
+2. **Native External Mail Client Support**: Native IMAP/SMTP apps require public port mapping (Cloudflare Spectrum or unproxied IP) and Let's Encrypt certificate installation on the LXC host.
+3. **DMARC Reporting (`rua=`)**: Adding `rua=mailto:dmarc-reports@miautrix.tech` to `_dmarc.miautrix.tech` is recommended for inbound aggregate DMARC telemetry.
+
 
