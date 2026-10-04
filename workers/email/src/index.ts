@@ -1,77 +1,167 @@
-// Recovered verbatim from the deployed Cloudflare Worker `miautrix-main-worker`,
-// version 327baddf-2d9d-494f-9630-e383c4ca4aa4 (number 6, deployed 2026-09-21T19:33:11Z).
-//
-// MIA-69 is recovery and version control only. Behaviour is NOT changed here, and this
-// file is NOT redeployed by this task. The `POST /send` defects annotated below are
-// diagnosis for the follow-up fix task; do not fix them in this file without that task.
-//
-// The deployed artefact was a single JavaScript module (`index.js`). It is stored here as
-// TypeScript because the upstream repo named `src/index.ts`, and because `wrangler` compiles
-// TS to the same module shape. The only edits applied to the deployed bytes are these
-// comments and the type annotations; no statement was added, removed or reordered.
+var __defProp = Object.defineProperty;
+var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
+// src/index.ts
 import { EmailMessage } from "cloudflare:email";
-
-interface Env {
-  // `send_email` binding, declared in wrangler.jsonc. Grants env.EMAIL.send().
-  EMAIL: { send(message: EmailMessage): Promise<void> };
+var DEFAULT_ALLOWED_SENDER_PATTERNS = "*@miautrix.tech,admin@miautrix.org";
+var DEFAULT_INBOUND_FORWARD_TO = "inbox@corp";
+var MAX_RAW_BYTES = 25 * 1024 * 1024;
+function jsonError(status, error, detail) {
+  return Response.json(detail ? { ok: false, error, detail } : { ok: false, error }, {
+    status,
+    headers: { "cache-control": "no-store" }
+  });
 }
-
-interface SendRequestBody {
-  from: string;
-  to: string;
-  // Base64-encoded raw MIME, as produced by CloudflareApiMailTransport.SendAsync.
-  raw: string;
+__name(jsonError, "jsonError");
+function timingSafeEqual(a, b) {
+  const encoder = new TextEncoder();
+  const left = encoder.encode(a);
+  const right = encoder.encode(b);
+  if (left.length !== right.length) return false;
+  let diff = 0;
+  for (let i = 0; i < left.length; i += 1) diff |= left[i] ^ right[i];
+  return diff === 0;
 }
-
-export default {
-  // INBOUND: sender -> MX (Cloudflare Email Routing) -> this handler.
-  async email(message: ForwardableEmailMessage, env: Env, ctx: ExecutionContext): Promise<void> {
-    // DEFECT (inbound, documented not fixed): `indexOf` is an exact string compare, so the
-    // "*@miautrix.tech" wildcard never matches any real sender. Only the literal
-    // "admin@miautrix.org" can pass. Everything else is rejected.
-    const allowList = ["*@miautrix.tech", "admin@miautrix.org"];
-    if (allowList.indexOf(message.from) == -1) {
+__name(timingSafeEqual, "timingSafeEqual");
+function senderAllowed(from, patterns) {
+  const candidate = from.trim().toLowerCase();
+  return patterns.split(",").map((pattern) => pattern.trim().toLowerCase()).filter((pattern) => pattern.length > 0).some(
+    (pattern) => pattern.startsWith("*@") ? candidate.endsWith(pattern.slice(1)) : candidate === pattern
+  );
+}
+__name(senderAllowed, "senderAllowed");
+function looksLikeAddress(value) {
+  if (value.length < 3 || value.length > 320) return false;
+  if (/[\s<>",;]/.test(value)) return false;
+  const at = value.indexOf("@");
+  return at > 0 && at === value.lastIndexOf("@") && at < value.length - 1 && value.includes(".", at);
+}
+__name(looksLikeAddress, "looksLikeAddress");
+function decodeBase64(raw) {
+  if (!/^[A-Za-z0-9+/\r\n]*={0,2}$/.test(raw)) return null;
+  try {
+    const binary = atob(raw.replace(/[\r\n]/g, ""));
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  } catch {
+    return null;
+  }
+}
+__name(decodeBase64, "decodeBase64");
+function authorize(request, env) {
+  const expected = env.SEND_TOKEN;
+  if (typeof expected !== "string" || expected.length === 0) {
+    return jsonError(503, "send_disabled", "SEND_TOKEN is not configured on this Worker.");
+  }
+  const header = request.headers.get("authorization") ?? "";
+  const match = /^Bearer\s+(.+)$/i.exec(header.trim());
+  if (!match) return jsonError(401, "unauthorized", "Expected an Authorization: Bearer header.");
+  if (!timingSafeEqual(match[1].trim(), expected)) return jsonError(401, "unauthorized");
+  return null;
+}
+__name(authorize, "authorize");
+async function handleSend(request, env) {
+  const denied = authorize(request, env);
+  if (denied) return denied;
+  const contentType = request.headers.get("content-type") ?? "";
+  if (contentType && !contentType.toLowerCase().includes("json")) {
+    return jsonError(415, "unsupported_media_type", "Send application/json.");
+  }
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return jsonError(400, "invalid_json", "Request body is not valid JSON.");
+  }
+  if (body === null || typeof body !== "object" || Array.isArray(body)) {
+    return jsonError(400, "invalid_body", "Expected a JSON object with from, to and raw.");
+  }
+  const { from, to, raw } = body;
+  const missing = ["from", "to", "raw"].filter(
+    (field) => typeof body[field] !== "string" || body[field].trim().length === 0
+  );
+  if (missing.length > 0) {
+    return jsonError(400, "missing_fields", `Required string field(s): ${missing.join(", ")}.`);
+  }
+  const sender = from.trim();
+  const recipient = to.trim();
+  if (!looksLikeAddress(sender)) return jsonError(400, "invalid_from", "from is not an email address.");
+  if (!looksLikeAddress(recipient)) return jsonError(400, "invalid_to", "to is not an email address.");
+  const rawBase64 = raw.trim();
+  if (rawBase64.length > Math.ceil(MAX_RAW_BYTES * 4 / 3)) {
+    return jsonError(413, "payload_too_large", `raw exceeds ${MAX_RAW_BYTES} bytes decoded.`);
+  }
+  const decoded = decodeBase64(rawBase64);
+  if (decoded === null) return jsonError(400, "invalid_raw", "raw is not valid base64.");
+  if (decoded.byteLength === 0) return jsonError(400, "invalid_raw", "raw decodes to an empty message.");
+  if (decoded.byteLength > MAX_RAW_BYTES) {
+    return jsonError(413, "payload_too_large", `raw exceeds ${MAX_RAW_BYTES} bytes decoded.`);
+  }
+  let rawMime;
+  try {
+    rawMime = new TextDecoder("utf-8", { fatal: false }).decode(decoded);
+  } catch {
+    return jsonError(400, "invalid_raw", "raw does not decode to text.");
+  }
+  if (!/\r?\n\r?\n/.test(rawMime)) {
+    return jsonError(
+      400,
+      "invalid_mime",
+      "raw must be an RFC 5322 message: headers, a blank line, then the body."
+    );
+  }
+  const email = env.EMAIL;
+  if (!email || typeof email.send !== "function") {
+    return jsonError(503, "email_binding_missing", "This Worker has no send_email binding named EMAIL.");
+  }
+  try {
+    await email.send(new EmailMessage(sender, recipient, rawMime));
+    return Response.json({ ok: true }, { status: 202, headers: { "cache-control": "no-store" } });
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    console.error("send_failed", detail);
+    return jsonError(502, "send_failed", detail);
+  }
+}
+__name(handleSend, "handleSend");
+var index_default = {
+  /**
+   * Inbound. Preserved behaviour from the recovered deployed Worker: allow-list the
+   * envelope sender, then forward to the verified destination. Only the hard-coded
+   * values became configuration.
+   */
+  async email(message, env) {
+    const patterns = env.ALLOWED_SENDER_PATTERNS ?? DEFAULT_ALLOWED_SENDER_PATTERNS;
+    if (!senderAllowed(message.from, patterns)) {
       message.setReject("Address not allowed");
-    } else {
-      // DEFECT (inbound, documented not fixed): "inbox@corp" is not a routable address and
-      // is not a verified Email Routing destination. This forward cannot succeed as written.
-      // The architecture calls for POST /api/v1/inbound/cloudflare into the app instead.
-      await message.forward("inbox@corp");
+      return;
     }
+    await message.forward(env.INBOUND_FORWARD_TO ?? DEFAULT_INBOUND_FORWARD_TO);
   },
-
-  // OUTBOUND: app -> POST /send -> env.EMAIL.send() -> recipient.
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const url = new URL(request.url);
-
-    if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/health")) {
-      return Response.json({ ok: true });
-    }
-
-    if (request.method === "POST" && url.pathname === "/send") {
-      // ROOT CAUSE of Cloudflare 1101 on every request shape (see README.md):
-      // these three statements sit OUTSIDE the try block, so any throw here is uncaught
-      // and the runtime returns 1101 rather than a 4xx.
-      //   1. request.json() throws on a non-JSON body.
-      //   2. atob(body.raw) throws InvalidCharacterError when `raw` is absent
-      //      (atob(undefined) -> "undefined" is not valid base64) or not base64.
-      //   3. new EmailMessage(...) throws on a missing/invalid from or to.
-      // There is also no bearer-token check anywhere in this handler, which is why a wrong
-      // token returns 1101 instead of 401: the request is never authenticated, it just
-      // reaches the same unguarded parse and throws.
-      const body = (await request.json()) as SendRequestBody;
-      const rawMime = atob(body.raw);
-      const message = new EmailMessage(body.from, body.to, rawMime);
-
-      try {
-        await env.EMAIL.send(message);
-        return Response.json({ ok: true });
-      } catch (err) {
-        return Response.json({ ok: false, error: String(err) }, { status: 500 });
+  async fetch(request, env) {
+    try {
+      const url = new URL(request.url);
+      const path = url.pathname.replace(/\/+$/, "") || "/";
+      if (path === "/" || path === "/health") {
+        if (request.method !== "GET" && request.method !== "HEAD") {
+          return jsonError(405, "method_not_allowed", "Use GET.");
+        }
+        return Response.json({ ok: true }, { headers: { "cache-control": "no-store" } });
       }
+      if (path === "/send") {
+        if (request.method !== "POST") return jsonError(405, "method_not_allowed", "Use POST.");
+        return await handleSend(request, env);
+      }
+      return jsonError(404, "not_found");
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      console.error("unhandled", detail);
+      return jsonError(500, "internal_error");
     }
-
-    return new Response("Not found", { status: 404 });
-  },
+  }
 };
+export {
+  index_default as default
+};
+//# sourceMappingURL=index.js.map
