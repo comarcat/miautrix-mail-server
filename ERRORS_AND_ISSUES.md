@@ -304,6 +304,30 @@ npx wrangler versions deploy 327baddf-2d9d-494f-9630-e383c4ca4aa4@100% \
   --name miautrix-main-worker --yes
 ```
 
+### Inbound `email()` wildcard allow-list & webhook forwarding remediated (MIA-77, 2026-10-04)
+
+**Error.** Inbound email routing on Cloudflare was broken for two independent reasons:
+1. Exact-match string compare (`indexOf`) on `"*@miautrix.tech"` wildcard caused every real tenant sender to be rejected. Only literal `admin@miautrix.org` could match.
+2. Inbound forward destination was hardcoded to `"inbox@corp"`, which is unroutable and not a verified Cloudflare destination.
+
+**Root cause.** The recovered `email()` handler compared `allowList.indexOf(message.from) == -1` against a string array containing a wildcard expression, and invoked `await message.forward("inbox@corp")` rather than delivering to the architecture's configured webhook (`POST /api/v1/inbound/cloudflare`). Additionally, delivery failures and missing credentials lacked explicit failure signalling, risking silent drops.
+
+**Fix.** Applied in `workers/email/src/index.ts` and `workers/email/wrangler.jsonc`:
+- `isSenderAllowed` implements true wildcard domain matching (`*@miautrix.tech`) and exact matching (`admin@miautrix.org`), case-insensitively, safely rejecting malformed or missing senders without throwing uncaught errors (no `1101`).
+- Destination is 100% configuration-driven via `env.INBOUND_DESTINATION` / `env.INBOUND_WEBHOOK_URL` (default: `https://mail.miautrix.tech/api/v1/inbound/cloudflare`) and declared in `wrangler.jsonc` `vars`.
+- Authenticated webhook delivery reads secret token (`env.INBOUND_TOKEN` / `env.INBOUND_WEBHOOK_TOKEN`), injects header `X-Miautrix-Inbound-Token`, and streams `message.raw`.
+- Fails closed and loudly: missing token or destination HTTP errors (such as 403 containment or 500) invoke `message.setReject()` with diagnostic detail and log errors, prompting the sending MTA to generate an NDR/bounce rather than silently dropping mail.
+
+**Verification.**
+- Unit and contract suite `workers/email/verify-inbound-contract.sh` (14 cases, 0 failed, 0 `1101`s) proving wildcard matching, exact matching, mixed-case parsing, malformed rejection, webhook token header injection, and HTTP 403 / network failure handling.
+- Full outbound regression suite `workers/email/verify-send-contract.sh` (29 cases, 0 failed, 0 `1101`s) confirming `POST /send`, `GET /`, `GET /health`, and `GET /nope` behave identically.
+- `npx wrangler deploy --dry-run` builds clean.
+
+**Rollback.** Target version 8 (`51e41cc4-db42-4e85-99ac-d0cef1bbdceb`, etag `0fbbd1058575946ca31d60093813f7437bccd35651e7baaada6179032e9b333b`) and version 6 (`327baddf-2d9d-494f-9630-e383c4ca4aa4`, etag `b6582d3ac146eacda28478b87c91bbbf6b07b4fbc0c911a20c0336d4083c0165`) preserved server-side. Restore via:
+```bash
+npx wrangler versions deploy 51e41cc4-db42-4e85-99ac-d0cef1bbdceb@100% --name miautrix-main-worker --yes
+```
+
 ### Outstanding
 
 - [x] Fix `POST /send`: move the parse inside the `try`, return `400` on a bad body, add
@@ -311,8 +335,8 @@ npx wrangler versions deploy 327baddf-2d9d-494f-9630-e383c4ca4aa4@100% \
       (MIA-76), 29/29 contract cases pass locally, live contract verified.**
 - [x] Deploy the `POST /send` fix: Worker secret `SEND_TOKEN` set and deployed via `wrangler`.
       Live version 8 (`51e41cc4-db42-4e85-99ac-d0cef1bbdceb`).
-- [ ] Fix the inbound `email()` allow-list wildcard and the unroutable `inbox@corp` forward
-      target (MIA-77).
+- [x] Fix the inbound `email()` allow-list wildcard and the unroutable `inbox@corp` forward
+      target. **Done 2026-10-04 (MIA-77), 14/14 inbound contract cases pass, 29/29 outbound cases pass, zero 1101s.**
 - [ ] The exact `/send` path, `Authorization` scheme and JSON field names in
       `CloudflareApiMailTransport` are the only values not taken from a supplied sample. They are
       confined to `SendAsync`/`ProbeAsync` in one file, so reconciling them against the sample

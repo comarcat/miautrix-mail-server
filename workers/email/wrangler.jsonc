@@ -57,5 +57,12 @@
   // Inbound Email Routing is configured in the Cloudflare dashboard (zone-level Email
   // Routing rules), NOT in this file. The email() handler is bound to the catch-all/custom
   // address rule there. Changing it is explicitly out of scope for MIA-69.
-  "routes": []
+  "routes": [],
+
+  // Non-sensitive runtime variables for inbound email routing and destination.
+  // Secrets (SEND_TOKEN, INBOUND_TOKEN) are injected via `wrangler secret put` and are absent here.
+  "vars": {
+    "ALLOWED_SENDER_PATTERNS": "*@miautrix.tech,admin@miautrix.org",
+    "INBOUND_DESTINATION": "https://mail.miautrix.tech/api/v1/inbound/cloudflare"
+  }
 }

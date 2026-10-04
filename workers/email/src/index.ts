@@ -3,10 +3,8 @@
 // Baseline: version 327baddf-2d9d-494f-9630-e383c4ca4aa4 (number 6, deployed 2026-09-21T19:33:11Z),
 // recovered into this repo by MIA-69. Reconciled under MIA-76 to align with live production
 // contract (version 8, 51e41cc4-db42-4e85-99ac-d0cef1bbdceb).
-//
-// MIA-76 changes the OUTBOUND `POST /send` handler only: authentication, media-type validation,
-// payload limits, MIME validation, and error mapping. The INBOUND `email()` handler below is
-// left byte-for-byte as recovered — its remediation belongs to MIA-77.
+// Remediated under MIA-77 for inbound email() wildcard allow-list matching, configuration-driven
+// forwarding, authenticated webhook delivery, and fail-closed error handling.
 //
 // Contract `POST /send` honours:
 //
@@ -19,7 +17,17 @@
 //   503  missing SEND_TOKEN secret or EMAIL binding — fail closed, never open
 //   500  unhandled worker error
 //
-// No request shape may produce a Cloudflare `1101`.
+// Contract `email()` honours:
+//
+//   - Allow-list: domain wildcards (`*@miautrix.tech`) and exact addresses (`admin@miautrix.org`).
+//     Case-insensitive. Missing/empty/malformed sender is rejected cleanly without throwing.
+//   - Destination: configuration-driven (env.INBOUND_DESTINATION / env.INBOUND_WEBHOOK_URL).
+//   - Webhook token: read from Worker secret (env.INBOUND_TOKEN / env.INBOUND_WEBHOOK_TOKEN) and
+//     injected as X-Miautrix-Inbound-Token header; absent from wrangler.jsonc.
+//   - Delivery failure: explicit rejection via message.setReject() and error logging,
+//     ensuring sending MTA receives SMTP 550 / NDR rather than silent mail drop.
+//
+// No request shape or email event may produce a Cloudflare `1101`.
 
 import { EmailMessage } from "cloudflare:email";
 
@@ -30,6 +38,20 @@ interface Env {
   // Shared bearer token the app must present on POST /send. Set as a Worker SECRET
   // (`npx wrangler secret put SEND_TOKEN`) — deliberately absent from wrangler.jsonc.
   SEND_TOKEN?: string;
+
+  // Shared webhook token the Worker presents on POST /api/v1/inbound/cloudflare (X-Miautrix-Inbound-Token).
+  // Set as a Worker SECRET (`npx wrangler secret put INBOUND_TOKEN`) — deliberately absent from wrangler.jsonc.
+  INBOUND_TOKEN?: string;
+  INBOUND_WEBHOOK_TOKEN?: string;
+  MIAUTRIX_INBOUND_TOKEN?: string;
+
+  // Allowed sender patterns (comma-separated, e.g. "*@miautrix.tech,admin@miautrix.org").
+  ALLOWED_SENDER_PATTERNS?: string;
+
+  // Inbound destination URL (HTTP webhook) or forwarding email address.
+  INBOUND_DESTINATION?: string;
+  INBOUND_WEBHOOK_URL?: string;
+  INBOUND_FORWARD_TO?: string;
 }
 
 interface SendRequestBody {
@@ -39,7 +61,44 @@ interface SendRequestBody {
   raw: string;
 }
 
+const DEFAULT_ALLOWED_SENDER_PATTERNS = "*@miautrix.tech,admin@miautrix.org";
+const DEFAULT_INBOUND_DESTINATION = "https://mail.miautrix.tech/api/v1/inbound/cloudflare";
 const MAX_RAW_BYTES = 25 * 1024 * 1024;
+
+export function isSenderAllowed(from: unknown, patterns?: string | string[]): boolean {
+  if (typeof from !== "string") return false;
+  const candidate = from.trim().toLowerCase();
+  if (candidate.length < 3 || candidate.length > 320) return false;
+  if (/[\s<>",;]/.test(candidate)) return false;
+  const atIndex = candidate.lastIndexOf("@");
+  if (atIndex <= 0 || atIndex >= candidate.length - 1 || !candidate.includes(".", atIndex)) {
+    return false;
+  }
+
+  const effectivePatterns = patterns ?? DEFAULT_ALLOWED_SENDER_PATTERNS;
+  const patternList = Array.isArray(effectivePatterns)
+    ? effectivePatterns
+    : (typeof effectivePatterns === "string" ? effectivePatterns.split(",") : []);
+
+  const candidateDomain = candidate.slice(atIndex + 1);
+
+  for (const rawPat of patternList) {
+    if (typeof rawPat !== "string") continue;
+    const pat = rawPat.trim().toLowerCase();
+    if (!pat) continue;
+
+    if (pat.startsWith("*@")) {
+      const patternDomain = pat.slice(2);
+      if (candidateDomain === patternDomain) {
+        return true;
+      }
+    } else if (candidate === pat) {
+      return true;
+    }
+  }
+
+  return false;
+}
 
 function jsonError(status: number, error: string, detail?: string): Response {
   return Response.json(detail ? { ok: false, error, detail } : { ok: false, error }, {
@@ -180,17 +239,79 @@ async function handleSend(request: Request, env: Env): Promise<Response> {
 export default {
   // INBOUND: sender -> MX (Cloudflare Email Routing) -> this handler.
   //
-  // UNCHANGED by MIA-76, intentionally. Two known defects, documented in ERRORS_AND_ISSUES.md
-  // and fixed by MIA-77:
-  //   1. `indexOf` is an exact string compare, so the "*@miautrix.tech" wildcard never matches
-  //      a real sender. Only the literal "admin@miautrix.org" can pass.
-  //   2. "inbox@corp" is not a routable address and not a verified Email Routing destination.
+  // Remediated under MIA-77:
+  //   1. Allow-list matches domain wildcards (*@miautrix.tech) and exact addresses (admin@miautrix.org), case-insensitively.
+  //   2. Forward destination is configuration-driven (env.INBOUND_DESTINATION / env.INBOUND_WEBHOOK_URL).
+  //   3. Webhook delivery carries secret token (env.INBOUND_TOKEN / env.INBOUND_WEBHOOK_TOKEN) in X-Miautrix-Inbound-Token header.
+  //   4. Fails closed and loudly: rejects invalid senders or delivery failures with message.setReject() and logs error.
   async email(message: ForwardableEmailMessage, env: Env, ctx: ExecutionContext): Promise<void> {
-    const allowList = ["*@miautrix.tech", "admin@miautrix.org"];
-    if (allowList.indexOf(message.from) == -1) {
-      message.setReject("Address not allowed");
-    } else {
-      await message.forward("inbox@corp");
+    try {
+      const patterns = env.ALLOWED_SENDER_PATTERNS ?? DEFAULT_ALLOWED_SENDER_PATTERNS;
+      if (!isSenderAllowed(message.from, patterns)) {
+        message.setReject("Address not allowed");
+        return;
+      }
+
+      const destination = (
+        env.INBOUND_DESTINATION ??
+        env.INBOUND_WEBHOOK_URL ??
+        env.INBOUND_FORWARD_TO ??
+        DEFAULT_INBOUND_DESTINATION
+      ).trim();
+
+      if (!destination) {
+        console.error("inbound_destination_missing", "No inbound destination configured.");
+        message.setReject("Inbound destination not configured");
+        return;
+      }
+
+      if (destination.startsWith("http://") || destination.startsWith("https://")) {
+        const token = (
+          env.INBOUND_TOKEN ??
+          env.INBOUND_WEBHOOK_TOKEN ??
+          env.MIAUTRIX_INBOUND_TOKEN ??
+          ""
+        ).trim();
+
+        if (!token) {
+          console.error("inbound_token_missing", "INBOUND_TOKEN secret is not configured on this Worker.");
+          message.setReject("Inbound webhook authentication not configured");
+          return;
+        }
+
+        const headers: Record<string, string> = {
+          "X-Miautrix-Inbound-Token": token,
+          "X-Miautrix-Envelope-From": typeof message.from === "string" ? message.from.trim() : "",
+          "X-Miautrix-Envelope-To": typeof message.to === "string" ? message.to.trim() : "",
+          "Content-Type": "message/rfc822",
+        };
+
+        const response = await fetch(destination, {
+          method: "POST",
+          headers,
+          body: message.raw,
+        });
+
+        if (!response.ok) {
+          const bodySnippet = await response.text().catch(() => "");
+          console.error(`inbound_webhook_failed: HTTP ${response.status} ${bodySnippet.slice(0, 200)}`);
+          message.setReject(`Inbound delivery failed (HTTP ${response.status})`);
+          return;
+        }
+
+        return;
+      }
+
+      // Non-HTTP forward destination (e.g. verified email address in Cloudflare Email Routing)
+      await message.forward(destination);
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      console.error("inbound_unhandled_error", detail);
+      try {
+        message.setReject("Inbound delivery failed");
+      } catch {
+        // ignore secondary rejection error
+      }
     }
   },
 
@@ -222,3 +343,4 @@ export default {
     }
   },
 };
+

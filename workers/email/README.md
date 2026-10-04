@@ -16,10 +16,9 @@ Before that, the source existed only in an external repo
 (`lee-miautrix-email-worker-acdc7e2a`, named in `ERRORS_AND_ISSUES.md`) that this project
 could not read, so the deployed code was unreviewable and unrevertable.
 
-[MIA-69](/MIA/issues/MIA-69) changed no behaviour and redeployed nothing.
-[MIA-76](/MIA/issues/MIA-76) rewrote the **outbound `POST /send`** handler only — see
-"`POST /send` contract" below. The inbound `email()` handler is still byte-for-byte as
-recovered; its remediation belongs to [MIA-77](/MIA/issues/MIA-77).
+[MIA-69](/MIA/issues/MIA-69) recovered the source into version control.
+[MIA-76](/MIA/issues/MIA-76) rewrote the **outbound `POST /send`** handler (strict status contract, authentication, payload limits).
+[MIA-77](/MIA/issues/MIA-77) remediated the **inbound `email()`** handler (domain wildcard allow-list matching, configuration-driven destination, secret webhook token authentication, fail-closed delivery error handling).
 
 ## `POST /send` contract
 
@@ -46,6 +45,21 @@ outer `catch`. Authentication runs first, so a bad token on an unreadable body a
 The app side needs **no change**: `CloudflareApiMailTransport` already posts `/send` with
 `from`/`to`/`raw` (base64) and already sends `Authorization: Bearer <CLOUDFLARE_API_TOKEN>`.
 The Worker simply reads that header now, where before it ignored it.
+
+## `email()` inbound handler contract (MIA-77)
+
+What the inbound email handler does when triggered by Cloudflare Email Routing:
+
+| Scenario | Behavior |
+| --- | --- |
+| Allowed sender at tenant domain (`someone@miautrix.tech` or mixed case) | Matches wildcard `*@miautrix.tech`, proceeds to delivery |
+| Allowed exact sender (`admin@miautrix.org`) | Matches exact pattern, proceeds to delivery |
+| Disallowed sender / outside domain (`attacker@evil.com`, `user@sub.miautrix.tech`) | Rejects via `message.setReject("Address not allowed")` |
+| Malformed / missing / non-string `from` | Rejects via `message.setReject("Address not allowed")` without throwing uncaught errors |
+| HTTP webhook destination with `INBOUND_TOKEN` secret | Posts MIME stream to webhook with `X-Miautrix-Inbound-Token`, `X-Miautrix-Envelope-From`, `X-Miautrix-Envelope-To` |
+| HTTP webhook destination with missing `INBOUND_TOKEN` | Fails closed: logs error and calls `message.setReject("Inbound webhook authentication not configured")` |
+| HTTP webhook destination returns non-2xx status (e.g. `403` containment, `500`) | Rejects via `message.setReject("Inbound delivery failed (HTTP <status>)")` so sending MTA generates NDR/bounce |
+| Email forwarding destination (e.g. `ops@miautrix.org`) | Forwards via `await message.forward(destination)` |
 
 ## Rollback point
 
@@ -124,12 +138,15 @@ Dry run, which changes nothing and needs no credential:
 cd workers/email && npx wrangler deploy --dry-run
 ```
 
-## Required bindings
+## Required bindings & variables
 
-| Binding | Type | Purpose |
+| Binding / Variable | Type | Purpose |
 | --- | --- | --- |
 | `EMAIL` | `send_email` | Backs `env.EMAIL.send()` on `POST /send`. Declared in `wrangler.jsonc`. Currently unrestricted — no `allowed_destination_addresses`. |
-| `SEND_TOKEN` | secret | Shared bearer token for `POST /send`. Set with `wrangler secret put`, never in `wrangler.jsonc`. Absent -> handler answers `503`. |
+| `SEND_TOKEN` | secret | Shared bearer token for `POST /send`. Set with `wrangler secret put SEND_TOKEN`, never in `wrangler.jsonc`. Absent -> handler answers `503`. |
+| `INBOUND_TOKEN` | secret | Shared webhook token sent in `X-Miautrix-Inbound-Token` on `POST /api/v1/inbound/cloudflare`. Set with `wrangler secret put INBOUND_TOKEN`, never in `wrangler.jsonc`. Absent -> email() fails closed. |
+| `ALLOWED_SENDER_PATTERNS` | var | Allowed sender pattern list (e.g. `*@miautrix.tech,admin@miautrix.org`). Declared in `wrangler.jsonc` `vars`. |
+| `INBOUND_DESTINATION` | var | Inbound delivery URL or email forward target. Declared in `wrangler.jsonc` `vars`. |
 
 Also required, and **not** in this file:
 
@@ -141,9 +158,20 @@ Also required, and **not** in this file:
 
 ## Verification
 
+### The Inbound `email()` contract check (MIA-77)
+
+`verify-inbound-contract.sh` proves the inbound matching logic, edge cases, webhook formatting, secret token injection, and fail-closed error handling:
+
+```bash
+cd workers/email
+./verify-inbound-contract.sh
+```
+
+Executed: **14 cases, 0 failed, 0 `1101`s.**
+
 ### The `POST /send` contract check (MIA-76)
 
-`verify-send-contract.sh` is the committed proof of the table above: 29 cases covering the
+`verify-send-contract.sh` is the committed proof of the outbound table: 29 cases covering the
 unchanged `GET` paths, method guards (`405`), media type check (`415`), every `401` ordering case,
 every `400` body shape, `413` oversize payload, and the well-formed request reaching
 `env.EMAIL.send()`. One command:
