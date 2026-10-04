@@ -176,12 +176,84 @@ fails the deploy instead of silently disarming the integration. `CLOUDFLARE_API_
 written to a `0600 root:root` systemd drop-in for **`miautrix-mail.service`** (the Web app serves the
 webhook, not the Worker) and the Web service is restarted.
 
+### Worker source recovered into this repo (MIA-69, 2026-10-04)
+
+**Error.** `POST /send` on the deployed Worker returned Cloudflare `1101` for every request
+shape tested by QA (MIA-64): well-formed body, `{}`, `{"to":...}`, non-JSON body, and a wrong
+bearer token. A malformed payload should give `400` and a missing bearer `401`; `1101` for all
+of them means the handler threw before validating anything. The source could not be read,
+reviewed or reverted, because it lived only in an external repo
+(`lee-miautrix-email-worker-acdc7e2a`, referenced above) and in the live deployment.
+
+**Root cause.** In `POST /send`, the three statements that parse the request —
+`await request.json()`, `atob(body.raw)` and `new EmailMessage(body.from, body.to, rawMime)` —
+sit **outside** the `try` block. The `try` wraps only `env.EMAIL.send()`. Any bad or absent
+field therefore throws uncaught, and the Workers runtime answers `1101`:
+
+- `{}` / `{"to":...}` -> `body.raw` is `undefined`; `atob("undefined")` throws `InvalidCharacterError`.
+- non-JSON body -> `request.json()` throws `SyntaxError`.
+- wrong bearer token -> **the handler contains no authentication check at all**, so the
+  request falls through to the same unguarded parse and throws there. This is why a bad token
+  returns `1101` rather than `401`.
+
+Two further defects found in the same recovery, in the inbound `email()` handler:
+
+- The allow-list test is `allowList.indexOf(message.from)`, an exact string compare, so the
+  `"*@miautrix.tech"` wildcard entry can never match a real sender. Only the literal
+  `admin@miautrix.org` passes.
+- It forwards to `"inbox@corp"`, which is not a routable address or a verified Email Routing
+  destination, so the forward cannot succeed. The architecture calls for
+  `POST /api/v1/inbound/cloudflare` instead.
+
+**Fix.** None applied. MIA-69 was scoped to recovery and version control only, explicitly
+forbidding a behaviour change or a redeploy. The source now lives at `workers/email/`
+(`wrangler.jsonc`, `src/index.ts`, `deployed-artifact.index.js`, `README.md`), so the fix is
+now a reviewable, revertable code change instead of a hand-edit in the dashboard. Applying it
+is the follow-up task.
+
+**Rollback point.** Script `miautrix-main-worker`, version
+`327baddf-2d9d-494f-9630-e383c4ca4aa4` (number 6), deployment
+`db40576c-f0b2-40d9-8720-44207ad9c692`, etag
+`b6582d3ac146eacda28478b87c91bbbf6b07b4fbc0c911a20c0336d4083c0165`, deployed
+`2026-09-21T19:33:11Z`. Artefact sha256
+`58e7c87472e1b24e0b89f45811c528f5b3621255b3723e2fd01378be97b50e9d`. Restore with
+`npx wrangler versions deploy 327baddf-2d9d-494f-9630-e383c4ca4aa4@100% --name miautrix-main-worker --yes`.
+
+**Verification.** Three checks, all executed:
+
+1. Source read from the Workers API `content/v2` endpoint for the live script — the deployed
+   module itself, not a reconstruction.
+2. `npx wrangler deploy --dry-run --outdir <tmp>` compiled `src/index.ts`; the output diffed
+   against `deployed-artifact.index.js` differs only by whitespace and one trailing comma
+   after normalising comments and esbuild's export wrapping. No statement differs.
+3. Live read-only probes matched the recovered code: `GET /` -> `200 {"ok":true}`,
+   `GET /health` -> `200 {"ok":true}`, `GET /nope` -> `404 Not found`.
+
+`POST /send` and `email()` were **not** executed — doing so would send or reject real mail.
+Their behaviour is asserted from the recovered bytes plus the MIA-64 evidence.
+
+No secret is committed: `wrangler.jsonc` carries no `account_id` and no token; both are
+injected at deploy time as `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`. No DNS, Email
+Routing or `/api/` containment change was made.
+
+Also noted for hardening review: the `EMAIL` `send_email` binding is **unrestricted** (no
+`allowed_destination_addresses`). Narrowing it is a behaviour change and so was left alone.
+
 ### Outstanding
 
+- [ ] Fix `POST /send`: move the parse inside the `try`, return `400` on a bad body, and add
+      the bearer check that the handler currently lacks (returns `401`). Source is now at
+      `workers/email/src/index.ts`. Rollback point recorded above.
+- [ ] Fix the inbound `email()` allow-list wildcard and the unroutable `inbox@corp` forward
+      target.
 - [ ] The exact `/send` path, `Authorization` scheme and JSON field names in
       `CloudflareApiMailTransport` are the only values not taken from a supplied sample. They are
       confined to `SendAsync`/`ProbeAsync` in one file, so reconciling them against the sample
       Worker's `src/index.ts` is a change to that file alone.
+      **Reconciled by MIA-69 against the recovered `workers/email/src/index.ts`: the path
+      `/send` and the JSON field names `from`, `to`, `raw` (base64) all match the deployed
+      handler. The `Authorization: Bearer` header does not — the deployed Worker never reads
+      it. So the app's wire format was correct and was never the cause of the `1101`.**
 - [ ] No live run yet. `miautrix.tech` is to be switched to Cloudflare mode to exercise: a real
       forwarded message reaching the webhook (`250` + one `Pending` queue row), a wrong token being
       rejected and recorded, `POST /api/v1/domains/{id}/verify` returning a populated `worker_status`,
