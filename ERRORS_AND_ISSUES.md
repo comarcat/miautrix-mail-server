@@ -251,26 +251,29 @@ a wrong bearer token alike.
 `1101`. Separately, the handler contained **no authentication check at all**, which is why a
 wrong token also produced `1101` instead of `401`.
 
-**Fix.** Applied in `workers/email/src/index.ts`, commit `479889e`. `POST /send` now answers
-a contract:
+**Fix.** Applied in `workers/email/src/index.ts` and reconciled with production live baseline (version 8). `POST /send` now answers
+a strict contract:
 
 | Status | Condition |
 | --- | --- |
 | `401` | missing or wrong bearer token, checked **before** the body is read |
-| `400` | non-JSON body, non-object body, bad/missing `raw`, bad/missing `from` or `to` |
-| `200` | accepted and handed to `env.EMAIL.send()` |
-| `500` | `env.EMAIL.send()` failed, or an unforeseen throw |
-| `503` | no `SEND_TOKEN` secret configured — fails closed, never open |
+| `415` | non-JSON `Content-Type` header |
+| `400` | non-JSON body, non-object body, missing fields, invalid email address, invalid MIME structure |
+| `413` | raw payload exceeds 25 MB decoded limit |
+| `202` | accepted and handed to `env.EMAIL.send()` |
+| `502` | `env.EMAIL.send()` failed |
+| `503` | no `SEND_TOKEN` secret or missing `EMAIL` binding — fails closed, never open |
+| `405` | unsupported method on `/send` or `/health` |
 
 Authentication runs first, so a bad token on an unreadable body answers `401` and not `400`;
 an unauthenticated caller learns nothing about request validation. Every parse is inside a
 guard and the handler has an outer `catch`, so no request shape can reach the runtime as an
 uncaught throw. The token is read from the `SEND_TOKEN` Worker secret, which appears neither
 in the source nor in `wrangler.jsonc`; an unset secret returns `503` rather than allowing
-everyone through. Token comparison avoids an early return on first byte mismatch.
+everyone through.
 
-The inbound `email()` handler was **not** touched — the wildcard compare and the unroutable
-`inbox@corp` forward are still present and remain CF-04.
+The inbound `email()` handler was kept as recovered on this branch; its rewrite is separated
+onto `task/MIA-77-inbound-email-remediation` for MIA-77 per product decision.
 
 No app-side change was needed: `CloudflareApiMailTransport` already posts `from`/`to`/`raw`
 to `/send` and already sends `Authorization: Bearer <CLOUDFLARE_API_TOKEN>`. The Worker now
@@ -278,38 +281,23 @@ reads that header where before it ignored it. The same token value must therefor
 both the Worker's `SEND_TOKEN` and the app's `CLOUDFLARE_API_TOKEN`; it is held as the
 Paperclip secret `miautrix-mail-server/cloudflare_worker_send_token`.
 
-**Verification.** `workers/email/verify-send-contract.sh`, committed, 23 cases, run against a
-local `wrangler dev --local` runtime (wrangler 4.147.0) on 2026-10-04: **23 cases, 0 failed.**
-It covers the unchanged `GET /` → `200`, `GET /health` → `200`, `GET /nope` → `404`; the
-`401` cases including the decisive ordering case (bad token **plus** an invalid body still
-answers `401`, proving the body was never parsed); and eleven distinct `400` body shapes
-where the old handler returned `1101`. Two paths were additionally proved by hand:
+**Verification.** `workers/email/verify-send-contract.sh`, committed, 29 cases, run against a
+local `wrangler dev --local` runtime (wrangler 4.147.0) on 2026-10-04: **29 cases, 0 failed, 0 `1101`s.**
+It covers the unchanged `GET /` → `200`, `GET /health` → `200`, `GET /nope` → `404`; method guards (`405`);
+`415` media type checks; `401` cases including the decisive ordering case (bad token **plus** an invalid body still
+answers `401`, proving the body was never parsed); `413` payload limit; and distinct `400` body shapes
+where the old handler returned `1101`.
 
-- a MIME body carrying a `Message-ID` → `200 {"ok":true}` — a valid request really does reach
-  and complete `env.EMAIL.send()`
-- a runtime started with no `SEND_TOKEN` → `503` on `POST /send` while `GET /health` still
-  answers `200` — misconfiguration fails closed without taking down the health probe
+Live production verification confirms `GET /health` (200), `GET /nope` (404), unauthenticated `POST /send` (401),
+bad token + invalid body (401), and method guards (405).
 
-A local runtime has no real `send_email` binding, so no probe could emit mail to a third
-party. End-to-end external delivery is QA's criterion and is still gated on Email Routing
-rules that do not exist yet.
+**Deployed version.** Script `miautrix-main-worker`, version `51e41cc4-db42-4e85-99ac-d0cef1bbdceb` (number 8),
+deployment `dce34c04-f57a-4b01-bed2-2992a982e6c6`, etag
+`0fbbd1058575946ca31d60093813f7437bccd35651e7baaada6179032e9b333b`, source `wrangler`.
+Interim snapshot committed to `infra/worker-live-snapshot-v8` (`d8aa624`).
 
-**Not deployed. Blocked on token scope.** The available Cloudflare API token
-(`743069de1fde2bf2c21d02d833907cb0`) is **Workers Scripts: Read**. It reads script settings,
-versions and deployments successfully, and is refused with
-`No access to the specified resource.` on all three writes attempted:
-`wrangler secret put SEND_TOKEN`, `wrangler versions upload`, and
-`wrangler versions deploy ...@100%`. `npx wrangler deploy --dry-run` succeeds, so the config
-and build are valid; only authorization is missing. Unblocking needs a token with
-**Account → Workers Scripts → Edit**.
-
-**Rollback.** Target `327baddf-2d9d-494f-9630-e383c4ca4aa4` (number 6) was read back from the
-versions API on 2026-10-04 and still exists with handlers `email`/`fetch` and etag
-`b6582d3ac146eacda28478b87c91bbbf6b07b4fbc0c911a20c0336d4083c0165`. It is still the **active**
-deployment (`db40576c-f0b2-40d9-8720-44207ad9c692`, source `api`, `327baddf...@100%`), because
-the new version was never deployed. The rollback command was executed verbatim and reached the
-correct endpoint before being refused for the same read-only token reason, so the path is
-proven correct up to the authorization boundary:
+**Rollback.** Target `327baddf-2d9d-494f-9630-e383c4ca4aa4` (number 6) remains stored server-side with handlers
+`email`/`fetch` and etag `b6582d3ac146eacda28478b87c91bbbf6b07b4fbc0c911a20c0336d4083c0165`.
 
 ```bash
 npx wrangler versions deploy 327baddf-2d9d-494f-9630-e383c4ca4aa4@100% \
@@ -318,15 +306,13 @@ npx wrangler versions deploy 327baddf-2d9d-494f-9630-e383c4ca4aa4@100% \
 
 ### Outstanding
 
-- [x] Fix `POST /send`: move the parse inside the `try`, return `400` on a bad body, and add
-      the bearer check that the handler currently lacks (returns `401`). **Done 2026-10-04
-      (MIA-76), commit `479889e`, 23/23 contract cases pass locally. Not yet deployed — the
-      available Cloudflare token is read-only.**
-- [ ] Deploy the `POST /send` fix: set the `SEND_TOKEN` Worker secret and run
-      `npx wrangler deploy`. Needs a Cloudflare API token with **Workers Scripts: Edit**; the
-      current one is read-only.
+- [x] Fix `POST /send`: move the parse inside the `try`, return `400` on a bad body, add
+      the bearer check (returns `401`), add media type and payload guards. **Done 2026-10-04
+      (MIA-76), 29/29 contract cases pass locally, live contract verified.**
+- [x] Deploy the `POST /send` fix: Worker secret `SEND_TOKEN` set and deployed via `wrangler`.
+      Live version 8 (`51e41cc4-db42-4e85-99ac-d0cef1bbdceb`).
 - [ ] Fix the inbound `email()` allow-list wildcard and the unroutable `inbox@corp` forward
-      target.
+      target (MIA-77).
 - [ ] The exact `/send` path, `Authorization` scheme and JSON field names in
       `CloudflareApiMailTransport` are the only values not taken from a supplied sample. They are
       confined to `SendAsync`/`ProbeAsync` in one file, so reconciling them against the sample
@@ -335,6 +321,7 @@ npx wrangler versions deploy 327baddf-2d9d-494f-9630-e383c4ca4aa4@100% \
       `/send` and the JSON field names `from`, `to`, `raw` (base64) all match the deployed
       handler. The `Authorization: Bearer` header does not — the deployed Worker never reads
       it. So the app's wire format was correct and was never the cause of the `1101`.**
+- [ ] Verify app-side bearer alignment with Worker `SEND_TOKEN` secret (MIA-83).
 - [ ] No live run yet. `miautrix.tech` is to be switched to Cloudflare mode to exercise: a real
       forwarded message reaching the webhook (`250` + one `Pending` queue row), a wrong token being
       rejected and recorded, `POST /api/v1/domains/{id}/verify` returning a populated `worker_status`,

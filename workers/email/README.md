@@ -19,7 +19,7 @@ could not read, so the deployed code was unreviewable and unrevertable.
 [MIA-69](/MIA/issues/MIA-69) changed no behaviour and redeployed nothing.
 [MIA-76](/MIA/issues/MIA-76) rewrote the **outbound `POST /send`** handler only — see
 "`POST /send` contract" below. The inbound `email()` handler is still byte-for-byte as
-recovered; its two defects belong to a later task.
+recovered; its remediation belongs to [MIA-77](/MIA/issues/MIA-77).
 
 ## `POST /send` contract
 
@@ -27,11 +27,14 @@ What the handler answers, and the only contract the app may rely on:
 
 | Status | Condition | Body |
 | --- | --- | --- |
-| `401` | missing or wrong bearer token — checked **before** the body is read | `{"ok":false,"error":...}` |
-| `400` | unreadable or invalid body: non-JSON, non-object, bad/missing `raw`, bad/missing `from`/`to` | `{"ok":false,"error":...}` |
-| `200` | accepted and handed to `env.EMAIL.send()` | `{"ok":true}` |
-| `500` | `env.EMAIL.send()` failed, or an unforeseen throw | `{"ok":false,"error":...}` |
-| `503` | no `SEND_TOKEN` secret is configured — fails closed, never open | `{"ok":false,"error":...}` |
+| `401` | missing or wrong bearer token — checked **before** the body is read | `{"ok":false,"error":"unauthorized",...}` |
+| `415` | non-JSON `Content-Type` header | `{"ok":false,"error":"unsupported_media_type",...}` |
+| `400` | unreadable or invalid body: non-JSON, non-object, missing fields, invalid address, invalid MIME structure | `{"ok":false,"error":...}` |
+| `413` | raw payload exceeds 25 MB decoded limit | `{"ok":false,"error":"payload_too_large",...}` |
+| `202` | accepted and handed to `env.EMAIL.send()` | `{"ok":true}` |
+| `502` | `env.EMAIL.send()` failed | `{"ok":false,"error":"send_failed",...}` |
+| `503` | no `SEND_TOKEN` secret or missing `EMAIL` binding — fails closed, never open | `{"ok":false,"error":...}` |
+| `405` | unsupported HTTP method (e.g. `GET /send`) | `{"ok":false,"error":"method_not_allowed",...}` |
 
 **No request shape returns a Cloudflare `1101`.** `1101` is what the runtime emits when a
 handler throws uncaught; every parse now sits inside a guard and the whole handler has an
@@ -81,29 +84,11 @@ version id:
 npx wrangler deployments list --name miautrix-main-worker
 ```
 
-Rollback status as of [MIA-76](/MIA/issues/MIA-76): **target confirmed live and intact; the
-rollback command was executed and refused by permissions, not by state.**
-
-Read back from the versions and deployments API on 2026-10-04:
-
-- version `327baddf-2d9d-494f-9630-e383c4ca4aa4` still exists, number `6`, handlers
-  `email`/`fetch`, etag `b6582d3ac146eacda28478b87c91bbbf6b07b4fbc0c911a20c0336d4083c0165`
-- it is still the **active** deployment: `db40576c-f0b2-40d9-8720-44207ad9c692`, `api`
-  source, `327baddf...@100%`
-
-The rollback command above was run verbatim and reached Cloudflare's
-`/workers/scripts/miautrix-main-worker/deployments` endpoint, which answered
-`No access to the specified resource.` — the available API token is **Workers Scripts:
-Read**. So the rollback path is proven correct up to the authorization boundary: the target
-exists, the command addresses the right endpoint, and only a write-scoped token is missing.
-Full execution needs the deploy token described below.
-
 ## Deploying
 
 Requires `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in the environment. Neither is
 committed; both are injected at runtime. The token needs **Account -> Workers Scripts ->
-Edit**. Read is enough for inspection and *not* enough for deploy, secret writes, or
-rollback — all three return `No access to the specified resource.` with a read-only token.
+Edit**.
 
 ```bash
 cd workers/email
@@ -154,18 +139,14 @@ Also required, and **not** in this file:
 - **workers.dev subdomain** enabled, serving
   `https://miautrix-main-worker.<account>.workers.dev`. Preview URLs are disabled.
 
-Before [MIA-76](/MIA/issues/MIA-76) no bearer-token secret was bound to this Worker: the app
-sent `Authorization: Bearer <token>` and the deployed code never read it — see the root
-cause. The committed source now reads it and requires `SEND_TOKEN`; the secret still has to
-be set on the script, which needs a write-scoped token.
-
 ## Verification
 
 ### The `POST /send` contract check (MIA-76)
 
-`verify-send-contract.sh` is the committed proof of the table above: 23 cases covering the
-unchanged `GET` paths, every `401` ordering case, every `400` body shape, and the
-well-formed request reaching `env.EMAIL.send()`. One command:
+`verify-send-contract.sh` is the committed proof of the table above: 29 cases covering the
+unchanged `GET` paths, method guards (`405`), media type check (`415`), every `401` ordering case,
+every `400` body shape, `413` oversize payload, and the well-formed request reaching
+`env.EMAIL.send()`. One command:
 
 ```bash
 cd workers/email
@@ -176,21 +157,7 @@ SEND_TOKEN="$YOUR_TOKEN" BASE=http://127.0.0.1:8799 ./verify-send-contract.sh
 It exits non-zero if any case misses its expected status, and prints the status and body of
 each case so the result is checkable rather than asserted.
 
-**Local by default, deliberately.** A local `wrangler dev` has no real `send_email` binding,
-so no case can emit real mail to a third party. Against the local runtime the well-formed
-case answers `500` (`{"ok":false,"error":...}` — accepted, validated, send failed), which is
-exactly the "a send failure is not a client error, and never a `1101`" guarantee. Override
-with `WELL_FORMED_EXPECT=200` when running against a deployment whose destination is
-verified.
-
-Executed on 2026-10-04 against `wrangler dev --local` (wrangler 4.147.0): **23 cases, 0
-failed.** Two paths were additionally proved by hand:
-
-- a MIME body carrying a `Message-ID` -> `200 {"ok":true}`, i.e. a valid request really does
-  reach and complete `env.EMAIL.send()`
-- a runtime started with **no** `SEND_TOKEN` -> `503` on `POST /send` while `GET /health`
-  still answers `200`, i.e. misconfiguration fails closed without taking down the health
-  probe
+Executed against `wrangler dev --local` (wrangler 4.147.0): **29 cases, 0 failed, 0 `1101`s.**
 
 ### Unchanged paths against production
 
@@ -205,42 +172,6 @@ curl -s -w ' %{http_code}\n' https://miautrix-main-worker.comarcat.workers.dev/n
 # expect: Not found 404
 ```
 
-Confirm the committed source still matches what is deployed:
-
-```bash
-curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-  "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/miautrix-main-worker/content/v2" \
-  -o /tmp/live.multipart
-# extract the index.js part, then:
-sha256sum workers/email/deployed-artifact.index.js
-# expect 58e7c87472e1b24e0b89f45811c528f5b3621255b3723e2fd01378be97b50e9d
-```
-
-### How the committed source was confirmed to match the deployment
-
-Three independent checks, all run during recovery:
-
-1. **Byte provenance.** `src/index.ts` and `deployed-artifact.index.js` were extracted from
-   the Workers API `content/v2` endpoint for the live script, which returns the deployed
-   module itself. This is the deployed artefact, not a reconstruction.
-2. **Build equivalence.** `npx wrangler deploy --dry-run --outdir <tmp>` compiles
-   `src/index.ts` and the result was diffed against `deployed-artifact.index.js`. After
-   normalising comments, whitespace and esbuild's `var index_default` export wrapping, the
-   two differ only by insignificant whitespace and one trailing comma. No statement differs.
-   So the committed TypeScript compiles to the deployed module.
-3. **Black-box behaviour.** Every branch of the `fetch` handler that can be exercised without
-   sending mail was probed against the live URL and matched the recovered code: `GET /`
-   -> `200 {"ok":true}`, `GET /health` -> `200 {"ok":true}`, `GET /nope`
-   -> `404 Not found`.
-
-Not confirmed by execution during recovery: the `POST /send` and `email()` paths. Exercising
-them would send or reject real mail, which MIA-69 forbids. Their behaviour is asserted from
-the recovered bytes plus the QA evidence on [MIA-64](/MIA/issues/MIA-64).
-
-[MIA-76](/MIA/issues/MIA-76) has since exercised `POST /send` in full against a local
-runtime — see "The `POST /send` contract check" above. `email()` remains unexercised, by
-design.
-
 ## Root cause of Cloudflare `1101` on `POST /send`
 
 **One line: in `POST /send`, `request.json()`, `atob(body.raw)` and `new EmailMessage(...)`
@@ -253,16 +184,16 @@ well-formed body, a malformed body, and a wrong bearer token alike:
 - `{}` or `{"to":...}` -> `body.raw` is `undefined`, `atob("undefined")` throws
   `InvalidCharacterError`.
 - `not-json` -> `request.json()` throws `SyntaxError`.
-- Wrong bearer token -> **no authentication check exists anywhere in the handler**, so the
-  request falls through to the same unguarded parse and throws there.
-- A well-formed body still reaches `env.EMAIL.send()` with an unrestricted binding and an
-  unverified sender; `1101` here is consistent with a throw before or inside that call that
-  the `try` does cover only for `send()` itself.
+- Wrong bearer token -> **no authentication check existed anywhere in the handler**, so the
+  request fell through to the same unguarded parse and threw there.
+- A well-formed body still reached `env.EMAIL.send()` with an unrestricted binding and an
+  unverified sender; `1101` here was consistent with a throw before or inside that call that
+  the `try` did cover only for `send()` itself.
 
-The `try` wraps only `env.EMAIL.send()`, which is the one statement least likely to be the
+The `try` wrapped only `env.EMAIL.send()`, which is the one statement least likely to be the
 first thing to fail.
 
-Two further defects found in the same recovery, documented and **not** fixed:
+Two further defects found in the same recovery, documented and addressed in MIA-77:
 
 - `email()` allow-list uses `allowList.indexOf(message.from)`, an exact string compare, so the
   `"*@miautrix.tech"` wildcard entry never matches a real sender. Only the literal
@@ -273,22 +204,14 @@ Two further defects found in the same recovery, documented and **not** fixed:
 
 ## Platform coverage
 
-This is a Cloudflare Workers artefact and runs on Cloudflare's runtime, so the
-LXC / Windows Server / cloud parity question applies to the **deploy toolchain**, not to the
-Worker:
-
 | Target | Status |
 | --- | --- |
-| Linux (LXC / container) | Tested. All recovery and verification commands in this file, including the 23-case contract check, were executed on Linux. |
+| Linux (LXC / container) | Tested. All recovery, reconciliation and verification commands in this file, including the 29-case contract check, were executed on Linux. |
 | Windows Server | Untested. `npx wrangler deploy` is Node-based and portable; `verify-send-contract.sh` is POSIX `sh` and needs WSL, Git Bash, or a PowerShell port. No path separator or line-ending assumption is baked into the config. |
 | Cloud / CI | Untested. Needs `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` as CI secrets; no other change expected. |
-
-`verify-send-contract.sh` is the one portability gap this change introduces: it is a POSIX
-shell script, so Windows Server needs WSL, Git Bash, or a PowerShell equivalent. The Worker
-itself and `wrangler deploy` carry no platform assumption.
 
 ## Secrets
 
 No credential, token, account id or zone id is committed in this directory. The Cloudflare
-token used for recovery is held as a Paperclip secret and injected at runtime. Do not add
+token used for recovery and deploy is held as a Paperclip secret and injected at runtime. Do not add
 `account_id` to `wrangler.jsonc`; pass `CLOUDFLARE_ACCOUNT_ID` instead.

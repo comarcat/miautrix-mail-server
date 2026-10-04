@@ -398,8 +398,8 @@ the deploy toolchain, not to the artefact.
 
 ## 9. What was deliberately not done
 
-- **Inbound `email()` untouched** — the wildcard `indexOf` compare and the unroutable
-  `inbox@corp` forward are both still there. Separate task (CF-04).
+- **Inbound `email()` untouched on this branch** — the wildcard `indexOf` compare and the unroutable
+  `inbox@corp` forward are both still there. Moved to `task/MIA-77-inbound-email-remediation` for MIA-77.
 - **The unrestricted `EMAIL` `send_email` binding was not narrowed** (RSK-07). It is a
   behaviour change and Onyx's call.
 - **Worker observability left off**, exactly as recovered. Noted, not bundled.
@@ -410,3 +410,32 @@ the deploy toolchain, not to the artefact.
 - **No app-side change.** `CloudflareApiMailTransport` already posted `from`/`to`/`raw` to
   `/send` with an `Authorization: Bearer` header; the Worker simply reads it now. The contract
   it depends on is unchanged, so modularity holds.
+
+---
+
+## 10. Reconciliation and Verification (Path 3)
+
+Following Product decision (Nyx, 2026-10-04), Path 3 reconciliation was implemented:
+
+1. **Live snapshot committed:**
+   Currently deployed live Worker version 8 was fetched from the Cloudflare Workers API and
+   committed verbatim on throwaway branch `infra/worker-live-snapshot-v8` (commit `d8aa624`).
+   - Version id: `51e41cc4-db42-4e85-99ac-d0cef1bbdceb` (number 8)
+   - Deployment id: `dce34c04-f57a-4b01-bed2-2992a982e6c6`
+   - Etag: `0fbbd1058575946ca31d60093813f7437bccd35651e7baaada6179032e9b333b`
+   - Sha256: `17029b0b9ffe9c37cf09920bc7bea1f4792dc2b2c8c66d5b80b4dce6a58a3ef6`
+
+2. **Reconciled source in `workers/email/src/index.ts`:**
+   Ported all guards (415 media type, 413 payload limit > 25MB, 400 MIME structure, 405 method guards,
+   202 success, 502 send failure) while keeping inbound `email()` scoped to MIA-77.
+
+3. **Verification:**
+   `workers/email/verify-send-contract.sh` expanded to 29 cases:
+   - 29 cases, 0 failed, 0 `1101`s.
+   - Tested against `npx wrangler dev --local` (wrangler 4.147.0).
+   - Live production tests confirm: `POST /send` without auth returns `401` (open relay closed),
+     bad token + invalid body returns `401`, `GET /` and `GET /health` return `200`, `GET /nope` returns `404`.
+
+4. **Rollback point:**
+   Version 6 (`327baddf-2d9d-494f-9630-e383c4ca4aa4`) remains preserved server-side.
+
