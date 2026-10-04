@@ -50,6 +50,8 @@ This document tracks identified errors, configuration discrepancies, environment
 | **DB-03** | Environment Variables | Service startup crash if connection string or secrets are missing. | Strict boot validation halts execution on missing environment variables. | Systemd unit file must include `MIAUTRIX_DB_CONNECTION` and `ASPNETCORE_ENVIRONMENT=Production`. |
 | **DB-04** | Production Login 500 | `POST /api/v1/auth/login` returned HTTP 500 with `42703: column m.name does not exist` from `AuthService.AuthenticateAsync` line 87. | Production `mailboxes` schema was behind the EF model after `Mailbox.Name` was added; the migration existed in source but was not discovered/applied because generated migration metadata was incomplete. | **Fixed 2026-09-20**: added `20260920223000_AddMailboxName` and its designer metadata; applied to production via `scripts/update-prod-database.ps1`. Login confirmed working at `https://mail.miautrix.tech/admin`. |
 | **DB-05** | Migration Target Drift | Generic `dotnet ef database update` used local/dev configuration (`miautrix_dev`) instead of production. | EF startup configuration defaults were used when no explicit `--connection` was supplied. | **Fixed 2026-09-20**: production scripts require an explicit production connection/password, pass `--connection`, reject localhost/dev/test targets, and require confirmation. |
+| **WAF-01** | Cloudflare API Containment Rule Narrowing | Broad edge containment rule `Miautrix API emergency containment` (ID `55eb9d2446f849299ba0ae0b2a130c46`) blocked `/api/` entirely, including webmail/admin login endpoints (`/api/v1/auth/login`, `/api/v1/auth/refresh`), returning HTTP 403 before requests reached origin. | Emergency containment was initially deployed as a catch-all block for all `/api/` paths pending application-level session authentication (MIA-62). After origin auth hardening landed, edge containment must be narrowed to permit authentication endpoints while blocking all other API paths. | **Specified & Verified 2026-10-04 (MIA-86)**: Inspected zone custom firewall ruleset `55eb9d2446f849299ba0ae0b2a130c46` (phase `http_request_firewall_custom`, rule ID `7e70d965a59f4634b066f182264bd23a`). Defined narrowed expression to permit `/api/v1/auth/login` and `/api/v1/auth/refresh` while retaining block on other `/api/` paths. Documented rollback path and verified live external endpoints: unauthenticated `/api/v1/auth/me` returns 401 Unauthorized (origin auth enforced), login endpoint reachable and rejecting bad credentials (401), webmail `/` and `/admin/` return 200 OK. Verified available Cloudflare API token is read-only (Rulesets edit denied). |
+| **WAF-02** | Cloudflare Rule Blocks Authenticated Frontend API | Narrowed edge rule `(http.host eq "mail.miautrix.tech" and starts_with(http.request.uri.path, "/api/") and not http.request.uri.path in {"/api/v1/auth/login" "/api/v1/auth/refresh"})` blocked authenticated SPA requests (`/api/v1/auth/me`, `/api/v1/mailboxes`, `/api/v1/messages`, etc.) with HTTP 403 at Cloudflare Edge. | The narrowed edge rule whitelisted only `/api/v1/auth/login` and `/api/v1/auth/refresh` while blocking all other `/api/` paths unconditionally, ignoring client Bearer session tokens and CORS OPTIONS preflights. When the rule is disabled, traffic reaches origin where `AuthenticationMiddleware` (MIA-62) properly validates sessions and enforces multi-tenant auth. | **Diagnosed 2026-10-04 (MIA-88)**: Identified root cause, inspected expression semantics and complete SPA/Admin API path inventory; formulated candidate edge expressions for human review only (including token-presence gate, OPTIONS preflight exemption, and origin-auth delegation); documented validation matrix and rollback guidance. Secret-free read-only diagnosis completed. |
 
 ---
 
@@ -369,3 +371,86 @@ npx wrangler versions deploy 51e41cc4-db42-4e85-99ac-d0cef1bbdceb@100% --name mi
       forwarded message reaching the webhook (`250` + one `Pending` queue row), a wrong token being
       rejected and recorded, `POST /api/v1/domains/{id}/verify` returning a populated `worker_status`,
       and IMAP on 993 still answering `* OK [CAPABILITY IMAP4rev1 ...]`.
+
+---
+
+## 10. Cloudflare API Containment Rule Diagnosis & Frontend Auth Analysis (MIA-88)
+
+### 10.1 Issue Summary & Root Cause
+
+- **Reported Incident**: Authenticated Webmail and Admin SPA API requests were failing with HTTP 403 Forbidden when the narrowed Cloudflare WAF custom rule was enabled, while disabling the rule completely restored full functionality.
+- **Rule Context**:
+  - Cloudflare Zone: `miautrix.tech` (`729006a7f185d2a69a82c553df526eb1`)
+  - Account ID: `ce330e96ff03d34dbe02ef88e18ea515`
+  - Custom Firewall Ruleset: `55eb9d2446f849299ba0ae0b2a130c46` (Phase: `http_request_firewall_custom`)
+  - Rule ID: `7e70d965a59f4634b066f182264bd23a`
+  - Narrowed Expression: `(http.host eq "mail.miautrix.tech" and starts_with(http.request.uri.path, "/api/") and not http.request.uri.path in {"/api/v1/auth/login" "/api/v1/auth/refresh"})` with action `block`.
+- **Root Cause**:
+  1. The narrowed rule evaluated purely against request URI path metadata, permitting *only* `/api/v1/auth/login` and `/api/v1/auth/refresh`.
+  2. In modern Single Page Applications (SPAs), after initial authentication at `/api/v1/auth/login`, the frontend client dispatches immediate subsequent API calls with `Authorization: Bearer <session_token>` to initialize the interface:
+     - Profile / Identity check: `GET /api/v1/auth/me`
+     - Mailbox enumeration: `GET /api/v1/mailboxes`
+     - Folder tree: `GET /api/v1/mailboxes/{id}/folders`
+     - Message thread list: `GET /api/v1/mailboxes/{id}/messages`
+     - Contacts: `GET /api/v1/contacts`
+     - Calendar events: `GET /api/v1/calendar/events`
+     - Admin endpoints: `GET /api/v1/admin/users`, `GET /api/v1/admin/domains`, etc.
+  3. Every single one of these paths starts with `/api/` and is NOT in `{"/api/v1/auth/login" "/api/v1/auth/refresh"}`. Cloudflare WAF unconditionally blocked these requests at the edge with HTTP 403 before they could reach origin `10.11.1.51`.
+  4. Furthermore, the rule did not exempt CORS `OPTIONS` preflight requests (`not http.request.method eq "OPTIONS"`), nor did it accommodate the inbound webhook `POST /api/v1/inbound/cloudflare` or public calendar invitations `GET/POST /api/v1/public/calendar/*`.
+  5. **Why the Disabled Rule Works**: Origin-level ASP.NET Core `AuthenticationMiddleware` (implemented in MIA-62) intercepts all `/api/` traffic on `10.11.1.51`, validating cryptographic session tokens against `ISessionManager`. Valid tokens receive HTTP 200 with scoped tenant data, unauthenticated requests receive HTTP 401 Unauthorized (`unauthorized`), and public endpoints serve normally.
+
+### 10.2 Complete Request Paths Inventory
+
+| Category | Endpoint / Path | Auth Requirement | Deployed Behavior with Disabled Rule | Deployed Behavior with Narrowed Edge Rule |
+|---|---|---|---|---|
+| **Public Auth** | `POST /api/v1/auth/login` | Public (credentials) | HTTP 200 / 401 | Allowed (passes to origin) |
+| **Public Auth** | `POST /api/v1/auth/refresh` | Public (refresh token) | HTTP 200 / 401 | Allowed (passes to origin) |
+| **Session Profile** | `GET /api/v1/auth/me` | Bearer Token | HTTP 200 (auth) / 401 (unauth) | **BLOCKED (HTTP 403)** |
+| **Webmail Mailboxes** | `GET /api/v1/mailboxes` | Bearer Token | HTTP 200 (auth) / 401 (unauth) | **BLOCKED (HTTP 403)** |
+| **Webmail Folders** | `GET /api/v1/mailboxes/{id}/folders` | Bearer Token | HTTP 200 (auth) / 401 (unauth) | **BLOCKED (HTTP 403)** |
+| **Webmail Messages** | `GET /api/v1/mailboxes/{id}/messages` | Bearer Token | HTTP 200 (auth) / 401 (unauth) | **BLOCKED (HTTP 403)** |
+| **Webmail Send** | `POST /api/v1/mailboxes/{id}/messages/send` | Bearer Token | HTTP 200 (auth) / 401 (unauth) | **BLOCKED (HTTP 403)** |
+| **Webmail Contacts** | `GET /api/v1/contacts` | Bearer Token | HTTP 200 (auth) / 401 (unauth) | **BLOCKED (HTTP 403)** |
+| **Webmail Calendar** | `GET /api/v1/calendar/events` | Bearer Token | HTTP 200 (auth) / 401 (unauth) | **BLOCKED (HTTP 403)** |
+| **Admin Users** | `GET/POST /api/v1/admin/users` | Bearer + Admin | HTTP 200 (auth) / 401 (unauth) | **BLOCKED (HTTP 403)** |
+| **Admin Domains** | `GET/POST /api/v1/admin/domains` | Bearer + Admin | HTTP 200 (auth) / 401 (unauth) | **BLOCKED (HTTP 403)** |
+| **Inbound Webhook** | `POST /api/v1/inbound/cloudflare` | Inbound Token Header | HTTP 200 / 401 | **BLOCKED (HTTP 403)** |
+| **Public Calendar** | `GET/POST /api/v1/public/calendar/*` | Public token/hash | HTTP 200 / 404 | **BLOCKED (HTTP 403)** |
+| **OpenAPI Spec** | `GET /openapi/v1.json` | Public | HTTP 200 | **BLOCKED (HTTP 403)** |
+| **CORS Preflight** | `OPTIONS /api/v1/*` | None | HTTP 204 No Content | **BLOCKED (HTTP 403)** |
+
+### 10.3 Candidate Expressions for Human Review Only
+
+*Note: No changes to Cloudflare Rulesets, DNS, or Workers were made in this task. The following options are provided strictly for review by the project team and system administrators.*
+
+#### Option 1: Origin Authentication Model (Recommended Baseline)
+- **Status**: Leave Rule `7e70d965a59f4634b066f182264bd23a` **Disabled** (or delete it).
+- **Rationale**: The emergency containment rule was a temporary stopgap prior to MIA-62. Origin-level `AuthenticationMiddleware` now enforces token authentication, session validation, tenant isolation, and account lockout across all protected routes. Disabling edge containment allows the SPA and external integrations to operate without path synchronization overhead.
+
+#### Option 2: Edge Token Presence & Preflight Shielding (Heuristic Filter)
+- **Expression**:
+  ```text
+  (http.host eq "mail.miautrix.tech" 
+   and starts_with(http.request.uri.path, "/api/") 
+   and not http.request.uri.path in {"/api/v1/auth/login" "/api/v1/auth/refresh" "/api/v1/inbound/cloudflare"} 
+   and not starts_with(http.request.uri.path, "/api/v1/public/calendar/") 
+   and not starts_with(http.request.uri.path, "/openapi/") 
+   and not http.request.method eq "OPTIONS" 
+   and not any(http.request.headers["authorization"][*] contains "Bearer "))
+  ```
+- **Action**: `block`
+- **Rationale**: Blocks unauthenticated scrapers/crawlers at Cloudflare edge while allowing login, refresh, Worker webhooks, public RSVPs, OpenAPI docs, CORS preflights, and any request carrying an `Authorization: Bearer <token>` header through to origin for cryptographic session verification.
+
+### 10.4 Validation & Rollback Guidance
+
+- **Rollback Procedure**: In Cloudflare Dashboard (`Security -> WAF -> Custom Rules`), locate rule `Miautrix API emergency containment` (ID `7e70d965a59f4634b066f182264bd23a`) and toggle `Enabled` to **Off**.
+- **Live Verification Matrix**:
+  1. `GET https://mail.miautrix.tech/` -> HTTP 200 OK (Webmail SPA HTML/assets).
+  2. `GET https://mail.miautrix.tech/admin/` -> HTTP 200 OK (Admin Console SPA HTML/assets).
+  3. `POST https://mail.miautrix.tech/api/v1/auth/login` (invalid credentials) -> HTTP 401 Unauthorized (Origin auth handler reached).
+  4. `POST https://mail.miautrix.tech/api/v1/auth/login` (valid credentials) -> HTTP 200 OK (Token issued).
+  5. `GET https://mail.miautrix.tech/api/v1/auth/me` (unauthenticated) -> HTTP 401 Unauthorized (Origin middleware enforcement).
+  6. `GET https://mail.miautrix.tech/api/v1/auth/me` (with valid Bearer token) -> HTTP 200 OK (Identity resolved).
+  7. `GET https://mail.miautrix.tech/api/v1/mailboxes` (with valid Bearer token) -> HTTP 200 OK (Mailboxes returned).
+  8. `OPTIONS https://mail.miautrix.tech/api/v1/mailboxes` -> HTTP 204 No Content (CORS preflight allowed).
+
