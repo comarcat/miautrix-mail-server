@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Miautrix Mail Server",
+    "subtitle": ".NET 10 Modular Monolith Architecture",
+    "output": "architecture.html",
+    "quality_profile": "showcase",
+    "viewBox": [1200, 620],
+    "views": [
+      {
+        "id": "mail-flow",
+        "label": "Mail Transport Flow",
+        "focus": ["ext-mta", "smtp-rx", "policy-engine", "storage", "postgres", "smtp-tx", "imap-sieve"]
+      },
+      {
+        "id": "management",
+        "label": "Client surfaces",
+        "focus": ["end-users", "admins", "webmail", "webadmin", "desktop", "cli", "core-api", "identity", "postgres"]
+      }
+    ]
+  },
+  "components": [
+    { "id": "ext-mta", "type": "external", "label": "External MTAs", "sublabel": "Internet SMTP", "pos": [50, 60], "size": [140, 50] },
+    { "id": "end-users", "type": "external", "label": "End Users", "sublabel": "Mail Clients", "pos": [50, 200], "size": [140, 50] },
+    { "id": "admins", "type": "external", "label": "Administrators", "sublabel": "On-prem / Remote", "pos": [50, 400], "size": [140, 50] },
+
+    { "id": "webmail", "type": "frontend", "label": "Webmail SPA", "sublabel": "React (JMAP)", "brand": "react", "pos": [260, 200], "size": [140, 50] },
+    { "id": "webadmin", "type": "frontend", "label": "Web Admin", "sublabel": "React (Iris Pay)", "brand": "react", "pos": [260, 300], "size": [140, 50] },
+    { "id": "desktop", "type": "frontend", "label": "Desktop Admin", "sublabel": "Electron", "pos": [260, 400], "size": [140, 50] },
+    { "id": "cli", "type": "frontend", "label": "miautrix-mail", "sublabel": "CLI Tool", "brand": "dotnet", "pos": [260, 500], "size": [140, 50] },
+
+    { "id": "smtp-rx", "type": "backend", "label": "Inbound SMTP", "pos": [500, 60], "size": [140, 50] },
+    { "id": "smtp-tx", "type": "backend", "label": "Submission", "pos": [500, 140], "size": [140, 50] },
+    { "id": "imap-sieve", "type": "backend", "label": "IMAPS / Sieve", "pos": [500, 220], "size": [140, 50] },
+    { "id": "core-api", "type": "backend", "label": "Core REST API", "sublabel": ".NET 10", "brand": "dotnet", "pos": [500, 400], "size": [140, 50] },
+
+    { "id": "policy-engine", "type": "security", "label": "Policy Engine", "sublabel": "Spam & ClamAV", "pos": [750, 60], "size": [140, 50] },
+    { "id": "identity", "type": "security", "label": "Identity & Auth", "sublabel": "Argon2id & MFA", "pos": [750, 400], "size": [140, 50] },
+
+    { "id": "storage", "type": "cloud", "label": "IMailStorage", "sublabel": "Content Addressed", "pos": [1000, 60], "size": [140, 50] },
+    { "id": "postgres", "type": "database", "label": "PostgreSQL", "sublabel": "Metadata & FTS", "brand": "postgresql", "pos": [1000, 220], "size": [140, 50] },
+    { "id": "redis", "type": "database", "label": "Redis Cache", "sublabel": "Sessions & State", "brand": "redis", "pos": [1000, 400], "size": [140, 50] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Modular Monolith (.NET 10)", "wraps": ["smtp-rx", "smtp-tx", "imap-sieve", "core-api", "policy-engine", "identity"], "pad": 20 },
+    { "kind": "region", "label": "Data Tier", "wraps": ["storage", "postgres", "redis"], "pad": 20 }
+  ],
+  "connections": [
+    { "from": "ext-mta", "to": "smtp-rx", "label": "SMTP:25" },
+
+    { "from": "end-users", "to": "webmail", "label": "HTTPS", "variant": "emphasis" },
+
+    { "from": "admins", "to": "webadmin", "label": "HTTPS", "variant": "emphasis" },
+    { "from": "admins", "to": "desktop" },
+    { "from": "admins", "to": "cli" },
+
+    { "from": "webmail", "to": "core-api", "label": "JMAP" },
+    { "from": "webadmin", "to": "core-api", "label": "REST", "labelDx": -25 },
+    { "from": "desktop", "to": "core-api" },
+    { "from": "cli", "to": "core-api" },
+
+    { "from": "smtp-rx", "to": "policy-engine", "label": "Filter" },
+    { "from": "smtp-tx", "to": "policy-engine", "label": "DKIM" },
+
+    { "from": "policy-engine", "to": "storage", "label": "MIME Blobs" },
+    { "from": "policy-engine", "to": "postgres", "label": "Metadata" },
+
+    { "from": "imap-sieve", "to": "postgres", "label": "Mailboxes" },
+
+    { "from": "core-api", "to": "identity", "label": "AuthZ", "variant": "security" },
+
+    { "from": "identity", "to": "postgres", "label": "Tenants" },
+    { "from": "identity", "to": "redis", "label": "Tokens", "variant": "dashed", "labelDx": 25 }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Surfaces",
+      "items": [
+        "Webmail SPA, Admin Portal, Desktop App, and CLI tool",
+        "Uniform REST / JMAP interfaces across all client applications"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Mail Flow",
+      "items": [
+        "Inbound & Outbound pipelines with SPF, DKIM, DMARC, and ClamAV",
+        "Content-addressable MIME storage with PostgreSQL metadata"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Security",
+      "items": [
+        "Clean Architecture enforces inward dependency constraints",
+        "Self-hosted Identity with Argon2id and WebAuthn MFA",
+        "Strict multi-tenant isolation returns HTTP 404 on boundary violations"
+      ]
+    }
+  ]
+}

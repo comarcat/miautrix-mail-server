@@ -1,0 +1,869 @@
+import type { Mailbox, EmailMessage, RawEmailMessage, Contact, CalendarEvent, SieveFilterRule, MailSignature, EmailAttachment, CalendarAvailability, DirectoryParticipant, Subscription, AvailabilityCompare } from '../types';
+
+const normalizeEmailAttachment = (a: any): EmailAttachment => ({
+  id: a.id,
+  name: a.file_name ?? a.fileName ?? 'attachment',
+  size: a.size_bytes ?? a.sizeBytes ?? 0,
+  contentType: a.content_type ?? a.contentType ?? 'application/octet-stream',
+  blobId: a.download_url ?? a.downloadUrl,
+});
+
+export interface WebmailLoginResult {
+  data: any;
+  token: string;
+}
+
+export class WebmailApiClient {
+  private baseUrl: string;
+  private token: string | null;
+  private tenantId: string | null;
+  private userId: string | null;
+
+  constructor(baseUrl: string = '/api/v1') {
+    this.baseUrl = baseUrl;
+    this.token = typeof window !== 'undefined' ? localStorage.getItem('miautrix_webmail_token') : null;
+    this.tenantId = typeof window !== 'undefined' ? localStorage.getItem('miautrix_webmail_tenant_id') : null;
+    this.userId = typeof window !== 'undefined' ? localStorage.getItem('miautrix_webmail_user_id') : null;
+  }
+
+  setToken(token: string | null) {
+    this.token = token;
+    if (typeof window !== 'undefined') {
+      if (token) {
+        localStorage.setItem('miautrix_webmail_token', token);
+      } else {
+        localStorage.removeItem('miautrix_webmail_token');
+      }
+    }
+  }
+
+  setTenantId(tenantId: string | null) {
+    this.tenantId = tenantId;
+    if (typeof window !== 'undefined') {
+      if (tenantId) {
+        localStorage.setItem('miautrix_webmail_tenant_id', tenantId);
+      } else {
+        localStorage.removeItem('miautrix_webmail_tenant_id');
+      }
+    }
+  }
+
+  setUserId(userId: string | null) {
+    this.userId = userId;
+    if (typeof window !== 'undefined') {
+      if (userId) {
+        localStorage.setItem('miautrix_webmail_user_id', userId);
+      } else {
+        localStorage.removeItem('miautrix_webmail_user_id');
+      }
+    }
+  }
+
+  getToken(): string | null {
+    return this.token;
+  }
+
+  getTenantId(): string | null {
+    return this.tenantId;
+  }
+
+  getUserId(): string | null {
+    return this.userId;
+  }
+
+  private getDefaultHeaders(extra: Record<string, string> = {}): Record<string, string> {
+    // Includes Authorization + tenant scoping headers.
+    // Useful for downloading binary endpoints without opening a new tab.
+
+    const headers: Record<string, string> = {
+      ...(extra as Record<string, string> || {}),
+    };
+
+    if (this.token) {
+      headers['Authorization'] = `Bearer ${this.token}`;
+    }
+
+    if (this.tenantId) {
+      headers['X-Tenant-Id'] = this.tenantId;
+    }
+
+    if (this.userId) {
+      headers['X-User-Id'] = this.userId;
+    }
+
+    return headers;
+  }
+
+  private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
+    const headers: Record<string, string> = {
+      'Accept': 'application/json',
+      ...this.getDefaultHeaders(options.headers as Record<string, string> || {}),
+    };
+
+    // getDefaultHeaders already includes Authorization + tenant/user scoping.
+
+    const method = options.method?.toUpperCase() || 'GET';
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) && !headers['Idempotency-Key']) {
+      headers['Idempotency-Key'] = typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `idemp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    }
+
+    const url = `${this.baseUrl}${path.startsWith('/') ? path : `/${path}`}`;
+    const res = await fetch(url, { ...options, headers });
+
+    if (res.status === 401) {
+      this.setToken(null);
+      this.setTenantId(null);
+      this.setUserId(null);
+      window.dispatchEvent(new CustomEvent('miautrix:auth:expired'));
+      throw new Error('Unauthorized');
+    }
+
+    if (!res.ok) {
+      const errorText = await res.text().catch(() => '');
+      throw new Error(`API error (${res.status}): ${errorText || res.statusText}`);
+    }
+
+    if (res.status === 204) {
+      return {} as T;
+    }
+
+    return res.json();
+  }
+
+  async login(email: string, password: string): Promise<WebmailLoginResult> {
+    this.setToken(null);
+    this.setTenantId(null);
+    this.setUserId(null);
+
+    const idempotencyKey = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `idemp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+    const res = await fetch(`${this.baseUrl}/auth/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Idempotency-Key': idempotencyKey,
+      },
+      body: JSON.stringify({ email_or_username: email, password }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.error?.message || err?.message || 'Login failed. Check credentials.');
+    }
+
+    const result = await res.json();
+    const loginData = result.data ?? result.user ?? null;
+    if (result.token) {
+      this.setToken(result.token);
+    }
+    const tenantId = loginData?.tenantId ?? loginData?.tenant_id;
+    if (tenantId) {
+      this.setTenantId(tenantId);
+    }
+    if (loginData?.id) {
+      this.setUserId(loginData.id);
+    }
+    return result as WebmailLoginResult;
+  }
+
+  async downloadAttachment(downloadPath: string, fileName: string): Promise<void> {
+    const headers = this.getDefaultHeaders();
+
+    // downloadPath is expected to be a relative API path like `/api/v1/messages/.../attachments/...`.
+    const url = downloadPath.startsWith('/') ? downloadPath : `/${downloadPath}`;
+
+    const res = await fetch(url, {
+      method: 'GET',
+      headers,
+    });
+
+    if (!res.ok) {
+      const errorText = await res.text().catch(() => '');
+      throw new Error(`Download failed (${res.status}): ${errorText || res.statusText}`);
+    }
+
+    const blob = await res.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+
+    try {
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = fileName;
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } finally {
+      window.URL.revokeObjectURL(blobUrl);
+    }
+  }
+
+  async logout(): Promise<void> {
+    try {
+      await this.request('/auth/logout', { method: 'POST' });
+    } catch {
+      // Ignore errors on logout
+    } finally {
+      this.setToken(null);
+      this.setTenantId(null);
+      this.setUserId(null);
+    }
+  }
+
+  async me(): Promise<{ data: any }> {
+    return this.request<{ data: any }>('/auth/me');
+  }
+
+  async changePassword(currentPassword: string, newPassword: string): Promise<{ data?: any; message?: string }> {
+    return this.request<{ data?: any; message?: string }>('/auth/change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        current_password: currentPassword,
+        new_password: newPassword,
+      }),
+    });
+  }
+
+  private normalizeArray<T>(res: any): { data: T[] } {
+    if (Array.isArray(res)) {
+      return { data: res };
+    }
+    if (res && Array.isArray(res.data)) {
+      return { data: res.data };
+    }
+    if (res && Array.isArray(res.items)) {
+      return { data: res.items };
+    }
+    return { data: [] };
+  }
+
+  async getMailboxes(): Promise<{ data: Mailbox[] }> {
+    const res = await this.request<any>('/mailboxes');
+    return this.normalizeArray<Mailbox>(res);
+  }
+
+  async getFolders(mailboxId: string): Promise<{ data: Mailbox[] }> {
+    const res = await this.request<any>(`/mailboxes/${mailboxId}/folders`);
+    return this.normalizeArray<Mailbox>(res);
+  }
+
+  async getMessages(mailboxId: string, folderId: string, params: { search?: string; limit?: number; cursor?: string } = {}): Promise<{ data: EmailMessage[] }> {
+    const query = new URLSearchParams();
+    query.set('folder_id', folderId);
+    if (params.search) query.set('search', params.search);
+    if (params.limit) query.set('limit', params.limit.toString());
+    if (params.cursor) query.set('cursor', params.cursor);
+    const qs = query.toString();
+    const res = await this.request<any>(`/mailboxes/${mailboxId}/messages${qs ? `?${qs}` : ''}`);
+
+    const rawMessages = this.normalizeArray<RawEmailMessage>(res).data;
+    // The list endpoint is not guaranteed to populate every field (e.g. `preview`
+    // is absent), so default instead of letting `undefined` reach component state.
+    const messages: EmailMessage[] = rawMessages.map((msg) => ({
+      id: msg.id,
+      mailboxId: msg.mailbox_id,
+      folderId: msg.folder_id,
+      from: { name: msg.sender ?? '', email: msg.sender ?? '' },
+      to: [{ name: msg.recipient ?? '', email: msg.recipient ?? '' }],
+      subject: msg.subject ?? '(No Subject)',
+      snippet: msg.preview ?? '',
+      bodyHtml: '', // fetched on demand via getMessageDetail
+      receivedAt: msg.date ?? '',
+      isUnread: !msg.is_read,
+      flagColor: msg.flag_color ?? msg.flagColor ?? undefined,
+      securityChecks: { spfPass: true, dkimPass: true, dmarcPass: true },
+      attachments: [],
+    }));
+
+    return { data: messages };
+  }
+
+  async getMessageDetail(mailboxId: string, messageId: string): Promise<{ data: EmailMessage }> {
+    const res = await this.request<any>(`/mailboxes/${mailboxId}/messages/${messageId}`);
+    const d = res?.data ?? res;
+
+    const attachments = (d?.attachments ?? []).map((a: any) => ({
+      id: a.id,
+      name: a.file_name ?? a.fileName ?? 'attachment',
+      size: a.size_bytes ?? a.sizeBytes ?? 0,
+      contentType: a.content_type ?? a.contentType ?? 'application/octet-stream',
+      blobId: a.download_url ?? a.downloadUrl,
+    }));
+
+    const email: EmailMessage = {
+      id: d.id,
+      mailboxId: d.mailbox_id,
+      folderId: d.folder_id,
+      from: { name: d.sender, email: d.sender },
+      to: [{ name: d.recipient, email: d.recipient }],
+      cc: (d.cc ?? d.cc_recipients ?? []).map ? (d.cc ?? d.cc_recipients ?? []).map((email: string) => ({ name: email, email })) : (d.cc ?? d.cc_recipients ?? '').split(',').map((email: string) => email.trim()).filter(Boolean).map((email: string) => ({ name: email, email })),
+      bcc: (d.bcc ?? d.bcc_recipients ?? []).map ? (d.bcc ?? d.bcc_recipients ?? []).map((email: string) => ({ name: email, email })) : (d.bcc ?? d.bcc_recipients ?? '').split(',').map((email: string) => email.trim()).filter(Boolean).map((email: string) => ({ name: email, email })),
+      subject: d.subject,
+      snippet: d.body_text ? String(d.body_text).slice(0, 80) : '',
+      bodyHtml: d.body_html ?? d.bodyHtml ?? '',
+      bodyText: d.body_text ?? d.bodyText ?? undefined,
+      receivedAt: d.date,
+      isUnread: !d.is_read,
+      flagColor: d.flag_color ?? d.flagColor ?? undefined,
+      securityChecks: { spfPass: true, dkimPass: true, dmarcPass: true },
+      attachments,
+    };
+
+    return { data: email };
+  }
+
+  async markRead(mailboxId: string, messageId: string, isRead: boolean): Promise<{ data: boolean }> {
+    await this.request<any>(`/mailboxes/${mailboxId}/messages/${messageId}/read`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_read: isRead }),
+    });
+
+    return { data: true };
+  }
+
+  async setFlag(mailboxId: string, messageId: string, color: string | null): Promise<{ data: boolean }> {
+    await this.request<any>(`/mailboxes/${mailboxId}/messages/${messageId}/flag`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ color }),
+    });
+
+    return { data: true };
+  }
+
+  async getFlagAlerts(mailboxId: string): Promise<{ data: any[] }> {
+    const res = await this.request<any>(`/mailboxes/${mailboxId}/settings/flags/alerts`);
+    return this.normalizeArray<any>(res);
+  }
+
+  async setFlagAlert(mailboxId: string, color: string, alertConfigurationJson: string): Promise<{ data: boolean }> {
+    await this.request<any>(`/mailboxes/${mailboxId}/settings/flags/${color}/alert`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ alertConfigurationJson }),
+    });
+
+    return { data: true };
+  }
+
+  async moveMessage(mailboxId: string, messageId: string, targetFolderId: string): Promise<{ data: boolean }> {
+    await this.request<any>(`/mailboxes/${mailboxId}/messages/${messageId}/move`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target_folder_id: targetFolderId }),
+    });
+
+    return { data: true };
+  }
+
+  async deleteMessage(mailboxId: string, messageId: string, permanent: boolean = false): Promise<{ data: boolean }> {
+    const url = `/mailboxes/${mailboxId}/messages/${messageId}?permanent=${permanent ? 'true' : 'false'}`;
+    await this.request<any>(url, {
+      method: 'DELETE',
+    });
+
+    return { data: true };
+  }
+
+  async createFolder(mailboxId: string, name: string, parentId: string | null = null): Promise<{ data: Mailbox }> {
+    const res = await this.request<any>(`/mailboxes/${mailboxId}/folders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, parent_id: parentId }),
+    });
+
+    return { data: res?.data ?? res };
+  }
+
+  async updateFolderParent(
+    mailboxId: string,
+    folderId: string,
+    parentId: string | null,
+  ): Promise<{ data: Mailbox }> {
+    const res = await this.request<any>(`/mailboxes/${mailboxId}/folders/${folderId}/parent`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ parent_id: parentId }),
+    });
+
+    return { data: res?.data ?? res };
+  }
+
+  async deleteFolder(mailboxId: string, folderId: string): Promise<void> {
+    await this.request<any>(`/mailboxes/${mailboxId}/folders/${folderId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async sendMessage(mailboxId: string, payload: { from: string; to: string; cc?: string; bcc?: string; subject: string; body: string; bodyHtml?: string }): Promise<{ data: EmailMessage }> {
+    const res = await this.request<any>(`/mailboxes/${mailboxId}/messages/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: payload.from,
+        to: payload.to.split(',').map((item) => item.trim()).filter(Boolean),
+        cc: (payload.cc ?? '').split(',').map((item) => item.trim()).filter(Boolean),
+        bcc: (payload.bcc ?? '').split(',').map((item) => item.trim()).filter(Boolean),
+        subject: payload.subject,
+        body_text: payload.body,
+        body_html: payload.bodyHtml ?? `<p>${payload.body.replace(/\n/g, '<br/>')}</p>`,
+      }),
+    });
+
+    return { data: res?.data ?? res };
+  }
+
+  async upsertDraft(mailboxId: string, payload: { draftId?: string | null; from: string; to: string; cc?: string; bcc?: string; subject: string; body: string; bodyHtml?: string }): Promise<{ data: { draftId: string; success: boolean; message: string } }> {
+    const path = payload.draftId ? `/mailboxes/${mailboxId}/drafts/${payload.draftId}` : `/mailboxes/${mailboxId}/drafts`;
+    const res = await this.request<any>(path, {
+      method: payload.draftId ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: payload.from,
+        to: payload.to.split(',').map((item) => item.trim()).filter(Boolean),
+        cc: (payload.cc ?? '').split(',').map((item) => item.trim()).filter(Boolean),
+        bcc: (payload.bcc ?? '').split(',').map((item) => item.trim()).filter(Boolean),
+        subject: payload.subject,
+        body_text: payload.body,
+        body_html: payload.bodyHtml ?? `<p>${payload.body.replace(/\n/g, '<br/>')}</p>`,
+      }),
+    });
+
+    const data = res?.data ?? res;
+    return { data };
+  }
+
+  async sendDraft(mailboxId: string, draftId: string, payload: { from: string; to: string; cc?: string; bcc?: string; subject: string; body: string; bodyHtml?: string }): Promise<{ data: EmailMessage }> {
+    const res = await this.request<any>(`/mailboxes/${mailboxId}/drafts/${draftId}/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: payload.from,
+        to: payload.to.split(',').map((item) => item.trim()).filter(Boolean),
+        cc: (payload.cc ?? '').split(',').map((item) => item.trim()).filter(Boolean),
+        bcc: (payload.bcc ?? '').split(',').map((item) => item.trim()).filter(Boolean),
+        subject: payload.subject,
+        body_text: payload.body,
+        body_html: payload.bodyHtml ?? `<p>${payload.body.replace(/\n/g, '<br/>')}</p>`,
+      }),
+    });
+
+    return { data: res?.data ?? res };
+  }
+
+  async discardDraft(mailboxId: string, draftId: string): Promise<void> {
+    await this.request(`/mailboxes/${mailboxId}/drafts/${draftId}`, { method: 'DELETE' });
+  }
+
+  async uploadDraftAttachments(mailboxId: string, draftId: string, files: File[]): Promise<{ data: EmailAttachment[] }> {
+    const form = new FormData();
+    for (const file of files) {
+      form.append('files', file);
+    }
+
+    const path = `/mailboxes/${mailboxId}/drafts/${draftId}/attachments`;
+    // Use this.request so the shared Idempotency-Key header is injected for POST.
+    const json = await this.request<any>(path, {
+      method: 'POST',
+      body: form,
+    });
+
+    const raw = json?.data ?? json;
+    const attachments = (raw ?? []).map(normalizeEmailAttachment);
+
+    return { data: attachments };
+  }
+
+  async deleteDraftAttachment(mailboxId: string, draftId: string, attachmentId: string): Promise<void> {
+    await this.request(`/mailboxes/${mailboxId}/drafts/${draftId}/attachments/${attachmentId}`, { method: 'DELETE' });
+  }
+
+  async getSignatures(): Promise<{ data: MailSignature[] }> {
+    const res = await this.request<any>('/mail/signatures');
+    const raw = this.normalizeArray<any>(res).data;
+    return {
+      data: raw.map((item) => ({
+        id: item.id,
+        name: item.name,
+        contentText: item.contentText ?? item.content_text ?? '',
+        contentHtml: item.contentHtml ?? item.content_html ?? null,
+        isDefault: !!(item.isDefault ?? item.is_default),
+      })),
+    };
+  }
+
+  async saveSignature(signature: Partial<MailSignature> & { name: string; contentText: string }): Promise<{ data: MailSignature }> {
+    const path = signature.id ? `/mail/signatures/${signature.id}` : '/mail/signatures';
+    const res = await this.request<any>(path, {
+      method: signature.id ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: signature.name,
+        content_text: signature.contentText,
+        content_html: signature.contentHtml ?? null,
+        is_default: !!signature.isDefault,
+      }),
+    });
+    const item = res?.data ?? res;
+    return {
+      data: {
+        id: item.id,
+        name: item.name,
+        contentText: item.contentText ?? item.content_text ?? '',
+        contentHtml: item.contentHtml ?? item.content_html ?? null,
+        isDefault: !!(item.isDefault ?? item.is_default),
+      },
+    };
+  }
+
+  async deleteSignature(signatureId: string): Promise<void> {
+    await this.request(`/mail/signatures/${signatureId}`, { method: 'DELETE' });
+  }
+
+  async setDefaultSignature(signatureId: string): Promise<void> {
+    await this.request(`/mail/signatures/${signatureId}/default`, { method: 'PUT' });
+  }
+
+  private normalizeContact(item: any): Contact {
+    return {
+      id: item.id,
+      name: item.name ?? item.email ?? '',
+      email: item.email ?? '',
+      organization: item.organization ?? '',
+      department: item.department ?? undefined,
+      phone: item.phone ?? undefined,
+      book: item.book ?? 'personal',
+      kind: item.kind ?? null,
+      isService: item.isService ?? item.is_service ?? false,
+      canEdit: item.canEdit ?? item.can_edit ?? false,
+    };
+  }
+
+  private normalizeCalendarEvent(item: any): CalendarEvent {
+    return {
+      id: item.id,
+      userId: item.userId ?? item.user_id,
+      title: item.title ?? 'Busy',
+      startTime: item.startTime ?? item.start_time,
+      endTime: item.endTime ?? item.end_time,
+      location: item.location ?? null,
+      organizer: item.organizer ?? null,
+      status: item.status ?? 'confirmed',
+      visibility: item.visibility ?? 'private',
+      showAs: item.showAs ?? item.show_as ?? 'busy',
+      description: item.description ?? null,
+      isOwn: item.isOwn ?? item.is_own ?? false,
+      canEdit: item.canEdit ?? item.can_edit ?? false,
+      attendees: (item.attendees ?? []).map((a: any) => ({
+        id: a.id,
+        email: a.email,
+        displayName: a.displayName ?? a.display_name ?? null,
+        role: a.role ?? 'required',
+        isExternal: !!(a.isExternal ?? a.is_external),
+        responseStatus: a.responseStatus ?? a.response_status ?? 'needs_action',
+        respondedAt: a.respondedAt ?? a.responded_at ?? null,
+        proposedStartTime: a.proposedStartTime ?? a.proposed_start_time ?? null,
+        proposedEndTime: a.proposedEndTime ?? a.proposed_end_time ?? null,
+        proposalNote: a.proposalNote ?? a.proposal_note ?? null,
+      })),
+      recurrenceFrequency: item.recurrenceFrequency ?? item.recurrence_frequency ?? null,
+      recurrenceInterval: item.recurrenceInterval ?? item.recurrence_interval ?? 1,
+      recurrenceUntil: item.recurrenceUntil ?? item.recurrence_until ?? null,
+    };
+  }
+
+  private normalizeSieveRule(item: any): SieveFilterRule {
+    return {
+      id: item.id,
+      name: item.name ?? '',
+      field: item.field ?? 'subject',
+      comparator: item.comparator ?? 'contains',
+      value: item.value ?? '',
+      action: item.action ?? 'fileinto',
+      targetFolder: item.targetFolder ?? item.target_folder ?? undefined,
+      active: !!(item.active ?? item.isActive ?? item.is_active),
+    };
+  }
+
+  async getContacts(): Promise<{ data: Contact[] }> {
+    const res = await this.request<any>('/contacts');
+    return { data: this.normalizeArray<any>(res).data.map((item) => this.normalizeContact(item)) };
+  }
+
+  private static contactBody(contact: Omit<Contact, 'id' | 'book'>) {
+    return JSON.stringify({
+      name: contact.name,
+      email: contact.email,
+      organization: contact.organization ?? null,
+      department: contact.department ?? null,
+      phone: contact.phone ?? null,
+    });
+  }
+
+  async createContact(contact: Omit<Contact, 'id' | 'book'>): Promise<{ data: Contact }> {
+    const res = await this.request<any>('/contacts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: WebmailApiClient.contactBody(contact),
+    });
+    return { data: this.normalizeContact(res?.data ?? res) };
+  }
+
+  async updateContact(contactId: string, contact: Omit<Contact, 'id' | 'book'>): Promise<{ data: Contact }> {
+    const res = await this.request<any>(`/contacts/${contactId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: WebmailApiClient.contactBody(contact),
+    });
+    return { data: this.normalizeContact(res?.data ?? res) };
+  }
+
+  async updateDirectoryContact(contactId: string, contact: Omit<Contact, 'id' | 'book'>): Promise<{ data: Contact }> {
+    const res = await this.request<any>(`/contacts/directory/${contactId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: WebmailApiClient.contactBody(contact),
+    });
+    return { data: this.normalizeContact(res?.data ?? res) };
+  }
+
+  async deleteContact(contactId: string): Promise<void> {
+    await this.request(`/contacts/${contactId}`, { method: 'DELETE' });
+  }
+
+  async getCalendarEvents(params: { from?: string; to?: string } = {}): Promise<{ data: CalendarEvent[] }> {
+    const query = new URLSearchParams();
+    if (params.from) query.set('from', params.from);
+    if (params.to) query.set('to', params.to);
+    const qs = query.toString();
+    const res = await this.request<any>(`/calendar/events${qs ? `?${qs}` : ''}`);
+    return { data: this.normalizeArray<any>(res).data.map((item) => this.normalizeCalendarEvent(item)) };
+  }
+
+  async getCalendarAvailability(params: { from: string; to: string; userIds?: string[] }): Promise<{ data: CalendarAvailability[] }> {
+    const query = new URLSearchParams({ from: params.from, to: params.to });
+    if (params.userIds?.length) query.set('user_ids', params.userIds.join(','));
+    const res = await this.request<any>(`/calendar/availability?${query.toString()}`);
+    return {
+      data: this.normalizeArray<any>(res).data.map((item) => ({
+        userId: item.userId ?? item.user_id,
+        displayName: item.displayName ?? item.display_name ?? item.email,
+        email: item.email,
+        busy: (item.busy ?? []).map((b: any) => ({
+          startTime: b.startTime ?? b.start_time,
+          endTime: b.endTime ?? b.end_time,
+          showAs: b.showAs ?? b.show_as ?? 'busy',
+          title: b.title ?? null,
+        })),
+      })),
+    };
+  }
+
+  // The calendar directory returns snake_case DTOs like every other endpoint, so it
+  // needs the same explicit mapping: without it `userId`/`displayName` are undefined
+  // and the resource dropdown renders blank rows.
+  private normalizeDirectoryParticipant(item: any): DirectoryParticipant {
+    return {
+      userId: item.userId ?? item.user_id ?? '',
+      displayName: item.displayName ?? item.display_name ?? item.email ?? '',
+      email: item.email ?? '',
+      kind: item.kind === 'resource' ? 'resource' : 'user',
+    };
+  }
+
+  async getDirectoryParticipants(): Promise<{ data: DirectoryParticipant[] }> {
+    const res = await this.request<any>('/calendar/directory');
+    return {
+      data: this.normalizeArray<any>(res).data.map((item) => this.normalizeDirectoryParticipant(item)),
+    };
+  }
+
+  async getSubscriptions(): Promise<{ data: Subscription[] }> {
+    const res = await this.request<any>('/calendar/subscriptions');
+    return {
+      data: this.normalizeArray<any>(res).data.map((item) => ({
+        userId: item.userId ?? item.user_id ?? '',
+        displayName: item.displayName ?? item.display_name ?? item.email ?? '',
+        email: item.email ?? '',
+      })),
+    };
+  }
+
+  async addSubscription(userId: string): Promise<void> {
+    await this.request('/calendar/subscriptions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId }),
+    });
+  }
+
+  async deleteSubscription(targetUserId: string): Promise<void> {
+    await this.request(`/calendar/subscriptions/${targetUserId}`, { method: 'DELETE' });
+  }
+
+  async compareAvailability(startTime: string, endTime: string, participantIds: string[]): Promise<{ data: AvailabilityCompare }> {
+    const res = await this.request<any>('/calendar/availability/compare', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        start_time: startTime,
+        end_time: endTime,
+        participant_ids: participantIds,
+      }),
+    });
+    // Mapped like every other calendar read: the dialog indexes `conflicts` directly,
+    // so an unmapped payload is a blank panel at best and a render crash at worst.
+    const raw = res?.data ?? res;
+    return {
+      data: {
+        participants: (raw?.participants ?? []).map((p: any) => ({
+          userId: p.userId ?? p.user_id,
+          displayName: p.displayName ?? p.display_name ?? p.email,
+          email: p.email,
+          busy: (p.busy ?? []).map((b: any) => ({
+            startTime: b.startTime ?? b.start_time,
+            endTime: b.endTime ?? b.end_time,
+            showAs: b.showAs ?? b.show_as ?? 'busy',
+            title: b.title ?? null,
+          })),
+        })),
+        conflicts: (raw?.conflicts ?? []).map((c: any) => ({
+          participantId: c.participantId ?? c.participant_id,
+          participantName: c.participantName ?? c.participant_name ?? '',
+          startTime: c.startTime ?? c.start_time,
+          endTime: c.endTime ?? c.end_time,
+        })),
+        allAvailable: !!(raw?.allAvailable ?? raw?.all_available),
+      },
+    };
+  }
+
+  // The API contract is snake_case (ApiJson.Options uses SnakeCaseLower) and rejects
+  // unknown members, so request bodies are serialized explicitly rather than passed through.
+  private static calendarEventBody(event: Omit<CalendarEvent, 'id'>) {
+    return JSON.stringify({
+      title: event.title,
+      description: event.description ?? null,
+      start_time: event.startTime,
+      end_time: event.endTime,
+      location: event.location ?? null,
+      organizer: event.organizer ?? null,
+      status: event.status ?? 'confirmed',
+      visibility: event.visibility ?? 'private',
+      show_as: event.showAs ?? 'busy',
+      invitees: (event.invitees ?? []).map((invitee) => ({
+        email: invitee.email,
+        display_name: invitee.displayName ?? null,
+        role: invitee.role ?? 'required',
+      })),
+      send_invitations: event.sendInvitations ?? true,
+      recurrence_frequency: event.recurrenceFrequency ?? null,
+      recurrence_interval: event.recurrenceInterval ?? 1,
+      recurrence_until: event.recurrenceUntil ?? null,
+    });
+  }
+
+  async createCalendarEvent(event: Omit<CalendarEvent, 'id'>): Promise<{ data: CalendarEvent }> {
+    const res = await this.request<any>('/calendar/events', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: WebmailApiClient.calendarEventBody(event),
+    });
+    return { data: this.normalizeCalendarEvent(res?.data ?? res) };
+  }
+
+  async updateCalendarEvent(eventId: string, event: Omit<CalendarEvent, 'id'>): Promise<{ data: CalendarEvent }> {
+    const res = await this.request<any>(`/calendar/events/${eventId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: WebmailApiClient.calendarEventBody(event),
+    });
+    return { data: this.normalizeCalendarEvent(res?.data ?? res) };
+  }
+
+  async deleteCalendarEvent(eventId: string): Promise<void> {
+    await this.request(`/calendar/events/${eventId}`, { method: 'DELETE' });
+  }
+
+  // Re-sends the iCalendar REQUEST to every attendee of an event that has already been saved.
+  async resendInvitations(eventId: string): Promise<void> {
+    await this.request(`/calendar/events/${eventId}/invitations`, { method: 'POST' });
+  }
+
+  async rsvpEvent(eventId: string, request: { response: string; proposed_start_time?: string; proposed_end_time?: string; note?: string }): Promise<{ data: CalendarEvent }> {
+    const res = await this.request<any>(`/calendar/events/${eventId}/rsvp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+    return { data: this.normalizeCalendarEvent(res?.data ?? res) };
+  }
+
+  async acceptRescheduleProposal(eventId: string, attendeeId: string): Promise<void> {
+    await this.request(`/calendar/events/${eventId}/attendees/${attendeeId}/accept-proposal`, {
+      method: 'POST',
+    });
+  }
+
+  async declineRescheduleProposal(eventId: string, attendeeId: string): Promise<void> {
+    await this.request(`/calendar/events/${eventId}/attendees/${attendeeId}/decline-proposal`, {
+      method: 'POST',
+    });
+  }
+
+  async getSieveRules(mailboxId: string): Promise<{ data: SieveFilterRule[] }> {
+    const res = await this.request<any>(`/mail/rules?mailboxId=${encodeURIComponent(mailboxId)}`);
+    return { data: this.normalizeArray<any>(res).data.map((item) => this.normalizeSieveRule(item)) };
+  }
+
+  private static sieveRuleBody(rule: Omit<SieveFilterRule, 'id'>) {
+    return JSON.stringify({
+      name: rule.name,
+      field: rule.field,
+      comparator: rule.comparator,
+      value: rule.value,
+      action: rule.action,
+      target_folder: rule.targetFolder ?? null,
+      active: !!rule.active,
+    });
+  }
+
+  async createSieveRule(mailboxId: string, rule: Omit<SieveFilterRule, 'id'>): Promise<{ data: SieveFilterRule }> {
+    const res = await this.request<any>(`/mail/rules?mailboxId=${encodeURIComponent(mailboxId)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: WebmailApiClient.sieveRuleBody(rule),
+    });
+    return { data: this.normalizeSieveRule(res?.data ?? res) };
+  }
+
+  async updateSieveRule(mailboxId: string, ruleId: string, rule: Omit<SieveFilterRule, 'id'>): Promise<{ data: SieveFilterRule }> {
+    const res = await this.request<any>(`/mail/rules/${ruleId}?mailboxId=${encodeURIComponent(mailboxId)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: WebmailApiClient.sieveRuleBody(rule),
+    });
+    return { data: this.normalizeSieveRule(res?.data ?? res) };
+  }
+
+  async setSieveRuleActive(mailboxId: string, ruleId: string, active: boolean): Promise<void> {
+    await this.request(`/mail/rules/${ruleId}/active?mailboxId=${encodeURIComponent(mailboxId)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ active }),
+    });
+  }
+
+  async deleteSieveRule(mailboxId: string, ruleId: string): Promise<void> {
+    await this.request(`/mail/rules/${ruleId}?mailboxId=${encodeURIComponent(mailboxId)}`, { method: 'DELETE' });
+  }
+}
+
+export const webmailClient = new WebmailApiClient();

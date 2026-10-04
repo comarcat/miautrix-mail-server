@@ -1,0 +1,91 @@
+using Miautrix.Mail.Domain;
+using Miautrix.Mail.Security;
+using Microsoft.EntityFrameworkCore;
+
+namespace Miautrix.Mail.Persistence;
+
+/// <summary>
+/// Database-backed implementation of <see cref="IPermissionRepository"/>. Roles bind
+/// to memberships, permissions to roles, so a user's permission set is derived from
+/// their membership's role within the tenant.
+/// </summary>
+public sealed class EfPermissionRepository : IPermissionRepository
+{
+    private readonly AppDbContext _db;
+
+    public EfPermissionRepository(AppDbContext db) => _db = db;
+
+    public bool HasPermission(Guid tenantId, Guid userId, string permissionCode)
+    {
+        var membershipRoleIds = _db.Memberships
+            .Where(m => m.TenantId == tenantId && m.UserId == userId && m.RoleId != null)
+            .Select(m => m.RoleId!.Value);
+
+        return _db.RolePermissions
+            .Where(rp => rp.TenantId == tenantId
+                         && rp.RoleId != null
+                         && rp.PermissionId != null
+                         && membershipRoleIds.Contains(rp.RoleId.Value))
+            .Join(
+                _db.Permissions.Where(p => p.TenantId == tenantId && p.Code == permissionCode),
+                rp => rp.PermissionId!.Value,
+                p => p.Id,
+                (rp, p) => p)
+            .Any();
+    }
+
+    public bool IsMailboxOwner(Guid tenantId, Guid userId, Guid mailboxId)
+    {
+        return _db.Users
+            .Where(u => u.TenantId == tenantId && u.Id == userId)
+            .Join(
+                _db.Mailboxes.Where(m => m.TenantId == tenantId && m.Id == mailboxId && m.Kind == "user"),
+                u => u.Email.ToLower(),
+                m => m.Address.ToLower(),
+                (u, m) => m)
+            .Any();
+    }
+
+    public string? GetMailboxDelegateAccess(Guid tenantId, Guid userId, Guid mailboxId)
+    {
+        return _db.MailboxDelegates
+            .Where(d => d.TenantId == tenantId && d.UserId == userId && d.MailboxId == mailboxId)
+            .Select(d => d.AccessLevel)
+            .FirstOrDefault();
+    }
+
+    public string GetMailboxEffectiveAccess(Guid tenantId, Guid userId, Mailbox mailbox)
+    {
+        if (IsMailboxOwner(tenantId, userId, mailbox.Id) || HasPermission(tenantId, userId, "mailbox.update"))
+        {
+            return "write";
+        }
+
+        if (mailbox.Kind.Equals("shared", StringComparison.OrdinalIgnoreCase))
+        {
+            return GetMailboxDelegateAccess(tenantId, userId, mailbox.Id) ?? "read";
+        }
+
+        return "write";
+    }
+
+    public int GetTenantOwnerCount(Guid tenantId)
+    {
+        var ownerRoleIds = _db.Roles
+            .Where(r => r.TenantId == tenantId && r.Code == "owner")
+            .Select(r => r.Id);
+
+        return _db.Memberships
+            .Count(m => m.TenantId == tenantId && m.RoleId != null && ownerRoleIds.Contains(m.RoleId.Value));
+    }
+
+    public bool IsUserTenantOwner(Guid tenantId, Guid userId)
+    {
+        var ownerRoleIds = _db.Roles
+            .Where(r => r.TenantId == tenantId && r.Code == "owner")
+            .Select(r => r.Id);
+
+        return _db.Memberships.Any(m =>
+            m.TenantId == tenantId && m.UserId == userId && m.RoleId != null && ownerRoleIds.Contains(m.RoleId.Value));
+    }
+}

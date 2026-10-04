@@ -1,0 +1,202 @@
+export interface Mailbox {
+  id: string;
+  name: string;
+  role: 'inbox' | 'drafts' | 'sent' | 'junk' | 'archive' | 'trash' | 'custom';
+  unreadEmails: number;
+  totalEmails: number;
+  icon: string;
+  parentId?: string | null;
+  mailboxId?: string;
+  quotaBytes?: number;
+  usedBytes?: number;
+}
+
+export interface MailboxAccount {
+  id: string;
+  address: string;
+  name?: string;
+  kind?: 'user' | 'shared';
+  accessLevel?: 'read' | 'write';
+  quotaBytes?: number;
+  usedBytes?: number;
+}
+
+export interface SharedMailboxGroup {
+  account: MailboxAccount;
+  folders: Mailbox[];
+}
+
+// Folder/group DTOs use the same shape as Mailbox in the current webmail UI.
+// (Mailbox is misnamed historically in this repo.)
+
+export interface EmailAttachment {
+  id: string;
+  name: string;
+  size: number;
+  contentType: string;
+  blobId?: string;
+}
+
+export interface EmailMessage {
+  id: string;
+  mailboxId: string;
+  folderId: string;
+  from: {
+    name: string;
+    email: string;
+  };
+  to: Array<{
+    name: string;
+    email: string;
+  }>;
+  cc?: Array<{
+    name: string;
+    email: string;
+  }>;
+  bcc?: Array<{
+    name: string;
+    email: string;
+  }>;
+  subject: string;
+  snippet: string;
+  bodyHtml: string;
+  bodyText?: string;
+  receivedAt: string;
+  isUnread: boolean;
+  isFlagged?: boolean;
+  flagColor?: 'red' | 'blue' | 'green' | 'orange' | 'purple';
+  securityChecks: {
+    spfPass: boolean;
+    dkimPass: boolean;
+    dmarcPass: boolean;
+    tlsVersion?: string;
+    spamScore?: number;
+  };
+  attachments: EmailAttachment[];
+}
+
+export interface RawEmailMessage {
+  id: string;
+  mailbox_id: string;
+  folder_id: string;
+  sender: string;
+  recipient: string;
+  subject: string;
+  preview: string;
+  date: string;
+  is_read: boolean;
+  size_bytes: number;
+  flag_color?: 'red' | 'blue' | 'green' | 'orange' | 'purple' | null;
+  flagColor?: 'red' | 'blue' | 'green' | 'orange' | 'purple' | null;
+}
+
+export interface Contact {
+  id: string;
+  name: string;
+  email: string;
+  organization: string;
+  department?: string;
+  phone?: string;
+  book: 'personal' | 'directory';
+  kind?: 'user' | 'shared' | 'group' | string | null;
+  isService?: boolean;
+  canEdit?: boolean;
+}
+
+export interface CalendarAttendee {
+  id: string;
+  email: string;
+  displayName?: string | null;
+  role: 'required' | 'optional' | string;
+  isExternal: boolean;
+  responseStatus: 'needs_action' | 'accepted' | 'tentative' | 'declined' | 'reschedule_proposed' | string;
+  respondedAt?: string | null;
+  proposedStartTime?: string | null;
+  proposedEndTime?: string | null;
+  proposalNote?: string | null;
+}
+
+export interface CalendarInvitee {
+  email: string;
+  displayName?: string | null;
+  role?: 'required' | 'optional' | string;
+}
+
+export interface CalendarEvent {
+  id: string;
+  userId?: string;
+  title: string;
+  startTime: string;
+  endTime: string;
+  location?: string | null;
+  organizer?: string | null;
+  status: 'confirmed' | 'tentative' | 'cancelled';
+  visibility?: 'private' | 'public';
+  showAs?: 'free' | 'busy' | 'tentative' | 'out_of_office';
+  attendees?: CalendarAttendee[];
+  invitees?: CalendarInvitee[];
+  description?: string | null;
+  isOwn?: boolean;
+  canEdit?: boolean;
+  sendInvitations?: boolean;
+  recurrenceFrequency?: 'none' | 'daily' | 'weekly' | 'monthly' | null;
+  recurrenceInterval?: number;
+  recurrenceUntil?: string | null;
+}
+
+export interface DirectoryParticipant {
+  userId: string;
+  displayName: string;
+  email: string;
+  kind: 'user' | 'resource';
+}
+
+export interface Subscription {
+  userId: string;
+  displayName: string;
+  email: string;
+}
+
+export interface AvailabilityCompare {
+  participants: CalendarAvailability[];
+  conflicts: CalendarConflict[];
+  allAvailable: boolean;
+}
+
+export interface CalendarConflict {
+  participantId: string;
+  participantName: string;
+  startTime: string;
+  endTime: string;
+}
+
+export interface CalendarAvailability {
+  userId: string;
+  displayName: string;
+  email: string;
+  busy: Array<{
+    startTime: string;
+    endTime: string;
+    showAs: string;
+    title?: string | null;
+  }>;
+}
+
+export interface MailSignature {
+  id: string;
+  name: string;
+  contentText: string;
+  contentHtml?: string | null;
+  isDefault: boolean;
+}
+
+export interface SieveFilterRule {
+  id: string;
+  name: string;
+  field: 'from' | 'subject' | 'to' | 'header';
+  comparator: 'contains' | 'is' | 'matches' | 'exists';
+  value: string;
+  action: 'fileinto' | 'redirect' | 'reject' | 'addflag' | 'discard';
+  targetFolder?: string;
+  active: boolean;
+}

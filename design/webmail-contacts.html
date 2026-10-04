@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Miautrix Webmail — Contacts</title>
+  <link rel="stylesheet" href="webmail.css">
+</head>
+<body>
+
+<div class="webmail-layout">
+
+  <!-- Header -->
+  <header class="wm-header">
+    <nav class="wm-tabs">
+      <div class="wm-tab"><a href="webmail-inbox.html" style="text-decoration:none; color:inherit;">Home</a></div>
+      <div class="wm-tab"><a href="webmail-inbox.html" style="text-decoration:none; color:inherit;">Inbox</a></div>
+      <div class="wm-tab"><a href="webmail-example.html" style="text-decoration:none; color:inherit;">New Message</a></div>
+      <div class="wm-tab active">Contacts</div>
+      <div class="wm-tab"><a href="webmail-settings.html" style="text-decoration:none; color:inherit;">Settings</a></div>
+    </nav>
+
+    <div class="wm-ribbon">
+      <div class="wm-ribbon-group">
+        <button class="btn btn-primary" style="padding: 6px 14px; font-size: 14px;">
+          <img src="../images/icons/webmail/contacts.png" alt="" style="width: 14px; filter: brightness(0) invert(1);">
+          New Contact
+        </button>
+      </div>
+
+      <div class="wm-ribbon-group">
+        <button class="wm-tool-btn" title="Edit Contact"><img src="../images/icons/webmail/compose-pencil.png" alt="Edit"></button>
+        <button class="wm-tool-btn" title="Delete"><img src="../images/icons/webmail/trash.png" alt="Delete"></button>
+        <button class="wm-tool-btn" title="Export vCard"><img src="../images/icons/webmail/archive-box.png" alt="Export"></button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Body -->
+  <div class="wm-body">
+
+    <!-- Sidebar -->
+    <aside class="wm-sidebar">
+      <div class="wm-nav-section">
+        <div class="wm-nav-head">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          Address Books
+        </div>
+        <a class="wm-nav-item active" href="#">
+          <div class="wm-nav-icon">
+            <img src="../images/icons/webmail/contacts.png" alt="">
+            <span>Personal Contacts</span>
+          </div>
+          <span class="badge">12</span>
+        </a>
+        <a class="wm-nav-item" href="#">
+          <div class="wm-nav-icon">
+            <img src="../images/icons/webmail/contacts.png" alt="">
+            <span>Company Directory</span>
+          </div>
+          <span class="badge">150</span>
+        </a>
+      </div>
+    </aside>
+
+    <!-- Main Contacts Table / Grid -->
+    <main class="wm-content">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+        <h1 style="font-size: 2rem;">Personal Contacts</h1>
+        <input class="input-base" type="text" placeholder="Search contacts..." style="max-width: 280px; font-size: 14px; padding: 6px 12px;" />
+      </div>
+
+      <div style="background: var(--pure-white); border: 1px solid var(--neutral-border); border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-lvl1);">
+        <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 14px;">
+          <thead>
+            <tr style="background: var(--surface-canvas); border-bottom: 1px solid var(--neutral-border); color: var(--neutral-label); font-weight: 500;">
+              <th style="padding: 12px 16px;">Name</th>
+              <th style="padding: 12px 16px;">Email</th>
+              <th style="padding: 12px 16px;">Organization</th>
+              <th style="padding: 12px 16px;">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom: 1px solid var(--neutral-border);">
+              <td style="padding: 14px 16px; font-weight: 500; color: var(--deep-navy);">Alex Vance</td>
+              <td style="padding: 14px 16px; color: var(--neutral-body); font-family: var(--font-mono);">alex.vance@blackmesa.internal</td>
+              <td style="padding: 14px 16px; color: var(--neutral-body);">Engineering Dept</td>
+              <td style="padding: 14px 16px;">
+                <a class="btn btn-outline" href="webmail-example.html" style="padding: 4px 10px; font-size: 12px;">Email</a>
+              </td>
+            </tr>
+            <tr style="border-bottom: 1px solid var(--neutral-border);">
+              <td style="padding: 14px 16px; font-weight: 500; color: var(--deep-navy);">Miautrix Postmaster</td>
+              <td style="padding: 14px 16px; color: var(--neutral-body); font-family: var(--font-mono);">postmaster@miautrix.org</td>
+              <td style="padding: 14px 16px; color: var(--neutral-body);">Mail Infrastructure</td>
+              <td style="padding: 14px 16px;">
+                <a class="btn btn-outline" href="webmail-example.html" style="padding: 4px 10px; font-size: 12px;">Email</a>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+
+  </div>
+
+</div>
+
+</body>
+</html>

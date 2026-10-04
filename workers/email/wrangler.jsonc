@@ -1,0 +1,61 @@
+{
+  // Reconstructed from the deployed Worker's own settings and bindings, read back from the
+  // Cloudflare API for script `miautrix-main-worker` on 2026-10-04. Every value below was
+  // copied from that live response, not guessed. See README.md for the exact read commands
+  // and for the two fields the API does not expose.
+  //
+  // No secret, account id or zone id appears in this file. account_id is supplied at deploy
+  // time via the CLOUDFLARE_ACCOUNT_ID environment variable, per the runtime-configuration
+  // rule: credentials and account identifiers are injected, never committed.
+  "$schema": "node_modules/wrangler/config-schema.json",
+
+  "name": "miautrix-main-worker",
+  "main": "src/index.ts",
+
+  // Live value: settings.compatibility_date = "2025-05-23".
+  "compatibility_date": "2025-05-23",
+  // Live value: settings.compatibility_flags = [].
+  "compatibility_flags": [],
+
+  // Live value: script subdomain enabled = true, previews_enabled = false.
+  // Serves https://miautrix-main-worker.<account>.workers.dev
+  "workers_dev": true,
+  "preview_urls": false,
+
+  // Live value: the deployed script has exactly one binding, name "EMAIL", type "send_email",
+  // with no destination_address and no allowed_destination_addresses restriction. This is the
+  // binding that backs env.EMAIL.send() on the outbound POST /send path.
+  //
+  // NOTE for the hardening review: an unrestricted send_email binding can send to any verified
+  // destination. Narrowing it with allowed_destination_addresses is a behaviour change and is
+  // therefore out of scope for MIA-69; it is raised for Onyx rather than applied here.
+  "send_email": [
+    {
+      "name": "EMAIL"
+    }
+  ],
+
+  // Live value: settings.observability.enabled = false, with logs.enabled = true.
+  // Recorded as deployed. Turning observability on is a deployment change, not a recovery
+  // change, so it is left exactly as found.
+  "observability": {
+    "enabled": false,
+    "head_sampling_rate": 1,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "invocation_logs": true
+    }
+  },
+
+  // Live value: settings.logpush = false, placement = {}, tail_consumers = [], tags = [].
+  "logpush": false,
+
+  // Live value: usage_model = "standard". wrangler derives this from the account, so it is
+  // recorded here as a comment rather than a key to avoid a schema conflict on deploy.
+
+  // Inbound Email Routing is configured in the Cloudflare dashboard (zone-level Email
+  // Routing rules), NOT in this file. The email() handler is bound to the catch-all/custom
+  // address rule there. Changing it is explicitly out of scope for MIA-69.
+  "routes": []
+}

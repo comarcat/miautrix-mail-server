@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet build:*)",
+      "Bash(dotnet test:*)",
+      "Bash(dotnet run:*)",
+      "Bash(dotnet ef:*)",
+      "Bash(dotnet package search:*)",
+      "Bash(dotnet --list-runtimes)",
+      "Bash(pnpm install)",
+      "Bash(pnpm --filter:*)",
+      "Bash(pnpm test:*)",
+      "Bash(npm view:*)",
+      "Bash(psql:*)",
+      "Bash(docker compose:*)",
+      "Bash(git status)",
+      "Bash(git diff:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Read(./**)",
+      "Write(./**)",
+      "Edit(./**)"
+    ],
+    "deny": [
+      "Bash(rm -rf /*)",
+      "Bash(git push --force:*)",
+      "Read(./**/.env)",
+      "Read(./**/*.pfx)",
+      "Read(./**/*.key)"
+    ]
+  }
+}

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Miautrix Webmail — Login</title>
+  <link rel="stylesheet" href="webmail.css">
+</head>
+<body>
+
+<div class="auth-wrapper">
+  <div class="card auth-card">
+
+    <div class="auth-header">
+      <div style="display: flex; justify-content: center; margin-bottom: 20px;">
+        <img src="../images/LogoIcon.png" alt="Miautrix Webmail Logo" style="height: 64px; object-fit: contain;">
+      </div>
+      <h1>Miautrix Webmail</h1>
+      <p>Sign in to your mailbox</p>
+    </div>
+
+    <form onsubmit="event.preventDefault(); window.location.href='webmail-example.html';">
+
+      <div class="form-group">
+        <label for="email">Email address</label>
+        <input id="email" class="input-base" type="email" placeholder="user@yourdomain.com" required />
+      </div>
+
+      <div class="form-group">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <label for="password" style="margin-bottom: 0;">Password</label>
+          <a href="#" style="color: var(--iris-violet); font-size: 13px; text-decoration: none; font-weight: 500;">Forgot password?</a>
+        </div>
+        <input id="password" class="input-base" type="password" placeholder="••••••••••••" required />
+      </div>
+
+      <div class="form-group" style="display: flex; align-items: center; gap: 8px;">
+        <input type="checkbox" id="remember" style="accent-color: var(--iris-violet); width: 16px; height: 16px; border-radius: 4px;" />
+        <label for="remember" style="margin: 0; font-size: 14px; font-weight: 400; color: var(--neutral-body); cursor: pointer;">Remember this device</label>
+      </div>
+
+      <button class="btn btn-primary w-full" type="submit" style="padding: 12px; margin-top: 8px; font-size: 16px;">
+        Sign In
+      </button>
+
+    </form>
+
+    <div class="auth-footer">
+      <span>Protected by Miautrix Security · Argon2id & TOTP</span>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

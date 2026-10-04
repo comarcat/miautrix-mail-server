@@ -1,0 +1,140 @@
+{
+  "tasks": [
+    {
+      "id": "1",
+      "title": "Solution scaffold and CI",
+      "status": "pending",
+      "dependencies": [],
+      "verify": ["dotnet build Miautrix.Mail.sln -warnaserror"],
+      "files": ["Miautrix.Mail.sln"]
+    },
+    {
+      "id": "2",
+      "title": "Domain model and EF Core schema",
+      "status": "pending",
+      "dependencies": ["1"],
+      "verify": ["dotnet ef database update"],
+      "files": ["src/Miautrix.Mail.Domain/Entities.cs", "src/Miautrix.Mail.Persistence/AppDbContext.cs"]
+    },
+    {
+      "id": "3",
+      "title": "Seed data and indexes",
+      "status": "pending",
+      "dependencies": ["2"],
+      "verify": ["dotnet run --project src/Miautrix.Mail.Seeder"],
+      "files": ["src/Miautrix.Mail.Seeder/Program.cs"]
+    },
+    {
+      "id": "4",
+      "title": "Identity",
+      "status": "pending",
+      "dependencies": ["3"],
+      "verify": ["dotnet test --filter Category=Identity"],
+      "files": ["src/Miautrix.Mail.Identity/AuthenticationService.cs"]
+    },
+    {
+      "id": "5",
+      "title": "Authorization and tenant isolation",
+      "status": "pending",
+      "dependencies": ["4"],
+      "verify": ["dotnet test --filter Category=Isolation"],
+      "files": ["src/Miautrix.Mail.Security/TenantAuthorizationHelper.cs"]
+    },
+    {
+      "id": "6",
+      "title": "Audit trail",
+      "status": "pending",
+      "dependencies": ["5"],
+      "verify": ["dotnet test --filter Category=Audit"],
+      "files": ["src/Miautrix.Mail.Domain/Entities.cs"]
+    },
+    {
+      "id": "7",
+      "title": "SMTP listener and queue",
+      "status": "pending",
+      "dependencies": ["6"],
+      "verify": ["dotnet test --filter Category=Smtp"],
+      "files": ["src/Miautrix.Mail.Protocols.Smtp/"]
+    },
+    {
+      "id": "8",
+      "title": "SPF, DKIM, DMARC",
+      "status": "pending",
+      "dependencies": ["7"],
+      "verify": ["dotnet test --filter Category=Dkim"],
+      "files": ["src/Miautrix.Mail.MailFlow/DkimSigner.cs"]
+    },
+    {
+      "id": "9",
+      "title": "Anti-spam baseline and quarantine",
+      "status": "pending",
+      "dependencies": ["8"],
+      "verify": ["dotnet test --filter Category=AntiSpam"],
+      "files": ["src/Miautrix.Mail.AntiSpam/SpamFilter.cs"]
+    },
+    {
+      "id": "10",
+      "title": "IMAP, storage, attachments",
+      "status": "pending",
+      "dependencies": ["9"],
+      "verify": ["dotnet test --filter Category=Imap"],
+      "files": ["src/Miautrix.Mail.Protocols.Imap/"]
+    },
+    {
+      "id": "11",
+      "title": "ManageSieve",
+      "status": "pending",
+      "dependencies": ["10"],
+      "verify": ["dotnet test --filter Category=Sieve"],
+      "files": ["src/Miautrix.Mail.Protocols.Sieve/"]
+    },
+    {
+      "id": "12",
+      "title": "Search",
+      "status": "pending",
+      "dependencies": ["11"],
+      "verify": ["dotnet test -l \"console;verbosity=detailed\""],
+      "files": ["src/Miautrix.Mail.Search/"]
+    },
+    {
+      "id": "13",
+      "title": "Rule engine, simulator, explorer",
+      "status": "pending",
+      "dependencies": ["12"],
+      "verify": ["dotnet test --filter Category=Rules"],
+      "files": ["src/Miautrix.Mail.MailFlow/RuleEngine.cs"]
+    },
+    {
+      "id": "14",
+      "title": "API contract and OpenAPI",
+      "status": "done",
+      "dependencies": ["13"],
+      "verify": ["dotnet test --filter Category=Api"],
+      "files": ["src/Miautrix.Mail.Web/Controllers/"]
+    },
+    {
+      "id": "15",
+      "title": "Web admin GUI",
+      "status": "done",
+      "dependencies": ["14"],
+      "verify": ["pnpm --filter admin test && pnpm --filter admin build"],
+      "files": ["src/Miautrix.Mail.Admin/"]
+    },
+    {
+      "id": "16",
+      "title": "Webmail",
+      "status": "done",
+      "dependencies": ["14"],
+      "verify": ["pnpm --filter webmail test"],
+      "files": ["src/Miautrix.Mail.Webmail/"]
+    },
+    {
+      "id": "17",
+      "title": "CLI",
+      "status": "done",
+      "dependencies": ["16"],
+      "verify": ["dotnet run --project src/Miautrix.Mail.Cli -- mailbox list --help"],
+      "files": ["src/Miautrix.Mail.Cli/"]
+    }
+  ]
+}
