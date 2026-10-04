@@ -239,11 +239,92 @@ Routing or `/api/` containment change was made.
 Also noted for hardening review: the `EMAIL` `send_email` binding is **unrestricted** (no
 `allowed_destination_addresses`). Narrowing it is a behaviour change and so was left alone.
 
+### `POST /send` fixed: 400 on a bad body, 401 on a bad token, no 1101 (MIA-76, 2026-10-04)
+
+**Error.** As recorded above for MIA-69 and found by QA in MIA-64: every `POST /send` request
+shape returned Cloudflare `1101` — well-formed body, `{}`, `{"to":...}`, a non-JSON body, and
+a wrong bearer token alike.
+
+**Root cause.** Unchanged from the MIA-69 diagnosis, not re-investigated. `request.json()`,
+`atob(body.raw)` and `new EmailMessage(...)` all ran outside the `try`, which wrapped only
+`env.EMAIL.send()`, so any bad or absent field threw uncaught and the runtime answered
+`1101`. Separately, the handler contained **no authentication check at all**, which is why a
+wrong token also produced `1101` instead of `401`.
+
+**Fix.** Applied in `workers/email/src/index.ts`, commit `479889e`. `POST /send` now answers
+a contract:
+
+| Status | Condition |
+| --- | --- |
+| `401` | missing or wrong bearer token, checked **before** the body is read |
+| `400` | non-JSON body, non-object body, bad/missing `raw`, bad/missing `from` or `to` |
+| `200` | accepted and handed to `env.EMAIL.send()` |
+| `500` | `env.EMAIL.send()` failed, or an unforeseen throw |
+| `503` | no `SEND_TOKEN` secret configured — fails closed, never open |
+
+Authentication runs first, so a bad token on an unreadable body answers `401` and not `400`;
+an unauthenticated caller learns nothing about request validation. Every parse is inside a
+guard and the handler has an outer `catch`, so no request shape can reach the runtime as an
+uncaught throw. The token is read from the `SEND_TOKEN` Worker secret, which appears neither
+in the source nor in `wrangler.jsonc`; an unset secret returns `503` rather than allowing
+everyone through. Token comparison avoids an early return on first byte mismatch.
+
+The inbound `email()` handler was **not** touched — the wildcard compare and the unroutable
+`inbox@corp` forward are still present and remain CF-04.
+
+No app-side change was needed: `CloudflareApiMailTransport` already posts `from`/`to`/`raw`
+to `/send` and already sends `Authorization: Bearer <CLOUDFLARE_API_TOKEN>`. The Worker now
+reads that header where before it ignored it. The same token value must therefore be set as
+both the Worker's `SEND_TOKEN` and the app's `CLOUDFLARE_API_TOKEN`; it is held as the
+Paperclip secret `miautrix-mail-server/cloudflare_worker_send_token`.
+
+**Verification.** `workers/email/verify-send-contract.sh`, committed, 23 cases, run against a
+local `wrangler dev --local` runtime (wrangler 4.147.0) on 2026-10-04: **23 cases, 0 failed.**
+It covers the unchanged `GET /` → `200`, `GET /health` → `200`, `GET /nope` → `404`; the
+`401` cases including the decisive ordering case (bad token **plus** an invalid body still
+answers `401`, proving the body was never parsed); and eleven distinct `400` body shapes
+where the old handler returned `1101`. Two paths were additionally proved by hand:
+
+- a MIME body carrying a `Message-ID` → `200 {"ok":true}` — a valid request really does reach
+  and complete `env.EMAIL.send()`
+- a runtime started with no `SEND_TOKEN` → `503` on `POST /send` while `GET /health` still
+  answers `200` — misconfiguration fails closed without taking down the health probe
+
+A local runtime has no real `send_email` binding, so no probe could emit mail to a third
+party. End-to-end external delivery is QA's criterion and is still gated on Email Routing
+rules that do not exist yet.
+
+**Not deployed. Blocked on token scope.** The available Cloudflare API token
+(`743069de1fde2bf2c21d02d833907cb0`) is **Workers Scripts: Read**. It reads script settings,
+versions and deployments successfully, and is refused with
+`No access to the specified resource.` on all three writes attempted:
+`wrangler secret put SEND_TOKEN`, `wrangler versions upload`, and
+`wrangler versions deploy ...@100%`. `npx wrangler deploy --dry-run` succeeds, so the config
+and build are valid; only authorization is missing. Unblocking needs a token with
+**Account → Workers Scripts → Edit**.
+
+**Rollback.** Target `327baddf-2d9d-494f-9630-e383c4ca4aa4` (number 6) was read back from the
+versions API on 2026-10-04 and still exists with handlers `email`/`fetch` and etag
+`b6582d3ac146eacda28478b87c91bbbf6b07b4fbc0c911a20c0336d4083c0165`. It is still the **active**
+deployment (`db40576c-f0b2-40d9-8720-44207ad9c692`, source `api`, `327baddf...@100%`), because
+the new version was never deployed. The rollback command was executed verbatim and reached the
+correct endpoint before being refused for the same read-only token reason, so the path is
+proven correct up to the authorization boundary:
+
+```bash
+npx wrangler versions deploy 327baddf-2d9d-494f-9630-e383c4ca4aa4@100% \
+  --name miautrix-main-worker --yes
+```
+
 ### Outstanding
 
-- [ ] Fix `POST /send`: move the parse inside the `try`, return `400` on a bad body, and add
-      the bearer check that the handler currently lacks (returns `401`). Source is now at
-      `workers/email/src/index.ts`. Rollback point recorded above.
+- [x] Fix `POST /send`: move the parse inside the `try`, return `400` on a bad body, and add
+      the bearer check that the handler currently lacks (returns `401`). **Done 2026-10-04
+      (MIA-76), commit `479889e`, 23/23 contract cases pass locally. Not yet deployed — the
+      available Cloudflare token is read-only.**
+- [ ] Deploy the `POST /send` fix: set the `SEND_TOKEN` Worker secret and run
+      `npx wrangler deploy`. Needs a Cloudflare API token with **Workers Scripts: Edit**; the
+      current one is read-only.
 - [ ] Fix the inbound `email()` allow-list wildcard and the unroutable `inbox@corp` forward
       target.
 - [ ] The exact `/send` path, `Authorization` scheme and JSON field names in
