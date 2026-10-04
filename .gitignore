@@ -28,6 +28,11 @@ Thumbs.db
 .cloudflare.env
 cloudflare.env
 !cloudflare.env.example
+# Wrangler local secret overrides (workers/email SEND_TOKEN etc). Runtime-injected, never committed.
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+.wrangler/
 certificates/
 *.pem
 *.key

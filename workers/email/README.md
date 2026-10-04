@@ -16,8 +16,33 @@ Before that, the source existed only in an external repo
 (`lee-miautrix-email-worker-acdc7e2a`, named in `ERRORS_AND_ISSUES.md`) that this project
 could not read, so the deployed code was unreviewable and unrevertable.
 
-**No behaviour was changed and nothing was redeployed by the recovery task.** The
-`/send` fix is a separate task.
+[MIA-69](/MIA/issues/MIA-69) changed no behaviour and redeployed nothing.
+[MIA-76](/MIA/issues/MIA-76) rewrote the **outbound `POST /send`** handler only — see
+"`POST /send` contract" below. The inbound `email()` handler is still byte-for-byte as
+recovered; its two defects belong to a later task.
+
+## `POST /send` contract
+
+What the handler answers, and the only contract the app may rely on:
+
+| Status | Condition | Body |
+| --- | --- | --- |
+| `401` | missing or wrong bearer token — checked **before** the body is read | `{"ok":false,"error":...}` |
+| `400` | unreadable or invalid body: non-JSON, non-object, bad/missing `raw`, bad/missing `from`/`to` | `{"ok":false,"error":...}` |
+| `200` | accepted and handed to `env.EMAIL.send()` | `{"ok":true}` |
+| `500` | `env.EMAIL.send()` failed, or an unforeseen throw | `{"ok":false,"error":...}` |
+| `503` | no `SEND_TOKEN` secret is configured — fails closed, never open | `{"ok":false,"error":...}` |
+
+**No request shape returns a Cloudflare `1101`.** `1101` is what the runtime emits when a
+handler throws uncaught; every parse now sits inside a guard and the whole handler has an
+outer `catch`. Authentication runs first, so a bad token on an unreadable body answers
+`401`, not `400` — an unauthenticated caller learns nothing about request validation.
+
+`GET /`, `GET /health` (`200 {"ok":true}`) and `GET /nope` (`404`) are unchanged.
+
+The app side needs **no change**: `CloudflareApiMailTransport` already posts `/send` with
+`from`/`to`/`raw` (base64) and already sends `Authorization: Bearer <CLOUDFLARE_API_TOKEN>`.
+The Worker simply reads that header now, where before it ignored it.
 
 ## Rollback point
 
@@ -56,15 +81,29 @@ version id:
 npx wrangler deployments list --name miautrix-main-worker
 ```
 
-Rollback status: **documented, and the target version is confirmed to exist** (read back
-from the versions API). Not executed — executing it would be a deployment, which MIA-69
-forbids.
+Rollback status as of [MIA-76](/MIA/issues/MIA-76): **target confirmed live and intact; the
+rollback command was executed and refused by permissions, not by state.**
+
+Read back from the versions and deployments API on 2026-10-04:
+
+- version `327baddf-2d9d-494f-9630-e383c4ca4aa4` still exists, number `6`, handlers
+  `email`/`fetch`, etag `b6582d3ac146eacda28478b87c91bbbf6b07b4fbc0c911a20c0336d4083c0165`
+- it is still the **active** deployment: `db40576c-f0b2-40d9-8720-44207ad9c692`, `api`
+  source, `327baddf...@100%`
+
+The rollback command above was run verbatim and reached Cloudflare's
+`/workers/scripts/miautrix-main-worker/deployments` endpoint, which answered
+`No access to the specified resource.` — the available API token is **Workers Scripts:
+Read**. So the rollback path is proven correct up to the authorization boundary: the target
+exists, the command addresses the right endpoint, and only a write-scoped token is missing.
+Full execution needs the deploy token described below.
 
 ## Deploying
 
 Requires `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in the environment. Neither is
-committed; both are injected at runtime. The token needs
-**Account -> Workers Scripts -> Edit** (read-only is enough for inspection, not for deploy).
+committed; both are injected at runtime. The token needs **Account -> Workers Scripts ->
+Edit**. Read is enough for inspection and *not* enough for deploy, secret writes, or
+rollback — all three return `No access to the specified resource.` with a read-only token.
 
 ```bash
 cd workers/email
@@ -73,6 +112,26 @@ CLOUDFLARE_API_TOKEN="$CF_TOKEN" CLOUDFLARE_ACCOUNT_ID="$CF_ACCOUNT_ID" \
 ```
 
 One command, no other steps. `wrangler` is the only tool required and is free.
+
+### The `SEND_TOKEN` secret
+
+`POST /send` requires a `SEND_TOKEN` Worker secret. It is **not** in `wrangler.jsonc` and
+not in any source file — an unset secret makes the handler answer `503` rather than allow
+anyone through. Set it once per environment, before the first authenticated deploy:
+
+```bash
+cd workers/email
+# Reads the value from stdin; it is never an argument and never appears in shell history.
+CLOUDFLARE_API_TOKEN="$CF_TOKEN" CLOUDFLARE_ACCOUNT_ID="$CF_ACCOUNT_ID" \
+  npx wrangler secret put SEND_TOKEN --name miautrix-main-worker
+```
+
+The same value must be the app's `CLOUDFLARE_API_TOKEN` for the Cloudflare transport, since
+that is the header `CloudflareApiMailTransport` already sends. It is held as the Paperclip
+secret `miautrix-mail-server/cloudflare_worker_send_token`.
+
+For local runs, `wrangler dev` reads `workers/email/.dev.vars`
+(`SEND_TOKEN="..."`). That file is gitignored and must never be committed.
 
 Dry run, which changes nothing and needs no credential:
 
@@ -85,6 +144,7 @@ cd workers/email && npx wrangler deploy --dry-run
 | Binding | Type | Purpose |
 | --- | --- | --- |
 | `EMAIL` | `send_email` | Backs `env.EMAIL.send()` on `POST /send`. Declared in `wrangler.jsonc`. Currently unrestricted — no `allowed_destination_addresses`. |
+| `SEND_TOKEN` | secret | Shared bearer token for `POST /send`. Set with `wrangler secret put`, never in `wrangler.jsonc`. Absent -> handler answers `503`. |
 
 Also required, and **not** in this file:
 
@@ -94,10 +154,45 @@ Also required, and **not** in this file:
 - **workers.dev subdomain** enabled, serving
   `https://miautrix-main-worker.<account>.workers.dev`. Preview URLs are disabled.
 
-There is no bearer-token secret bound to this Worker. The app sends
-`Authorization: Bearer <token>`, but the deployed code never reads it — see the root cause.
+Before [MIA-76](/MIA/issues/MIA-76) no bearer-token secret was bound to this Worker: the app
+sent `Authorization: Bearer <token>` and the deployed code never read it — see the root
+cause. The committed source now reads it and requires `SEND_TOKEN`; the secret still has to
+be set on the script, which needs a write-scoped token.
 
 ## Verification
+
+### The `POST /send` contract check (MIA-76)
+
+`verify-send-contract.sh` is the committed proof of the table above: 23 cases covering the
+unchanged `GET` paths, every `401` ordering case, every `400` body shape, and the
+well-formed request reaching `env.EMAIL.send()`. One command:
+
+```bash
+cd workers/email
+npx wrangler dev --local --port 8799 &          # local runtime, reads .dev.vars
+SEND_TOKEN="$YOUR_TOKEN" BASE=http://127.0.0.1:8799 ./verify-send-contract.sh
+```
+
+It exits non-zero if any case misses its expected status, and prints the status and body of
+each case so the result is checkable rather than asserted.
+
+**Local by default, deliberately.** A local `wrangler dev` has no real `send_email` binding,
+so no case can emit real mail to a third party. Against the local runtime the well-formed
+case answers `500` (`{"ok":false,"error":...}` — accepted, validated, send failed), which is
+exactly the "a send failure is not a client error, and never a `1101`" guarantee. Override
+with `WELL_FORMED_EXPECT=200` when running against a deployment whose destination is
+verified.
+
+Executed on 2026-10-04 against `wrangler dev --local` (wrangler 4.147.0): **23 cases, 0
+failed.** Two paths were additionally proved by hand:
+
+- a MIME body carrying a `Message-ID` -> `200 {"ok":true}`, i.e. a valid request really does
+  reach and complete `env.EMAIL.send()`
+- a runtime started with **no** `SEND_TOKEN` -> `503` on `POST /send` while `GET /health`
+  still answers `200`, i.e. misconfiguration fails closed without taking down the health
+  probe
+
+### Unchanged paths against production
 
 Read-only, no credential needed, safe to run against production:
 
@@ -138,9 +233,13 @@ Three independent checks, all run during recovery:
    -> `200 {"ok":true}`, `GET /health` -> `200 {"ok":true}`, `GET /nope`
    -> `404 Not found`.
 
-Not confirmed by execution: the `POST /send` and `email()` paths. Exercising them would send
-or reject real mail, which MIA-69 forbids. Their behaviour is asserted from the recovered
-bytes plus the QA evidence on [MIA-64](/MIA/issues/MIA-64).
+Not confirmed by execution during recovery: the `POST /send` and `email()` paths. Exercising
+them would send or reject real mail, which MIA-69 forbids. Their behaviour is asserted from
+the recovered bytes plus the QA evidence on [MIA-64](/MIA/issues/MIA-64).
+
+[MIA-76](/MIA/issues/MIA-76) has since exercised `POST /send` in full against a local
+runtime — see "The `POST /send` contract check" above. `email()` remains unexercised, by
+design.
 
 ## Root cause of Cloudflare `1101` on `POST /send`
 
@@ -180,9 +279,13 @@ Worker:
 
 | Target | Status |
 | --- | --- |
-| Linux (LXC / container) | Tested. All recovery and verification commands in this file were executed on Linux. |
-| Windows Server | Untested. `npx wrangler deploy` is Node-based and portable; the `curl` verification lines need PowerShell equivalents. No path separator or line-ending assumption is baked into the config. |
+| Linux (LXC / container) | Tested. All recovery and verification commands in this file, including the 23-case contract check, were executed on Linux. |
+| Windows Server | Untested. `npx wrangler deploy` is Node-based and portable; `verify-send-contract.sh` is POSIX `sh` and needs WSL, Git Bash, or a PowerShell port. No path separator or line-ending assumption is baked into the config. |
 | Cloud / CI | Untested. Needs `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` as CI secrets; no other change expected. |
+
+`verify-send-contract.sh` is the one portability gap this change introduces: it is a POSIX
+shell script, so Windows Server needs WSL, Git Bash, or a PowerShell equivalent. The Worker
+itself and `wrangler deploy` carry no platform assumption.
 
 ## Secrets
 
