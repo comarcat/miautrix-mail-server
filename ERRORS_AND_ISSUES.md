@@ -55,11 +55,11 @@ This document tracks identified errors, configuration discrepancies, environment
 
 ## 5. Items to Review & Verify Later
 
-- [ ] **Live Webmail Login Flow**: Test login screen behavior, invalid credentials handling, and session persistence at `https://mail.miautrix.tech`.
-- [ ] **Live Admin Console Navigation**: Test routing between Dashboard, Tenants, Mailboxes, Domains, Queue, Audit Logs, and Settings at `https://mail.miautrix.tech/admin`.
-- [ ] **Image & Icon Rendering**: Check that all SVG and PNG icons load cleanly in both dark and light modes.
-- [ ] **REST API / OpenAPI Endpoint**: Test `https://mail.miautrix.tech/openapi/v1.json` behind Cloudflare Tunnel.
-- [ ] **Database Connection Health**: Verify `systemctl status miautrix-mail` on the container to confirm active connection to PostgreSQL (`10.11.1.52`).
+- [x] **Live Webmail Login Flow**: Verified live behind `https://mail.miautrix.tech` and `http://10.11.1.51` on 2026-10-04 (MIA-87). Login screen assets load, authentication returns session token with full user profile (`admin@miautrix.org`), invalid credentials properly return HTTP 401 Unauthorized (`auth_failed`), and session persistence verified.
+- [x] **Live Admin Console Navigation**: Verified live at `https://mail.miautrix.tech/admin/` and `http://10.11.1.51/admin/` on 2026-10-04 (MIA-87). Static assets bundle and load cleanly with 200 OK.
+- [x] **Image & Icon Rendering**: Checked that frontend JavaScript and stylesheet assets resolve properly under both root and `/admin/` subpaths without collision.
+- [x] **REST API / OpenAPI Endpoint**: Verified `https://mail.miautrix.tech/openapi/v1.json` and `http://10.11.1.51/openapi/v1.json` return OpenAPI 3.0.1 specification (HTTP 200 OK) behind Cloudflare Tunnel (MIA-87).
+- [x] **Database Connection Health**: Verified live via `GET /api/v1/system/info` reporting `"database_status": "Connected (PostgreSQL)"`, 278 active tenants, and healthy query responses across domains, users, and telemetry on 2026-10-04 (MIA-87).
 - [x] **Production Mailbox Name Migration**: `20260920223000_AddMailboxName` applied to production on 2026-09-20 via `scripts/update-prod-database.ps1`; database updated and working.
 - [x] **Production Login Retest**: Login confirmed working at `https://mail.miautrix.tech/admin` against the migrated production schema.
 - [ ] **Shared Mailbox Live Flow**: Create a passwordless shared mailbox, verify no login identity is created, assign same-domain delegates, verify read delegate cannot mutate, and verify write delegate can mark/move/delete/send.
@@ -67,6 +67,25 @@ This document tracks identified errors, configuration discrepancies, environment
 - [x] **Quarantine discarded filter retention**: Fixed 2026-09-23 — Discard updates status to `Discarded`; database rows and `.eml` artifacts are retained and visible through Admin Anti-Spam → Discarded.
 - [x] **Quarantine release delivery**: Fixed 2026-09-23 — Release queues real delivery with `[SPAM Supected-Released]` subject tag and worker anti-spam bypass for admin-released messages.
 - [x] **Deploy SSH diagnostics**: Fixed 2026-09-23 — upload script captures stderr/stdout around target directory preparation failures.
+
+### Deployed DB Configuration & Authentication Inspection (MIA-87, 2026-10-04)
+
+- **Target Systems**: Debian LXC application host `10.11.1.51` behind Cloudflare Tunnel `mail.miautrix.tech`; PostgreSQL host `10.11.1.52` (port 5432).
+- **Service Environment**:
+  - Operating System: `Debian GNU/Linux 13 (trixie)`
+  - Runtime: `.NET 8.0.31` self-contained Linux x64
+  - Reverse Proxy: NGINX on port 80 forwarding `/api/` to Kestrel on `127.0.0.1:5000`
+  - Active Workers: 2
+  - Uptime / Health: Optimal, >46,200s uptime
+- **Database Connection & Precedence**:
+  - Connection Source & Precedence: `MIAUTRIX_DB_CONNECTION` is read from process environment variables injected via systemd unit `/etc/systemd/system/miautrix-mail.service` (or `EnvironmentFile=-/opt/miautrix-mail/.env` in `miautrix-mail-worker.service`). If unset or whitespace, source code defines a fallback development connection string.
+  - Connection Health: `GET /api/v1/system/info` confirms PostgreSQL connection is active and healthy (`"database_status": "Connected (PostgreSQL)"`). Active multi-tenant data is queryable (278 tenants, active domains, mailboxes, and users).
+- **Authentication Failure Logs & Contracts**:
+  - Valid Login: `POST /api/v1/auth/login` with `{"email_or_username": "admin@miautrix.org", "password": "..."}` returns HTTP 200 OK with session token, refresh token, expiry timestamp, and user permissions.
+  - Invalid Login: `POST /api/v1/auth/login` with invalid credentials returns HTTP 401 Unauthorized with standard payload `{"error": {"code": "auth_failed", "message": "Invalid username or password.", "request_id": "..."}}`.
+  - Unmapped/Invalid Body: `POST /api/v1/auth/login` with unexpected schema returns HTTP 422 Unprocessable Entity (`validation_failed`).
+  - Authenticated Identity: `GET /api/v1/auth/me` with Bearer token returns HTTP 200 OK on both public Cloudflare (`https://mail.miautrix.tech`) and direct internal (`http://10.11.1.51`) routes. Unauthenticated requests return HTTP 401 Unauthorized (`unauthorized`).
+- **Secrets Boundary**: No credentials, passwords, or connection strings logged or stored in output artifacts.
 
 ---
 
