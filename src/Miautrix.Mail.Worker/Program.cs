@@ -28,16 +28,8 @@ var antiMalwareOptions = AntiMalwareOptions.FromEnvironment(isDevelopment);
 var connectionString = Environment.GetEnvironmentVariable("MIAUTRIX_DB_CONNECTION");
 if (string.IsNullOrWhiteSpace(connectionString))
 {
-    if (isDevelopment)
-    {
-        connectionString = "Host=10.11.1.52;Port=5432;Database=miautrix-mail-dev;Username=mmdb-user;Password=Mi@usito#2026!";
-        Console.WriteLine("[Worker] MIAUTRIX_DB_CONNECTION not set — using development default.");
-    }
-    else
-    {
-        Console.Error.WriteLine("[Worker] FATAL: MIAUTRIX_DB_CONNECTION is required in production.");
-        return 1;
-    }
+    Console.Error.WriteLine("[Worker] FATAL: MIAUTRIX_DB_CONNECTION environment variable is required.");
+    return 1;
 }
 
 var storageDirectory = Environment.GetEnvironmentVariable("MIAUTRIX_STORAGE_DIR");

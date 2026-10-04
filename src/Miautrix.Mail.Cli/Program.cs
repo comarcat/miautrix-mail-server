@@ -19,7 +19,8 @@ public class Program
         var connectionString = Environment.GetEnvironmentVariable("MIAUTRIX_DB_CONNECTION");
         if (string.IsNullOrWhiteSpace(connectionString))
         {
-            connectionString = "Host=10.11.1.52;Port=5432;Database=miautrix-mail-dev;Username=mmdb-user;Password=Mi@usito#2026!";
+            Console.Error.WriteLine("[CLI] FATAL: MIAUTRIX_DB_CONNECTION environment variable is required.");
+            return 1;
         }
 
         services.AddDbContext<AppDbContext>(options =>

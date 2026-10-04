@@ -66,7 +66,7 @@ Tenant-owned domains define transport configuration. External recipient domains 
 Set the PostgreSQL connection string:
 
 ```bash
-export MIAUTRIX_DB_CONNECTION="Host=10.11.1.52;Port=5432;Database=miautrix-mail-dev;Username=mmdb-user;Password=Mi@usito#2026!"
+export MIAUTRIX_DB_CONNECTION="Host=<db-host>;Port=5432;Database=miautrix-mail-dev;Username=<db-user>;Password=<db-password>"
 ```
 
 ### Build & Test Commands

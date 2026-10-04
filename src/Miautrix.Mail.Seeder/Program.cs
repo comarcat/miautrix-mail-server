@@ -114,7 +114,8 @@ public static class Program
         var conn = Environment.GetEnvironmentVariable("MIAUTRIX_DB_CONNECTION");
         if (string.IsNullOrWhiteSpace(conn))
         {
-            conn = "Host=localhost;Database=miautrix_dev;Username=postgres;Password=postgres";
+            Console.Error.WriteLine("[Miautrix.Mail.Seeder] FATAL: MIAUTRIX_DB_CONNECTION environment variable is required.");
+            return 1;
         }
 
         var options = new DbContextOptionsBuilder<AppDbContext>()

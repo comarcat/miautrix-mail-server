@@ -26,7 +26,7 @@ public sealed class MailQueueApiTests : IClassFixture<WebApplicationFactory<Miau
         var conn = Environment.GetEnvironmentVariable("MIAUTRIX_DB_CONNECTION");
         if (string.IsNullOrWhiteSpace(conn))
         {
-            conn = "Host=10.11.1.52;Port=5432;Database=miautrix-mail-dev;Username=mmdb-user;Password=Mi@usito#2026!";
+            throw new InvalidOperationException("MIAUTRIX_DB_CONNECTION environment variable is required.");
         }
         return conn;
     }

@@ -767,11 +767,11 @@ public sealed class AdminService : IAdminService
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var delegateMailboxIds = activeUserIds.Count == 0
             ? new HashSet<Guid>()
-            : await _db.MailboxDelegates
+            : (await _db.MailboxDelegates
                 .Where(d => d.TenantId == tenantId && activeUserIds.Contains(d.UserId))
                 .Select(d => d.MailboxId)
                 .Distinct()
-                .ToHashSetAsync(ct);
+                .ToListAsync(ct)).ToHashSet();
 
         var messageCounts = await _db.Messages
             .Where(m => m.TenantId == tenantId && mailboxIds.Contains(m.MailboxId))

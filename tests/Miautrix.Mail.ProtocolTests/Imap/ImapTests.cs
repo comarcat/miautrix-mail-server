@@ -22,7 +22,7 @@ public sealed class ImapTests : IDisposable
         _storage = new FileSystemMailStorage(_testStorageDir);
 
         var connectionString = Environment.GetEnvironmentVariable("MIAUTRIX_DB_CONNECTION")
-            ?? "Host=10.11.1.52;Port=5432;Database=miautrix-mail-dev;Username=mmdb-user;Password=Mi@usito#2026!";
+            ?? throw new InvalidOperationException("MIAUTRIX_DB_CONNECTION environment variable is required.");
 
         var options = new DbContextOptionsBuilder<AppDbContext>()
             .UseNpgsql(connectionString)

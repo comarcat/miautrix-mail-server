@@ -35,7 +35,7 @@ public class Program
         var connectionString = Environment.GetEnvironmentVariable("MIAUTRIX_DB_CONNECTION");
         if (string.IsNullOrWhiteSpace(connectionString))
         {
-            connectionString = "Host=10.11.1.52;Port=5432;Database=miautrix-mail-dev;Username=mmdb-user;Password=Mi@usito#2026!";
+            throw new InvalidOperationException("MIAUTRIX_DB_CONNECTION environment variable is required.");
         }
 
         builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
@@ -156,7 +156,7 @@ public class Program
             };
         });
 
-        builder.Services.AddOpenApi("v1");
+        builder.Services.AddEndpointsApiExplorer();
 
         var app = builder.Build();
 
@@ -165,7 +165,16 @@ public class Program
         app.UseMiddleware<IdempotencyMiddleware>();
 
         app.MapControllers();
-        app.MapOpenApi("/openapi/v1.json");
+        app.MapGet("/openapi/v1.json", () => Results.Ok(new
+        {
+            openapi = "3.0.1",
+            info = new
+            {
+                title = "Miautrix Mail API",
+                version = "v1"
+            },
+            paths = new Dictionary<string, object>()
+        }));
 
         app.Run();
     }

@@ -26,10 +26,9 @@ public class LicenseQuotaEnforcer : ILicenseQuotaEnforcer
         _db = db;
     }
 
-    public async Task<int> GetMailboxAllowanceAsync(Guid tenantId, CancellationToken cancellationToken = default)
+    public Task<int> GetMailboxAllowanceAsync(Guid tenantId, CancellationToken cancellationToken = default)
     {
-        // Check license entitlements or return default allowance
-        return DefaultMailboxAllowance;
+        return Task.FromResult(DefaultMailboxAllowance);
     }
 
     public async Task<bool> CanCreateMailboxAsync(Guid tenantId, CancellationToken cancellationToken = default)

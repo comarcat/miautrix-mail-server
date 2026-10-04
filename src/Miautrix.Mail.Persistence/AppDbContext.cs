@@ -551,14 +551,14 @@ public class AppDbContext : DbContext
     }
 }
 
-internal sealed class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
+public sealed class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
 {
     public AppDbContext CreateDbContext(string[] args)
     {
         var conn = Environment.GetEnvironmentVariable("MIAUTRIX_DB_CONNECTION");
         if (string.IsNullOrWhiteSpace(conn))
         {
-            conn = "Host=localhost;Database=miautrix_dev;Username=postgres;Password=postgres";
+            throw new InvalidOperationException("MIAUTRIX_DB_CONNECTION environment variable is required.");
         }
 
         var options = new DbContextOptionsBuilder<AppDbContext>()
