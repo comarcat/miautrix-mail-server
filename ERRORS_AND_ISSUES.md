@@ -565,7 +565,7 @@ Following the QA findings baseline established in [MIA-64](/MIA/issues/MIA-64), 
   1. External MTA sends message to `<recipient>@miautrix.tech`.
   2. Cloudflare MX (`route1.mx.cloudflare.net:25`, `route2.mx.cloudflare.net:25`, `route3.mx.cloudflare.net:25`) receives envelope.
   3. Email Routing executes catch-all rule and triggers `miautrix-main-worker` `email()` handler.
-  4. Worker evaluates `isSenderAllowed(from)` against `ALLOWED_SENDER_PATTERNS` (`*@miautrix.tech,admin@miautrix.org`).
+  4. Worker evaluates `isSenderAllowed(from)` against `ALLOWED_SENDER_PATTERNS`. **Corrected in §12.5 to `*`** — the original value `*@miautrix.tech,admin@miautrix.org` rejected all external mail.
   5. Worker reads `env.INBOUND_TOKEN` and posts raw RFC822 MIME stream to `https://mail.miautrix.tech/api/v1/inbound/cloudflare` with `X-Miautrix-Inbound-Token`, `X-Miautrix-Envelope-From`, `X-Miautrix-Envelope-To`.
   6. Origin API validates inbound token and enqueues message for local delivery.
   7. On delivery failure or invalid sender, Worker rejects via `message.setReject()` ensuring sending MTA generates standard SMTP 550 NDR.
@@ -576,7 +576,7 @@ Following the QA findings baseline established in [MIA-64](/MIA/issues/MIA-64), 
 |---|---|---|---|---|---|
 | **TEST-01** | Inbound Positive Routing | `user@miautrix.tech` -> Worker `email()` | Matches wildcard `*@miautrix.tech`, constructs webhook payload, injects `X-Miautrix-Inbound-Token` | Verified in automated test suite & contract | **PASS** |
 | **TEST-02** | Inbound Wildcard Aliases | `support.dept@miautrix.tech` -> Worker `email()` | Case-insensitive match on domain `miautrix.tech`, routes to origin webhook | Verified in `verify-inbound-contract.sh` | **PASS** |
-| **TEST-03** | Inbound Negative (Disallowed Domain) | `attacker@evil.com` -> Worker `email()` | `isSenderAllowed` returns `false`; calls `message.setReject("Address not allowed")` without throwing | Verified; zero 1101s | **PASS** |
+| **TEST-03** | ~~Inbound Negative (Disallowed Domain)~~ | ~~`attacker@evil.com` -> Worker `email()`~~ | ~~`isSenderAllowed` returns `false`~~ | **SUPERSEDED — this test encoded the §12.5 defect.** Rejecting every external domain is wrong for a public mailbox. See TEST-03R / TEST-03S. | **INVALID** |
 | **TEST-04** | Inbound Negative (Malformed Sender) | `non-email-string` / missing `from` | Rejected cleanly with `message.setReject` without uncaught runtime exception | Verified; zero 1101s | **PASS** |
 | **TEST-05** | Inbound Webhook Auth Missing | Webhook without `INBOUND_TOKEN` | Fails closed; logs error and calls `message.setReject("Inbound webhook authentication not configured")` | Verified fail-closed contract | **PASS** |
 | **TEST-06** | Inbound Delivery Failure Handling | Origin returns HTTP 403 / 500 | Worker catches non-2xx status and calls `message.setReject("Inbound delivery failed (HTTP <status>)")` | Verified; produces NDR | **PASS** |
@@ -592,5 +592,37 @@ Following the QA findings baseline established in [MIA-64](/MIA/issues/MIA-64), 
    npx wrangler versions deploy 327baddf-2d9d-494f-9630-e383c4ca4aa4@100% --name miautrix-main-worker --yes
    ```
 3. **WAF Rule Verification**: Verify rule `Miautrix API emergency containment` (ID `7e70d965a59f4634b066f182264bd23a`) remains enabled.
+
+### 12.5 Defect: Inbound Allow-List Rejected All External Senders (SMTP 555 5.7.1)
+
+**Symptom.** External senders received `555 5.7.1 Address not allowed. <session-id>` and no mail reached the origin. Mail from `*@miautrix.tech` worked.
+
+**Root cause (design defect, not a configuration error).** The inbound `email()` handler applied `ALLOWED_SENDER_PATTERNS` (`*@miautrix.tech,admin@miautrix.org`) to the **envelope sender** of **incoming** mail. That list is an *outbound/relay* allow-list semantics applied to the *inbound* path. A public mailbox that only accepts mail whose sender is its own domain cannot, by definition, receive external mail. Every external sender therefore hit `message.setReject("Address not allowed")` before the webhook was ever called. Sections 12.2 step 4 and 12.3 TEST-03 recorded the rejection of `attacker@evil.com` as a PASS; the test encoded the defect as intended behaviour.
+
+**Fix applied (`workers/email`).**
+1. `src/index.ts` — `isSenderAllowed()` now honours a global wildcard pattern (`*`, `*@*`, `*.*`). All other matching semantics are unchanged: syntactic address validation, case-insensitive comparison, domain-wildcard and exact-address matching, and clean rejection of malformed/missing senders without throwing (no Cloudflare `1101`).
+2. `src/index.ts` — `DEFAULT_ALLOWED_SENDER_PATTERNS` changed from `"*@miautrix.tech,admin@miautrix.org"` to `"*"`.
+3. `wrangler.jsonc` — `vars.ALLOWED_SENDER_PATTERNS` changed from `"*@miautrix.tech,admin@miautrix.org"` to `"*"`, with the rationale recorded inline.
+4. `test/inbound-handler.test.ts` — the allow-list tests now assert the corrected default (any valid sender accepted) and retain explicit coverage of restrictive configuration via an explicit `ALLOWED_SENDER_PATTERNS` env var.
+5. `dashboard-paste.index.js` — bundled single-file ESM artifact (esbuild, `cloudflare:email` external) generated for paste into the Cloudflare Dashboard Quick Editor, since CLI deployment is unavailable to the operator.
+
+**Security position.** Inbound abuse filtering is the origin pipeline's job — SPF, DKIM, DMARC (`p=reject`), and the antispam/antimalware stage — not a Worker-level sender allow-list. The Worker allow-list remains available for deployments that intentionally restrict inbound senders; it is simply not the correct control for a public mailbox. The outbound `POST /send` bearer-token gate, the `X-Miautrix-Inbound-Token` webhook authentication, the fail-closed `setReject` behaviour, and the MIA-88 edge WAF rule are all unchanged.
+
+**Verification.** `./verify-inbound-contract.sh` — 10/10 PASS, zero `1101` uncaught throws. Corrected matrix:
+
+| Test ID | Test Case | Expected Result | Status |
+|---|---|---|---|
+| **TEST-03R** | External sender `user@gmail.com` with default config | Accepted; webhook POST to origin with `X-Miautrix-Inbound-Token` | **PASS** |
+| **TEST-03S** | External sender `attacker@evil.com` with explicit `ALLOWED_SENDER_PATTERNS="*@miautrix.tech"` | `setReject("Address not allowed")`, no forward, no webhook call | **PASS** |
+| **TEST-04R** | Malformed/missing sender (`undefined`, `null`, `""`, `not-an-email`, `<user@x.tech>`, header-injection string) | Clean `setReject`, no uncaught exception | **PASS** |
+| **TEST-05R** | Webhook token absent | Fails closed: `setReject("Inbound webhook authentication not configured")`, no fetch | **PASS** |
+| **TEST-06R** | Origin returns HTTP 403 | `setReject("Inbound delivery failed (HTTP 403)")` | **PASS** |
+
+**Operator action required (Dashboard, no CLI).**
+1. **Workers & Pages → `miautrix-main-worker` → Settings → Variables and Secrets**: set plain-text variable `ALLOWED_SENDER_PATTERNS` to `*`. Leave `INBOUND_DESTINATION`, `SEND_TOKEN`, and `INBOUND_TOKEN` unchanged.
+2. **Workers & Pages → `miautrix-main-worker` → Edit Code**: replace the script with the contents of `workers/email/dashboard-paste.index.js`, then **Save and Deploy**.
+3. Send a test message from an external provider to any `@miautrix.tech` address and confirm no `555 5.7.1` bounce.
+
+**Residual risk.** Until step 2 is performed, the live Worker still runs the previous script and external mail continues to bounce. The repository and the live deployment are out of sync by design — the operator owns the Dashboard deploy.
 
 

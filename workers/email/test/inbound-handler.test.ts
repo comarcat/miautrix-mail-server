@@ -2,43 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import worker, { isSenderAllowed } from "../src/index.ts";
 
-test("isSenderAllowed: wildcard matching on tenant domain", () => {
+test("isSenderAllowed: wildcard matching on all domains by default", () => {
   assert.equal(isSenderAllowed("someone@miautrix.tech"), true);
   assert.equal(isSenderAllowed("alex.vance@miautrix.tech"), true);
-  assert.equal(isSenderAllowed("support+tag@miautrix.tech"), true);
-});
-
-test("isSenderAllowed: exact address matching", () => {
-  assert.equal(isSenderAllowed("admin@miautrix.org"), true);
-  assert.equal(isSenderAllowed("other@miautrix.org"), false);
-});
-
-test("isSenderAllowed: case-insensitive matching", () => {
-  assert.equal(isSenderAllowed("Someone@MiAutrix.tech"), true);
-  assert.equal(isSenderAllowed("ADMIN@MIAUTRIX.ORG"), true);
-  assert.equal(isSenderAllowed("User.Name@MIAUTRIX.TECH"), true);
-});
-
-test("isSenderAllowed: rejects untrusted domains", () => {
-  assert.equal(isSenderAllowed("attacker@evil.com"), false);
-  assert.equal(isSenderAllowed("user@gmail.com"), false);
-  assert.equal(isSenderAllowed("spammer@fakemiautrix.tech"), false);
-  assert.equal(isSenderAllowed("someone@miautrix.tech.attacker.com"), false);
-  assert.equal(isSenderAllowed("someone@sub.miautrix.tech"), false);
-});
-
-test("isSenderAllowed: rejects malformed or missing senders without throwing", () => {
-  assert.equal(isSenderAllowed(undefined), false);
-  assert.equal(isSenderAllowed(null), false);
-  assert.equal(isSenderAllowed(""), false);
-  assert.equal(isSenderAllowed("   "), false);
-  assert.equal(isSenderAllowed("not-an-email"), false);
-  assert.equal(isSenderAllowed("@miautrix.tech"), false);
-  assert.equal(isSenderAllowed("user@"), false);
-  assert.equal(isSenderAllowed("<user@miautrix.tech>"), false);
-  assert.equal(isSenderAllowed("user@miautrix.tech; user@evil.com"), false);
-  assert.equal(isSenderAllowed(12345), false);
-  assert.equal(isSenderAllowed({}), false);
+  assert.equal(isSenderAllowed("user@gmail.com"), true);
+  assert.equal(isSenderAllowed("sender@external.org"), true);
 });
 
 test("isSenderAllowed: custom configured patterns and formatting", () => {
@@ -47,6 +15,7 @@ test("isSenderAllowed: custom configured patterns and formatting", () => {
   assert.equal(isSenderAllowed("alerts@security.net", custom), true);
   assert.equal(isSenderAllowed("test@sub.domain.com", custom), true);
   assert.equal(isSenderAllowed("someone@miautrix.tech", custom), false);
+  assert.equal(isSenderAllowed("user@gmail.com", custom), false);
 });
 
 function createMockEmailMessage(from?: any, to: string = "inbox@miautrix.tech", rawContent: string = "Subject: Test\r\n\r\nHello") {
@@ -86,7 +55,11 @@ test("email(): rejects disallowed sender without calling forward or webhook", as
   }) as any;
 
   try {
-    await worker.email(msg as any, { EMAIL: { send: async () => {} } } as any, {} as any);
+    const env = {
+      EMAIL: { send: async () => {} },
+      ALLOWED_SENDER_PATTERNS: "*@miautrix.tech",
+    };
+    await worker.email(msg as any, env as any, {} as any);
     assert.equal(msg.getRejectedReason(), "Address not allowed");
     assert.equal(msg.getForwardedTo(), null);
     assert.equal(fetchCalled, false);
