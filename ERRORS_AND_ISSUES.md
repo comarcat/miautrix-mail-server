@@ -625,4 +625,38 @@ Following the QA findings baseline established in [MIA-64](/MIA/issues/MIA-64), 
 
 **Residual risk.** Until step 2 is performed, the live Worker still runs the previous script and external mail continues to bounce. The repository and the live deployment are out of sync by design — the operator owns the Dashboard deploy.
 
+### 12.6 Defect: Inbound Webhook Token Mismatch (SMTP 555 5.7.1 "Inbound delivery failed (HTTP 401)")
+
+**Symptom.** After §12.5 was applied, the bounce text changed from `555 5.7.1 Address not allowed` to `555 5.7.1 Inbound delivery failed (HTTP 401)`. This is a *different* failure one layer deeper, and it confirms §12.5 succeeded: the envelope sender now passes `isSenderAllowed()`, the Worker constructs the webhook request, and the failure has moved to origin authentication.
+
+**Diagnosis.** The new text is the Worker's own fail-closed branch, `setReject(\`Inbound delivery failed (HTTP ${response.status})\`)`, emitted when the origin webhook returns non-2xx. Live read-only probes against `https://mail.miautrix.tech/api/v1/inbound/cloudflare`:
+
+| Probe | Response |
+|---|---|
+| `POST` with no `X-Miautrix-Inbound-Token` header | **401** |
+| `POST` with a deliberately wrong token value | **401** |
+
+`InboundController.cs` distinguishes the two failure modes precisely:
+- `!_options.IsConfigured` (server has no `MIAUTRIX_INBOUND_TOKEN`) → **503** `inbound_unconfigured`
+- `!_options.Accepts(suppliedToken)` (configured but mismatched) → **401** `inbound_auth_failed`
+
+The observed status is **401, not 503**. Therefore the origin **does** have `MIAUTRIX_INBOUND_TOKEN` set; its value simply differs from the Cloudflare Worker secret `INBOUND_TOKEN`.
+
+**Root cause.** Two divergent secret values. A freshly generated token was saved to the Cloudflare Worker but never installed on the origin, which continues to run the value already present in its systemd drop-in. This is a configuration/runbook gap, not a code defect — the fail-closed behaviour on both sides worked exactly as designed and produced an accurate, actionable NDR.
+
+**Resolution (operator, mail host `10.11.1.51`).** The origin value lives in the drop-in written by `scripts/lxc-install-worker-env.sh`:
+
+```
+/etc/systemd/system/miautrix-mail.service.d/10-miautrix-inbound.conf
+```
+
+- **Option A — adopt the origin's existing token.** Read it with `sed -n 's/^Environment="MIAUTRIX_INBOUND_TOKEN=\(.*\)"$/\1/p'` on that file and set the Cloudflare Worker secret `INBOUND_TOKEN` to the same value. No server restart required.
+- **Option B — push the new token to the origin.** Place `MIAUTRIX_INBOUND_TOKEN=<value>` in a root-only env file and run `sudo scripts/lxc-install-worker-env.sh --cloudflare-env-file <file>`. The script installs the drop-in `0600 root:root`, runs `daemon-reload`, and restarts `miautrix-mail`.
+
+Values must be byte-identical; trailing newlines and stray whitespace are a common copy error.
+
+**Secret handling.** The token value was not requested, transmitted, or recorded in any issue comment or project document. Both remediation options keep it on the operator's hosts.
+
+**Expected outcomes after reconciliation.** `no bounce` = resolved. `HTTP 401` again = values still differ. `HTTP 403` = token correct but the MIA-88 edge WAF rule is intercepting the webhook path (would require a WAF exemption for `/api/v1/inbound/cloudflare`, which the MIA-88 expression already lists — re-verify if seen). `HTTP 503` = origin lost the variable; re-run Option B.
+
 
