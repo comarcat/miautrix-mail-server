@@ -762,11 +762,13 @@ There is no direction discriminator on a `SmtpQueue` row. The dispatcher cannot 
 
 **Why the preceding fixes still stand.** §12.5–§12.7 were all genuine and all landed. The inbound chain works end to end: MX → Email Routing → Worker `email()` → allow-list → authenticated webhook → origin → persisted. Mail is **not lost**; it is in `SmtpQueue` accruing failed delivery attempts until it dead-letters. The defect is in what happens *after* successful receipt.
 
-**Remediation (out of MIA-91 scope — application architecture, owner Tabby, scope call Chief Roger).**
+**CORRECTION — item 3 below was wrong; see §12.11.** Local mailbox delivery is *not* missing. `InboundQueueDispatcher` already exists, is registered, and is complete. The defect is an unsynchronised race between two dispatchers polling the same rows, and it corrupts **both** directions. §12.11 supersedes this remediation list.
+
+**Remediation (superseded — retained for audit trail).**
 
 1. Add a direction discriminator to the queue (e.g. `Direction` column, or separate inbound-spool and outbound-queue tables). This is a **data-model decision** and should be made deliberately, not patched.
 2. Filter `OutboundQueueDispatcher.DispatchBatchAsync()` to outbound rows only.
-3. Implement local mailbox delivery for inbound rows so received mail reaches `IMailStorage` / the mailbox tables.
+3. ~~Implement local mailbox delivery for inbound rows so received mail reaches `IMailStorage` / the mailbox tables.~~ **Incorrect — already implemented.**
 4. Decide the migration for rows already enqueued inbound (reprocess for local delivery vs discard).
 5. Add a regression test asserting that a message accepted by `InboundController` is **never** picked up by the outbound dispatcher — the gap that let this ship.
 
@@ -794,3 +796,41 @@ Two gaps to close:
 - **No end-to-end token reconciliation check exists.** Both mismatches would have been caught before a live test by a diagnostic that verifies each pair without printing values — e.g. comparing SHA-256 prefixes of the two sides, or a Worker `/health` echo of a non-reversible token fingerprint. Worth adding to `lxc-install-worker-env.sh` as a post-install verification step.
 
 
+
+### 12.11 Corrected Root Cause: Unsynchronised Race Between Two Queue Dispatchers
+
+**This section supersedes the remediation list in §12.10.** The §12.10 symptom analysis stands; its proposed fix was based on an incorrect premise.
+
+**What §12.10 got wrong.** It stated that local mailbox delivery for inbound mail was missing. It is not. `InboundQueueDispatcher` (`src/Miautrix.Mail.Worker/InboundQueueDispatcher.cs`) exists, is registered at `src/Miautrix.Mail.Worker/Program.cs:149`, and is feature-complete: MIME parsing, antimalware and antispam, quota enforcement, `IMailStorage` write, `Message` row creation, attachment handling, and `Status = "Delivered"`.
+
+**Actual defect.** Both dispatchers are registered and both poll `smtp_queue` for overlapping row sets, with no direction discriminator and no row-level claim:
+
+| Dispatcher | Registration | Predicate |
+|---|---|---|
+| `InboundQueueDispatcher` | `Program.cs:149` | `Status == "Pending" && NextAttemptAt <= now` |
+| `OutboundQueueDispatcher` | `Program.cs:151` | `(Status == "Pending" \|\| Status == "Failed") && NextAttemptAt <= now` |
+
+`SmtpQueueItem` (`src/Miautrix.Mail.Domain/Entities.cs:307`) carries no direction field. There is no `SELECT … FOR UPDATE`, no in-flight status transition before processing, and no claim token. Both poll on a 5-second interval; whichever reaches a row first owns it.
+
+**Observed sequence.** `OutboundQueueDispatcher` reached the Gmail→miautrix.tech row first, resolved `@miautrix.tech` in its Cloudflare `domainMap`, and called `transport.SendAsync()` with the Gmail address as `from`. Cloudflare refused — correct anti-spoofing — producing `502 send_failed`.
+
+**Why it is now permanently stuck.** The failed attempt set `Status = "Failed"`. `InboundQueueDispatcher` filters on `Status == "Pending"` only, so it can no longer see the row. `OutboundQueueDispatcher` selects `"Failed"`, so the row is captured by the wrong dispatcher and will retry outbound until it dead-letters. The state machine does not self-heal.
+
+**Previously unreported severity — outbound mail loss.** The race runs in the other direction too. A locally composed message to an external recipient can be claimed by `InboundQueueDispatcher`, which looks up `item.Recipient` in `Mailboxes` (line 226), finds nothing, and sets `Status = "DeadLetter"` with `"Recipient mailbox not found."` — **silently destroying outbound mail**. This has not been observed only because outbound delivery was failing authentication throughout MIA-91 (§12.7). It will begin as soon as outbound authentication works.
+
+A third variant: an inbound message addressed to a `local`-transport domain hits the outbound dispatcher's "recipient domain is not Cloudflare-enabled => leave Pending/Failed for retries" branch, making inbound delivery non-deterministic rather than reliably broken.
+
+**Remediation plan.** A full developer-followable plan — file paths, line numbers, migration SQL, backfill inference, test matrix, and acceptance criteria — is recorded as the `plan` document on MIA-91, revision `5e49ef27-1d93-4e25-b48c-28b30208cf8f`, pending approval. Summary:
+
+1. **Immediate mitigation:** unregister `OutboundQueueDispatcher` (`Program.cs:151`). One line, reversible, deployable in minutes. Inbound then works uncontested; outbound stays queued rather than corrupted.
+2. **Schema:** add `Direction` (`"Inbound"`/`"Outbound"`, not null) to `SmtpQueueItem`, map it in `AppDbContext`, add a composite index on `(TenantId, Direction, Status, NextAttemptAt)`.
+3. **Enqueue:** add a **required** `direction` parameter to `ISmtpQueueManager.EnqueueAsync`; update every call site explicitly. A defaulted parameter is how this class of bug recurs.
+4. **Backfill:** infer direction from recipient locality against `domains`; reset inbound rows stranded in `Failed`/`DeadLetter` to `Pending`.
+5. **Filter both dispatchers** by `Direction`, then re-register the outbound dispatcher.
+6. **Expose `Direction`** in `MailQueueController` and the admin queue filter. Its absence is why diagnosis took four rounds of error-chasing.
+
+**Design decision (owner: Chief Roger).** `Direction` column (Option A) vs separate `inbound_spool` / `outbound_queue` tables (Option B). Option A is recommended now with Option B recorded as debt: Option A is a reversible additive migration that stops active mail corruption today, and is precisely the field a future table split would partition on. Option B is the better model but is a multi-surface refactor touching `MailQueueController`, the admin UI, `BackupService`, and `MailboxArchiveService`.
+
+**Test gap that allowed this.** No test asserted dispatcher ownership. The required matrix is in the plan document; the most important new case is that an **outbound** row is never set to `DeadLetter` by the inbound dispatcher, since that is the silent-loss path.
+
+**MIA-91 boundary.** This fix requires a schema migration and application-code changes across four files, both excluded by MIA-91's approved mutation boundary. Recorded as a plan for approval rather than implemented.
