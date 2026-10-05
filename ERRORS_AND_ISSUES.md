@@ -698,6 +698,43 @@ Values must be byte-identical.
 
 **Expected outcomes after reconciliation.** Queue drains with no `last_error` = resolved. `HTTP 401` = values still differ. `HTTP 503` = `SEND_TOKEN` cleared on the Worker. `HTTP 400`/`413`/`415` = authentication fixed, failure has moved to payload validation (`POST /send` contract, see §12.3 TEST-07).
 
+**Outcome.** Resolved by the operator. The subsequent attempt returned `HTTP 502`, confirming the Bearer token was accepted and the failure moved past authentication into `env.EMAIL.send()` (see §12.9).
+
+### 12.9 Open: Cloudflare `env.EMAIL.send()` Rejects the Outbound Message (HTTP 502 `send_failed`)
+
+**Symptom.** With outbound authentication reconciled, the queue `last_error` changed from `Cloudflare Worker rejected the message with HTTP 401.` to `… with HTTP 502.`
+
+**This is progress, not a regression.** `502` is returned from exactly one place in the Worker — the `catch` around `env.EMAIL.send()`:
+
+```javascript
+try {
+  await email.send(new EmailMessage(sender, recipient, rawMime));
+  return Response.json({ ok: true }, { status: 202 });
+} catch (err) {
+  console.error("send_failed", detail);
+  return jsonError(502, "send_failed", detail);
+}
+```
+
+Reaching it proves the request passed Bearer authentication, media-type check, JSON parse, structural validation, both `looksLikeAddress` checks, base64 decode, the 25 MB limit, and the RFC 5322 blank-line check. Cloudflare's email platform itself refused the message.
+
+**Why the cause is not visible in the queue.** The Worker returns the underlying reason as `detail` in the response body, but `CloudflareApiMailTransport` deliberately records only the status line — the comment at `CloudflareApiMailTransport.cs:101` notes the body may echo message content and `last_error` must never carry it. Correct behaviour; it means the diagnostic lives in the Worker logs, not the queue.
+
+**Diagnostic path.** Cloudflare Dashboard → Workers & Pages → `miautrix-main-worker` → **Logs** → **Begin log stream**, then retry the queued message. The `console.error("send_failed", detail)` line carries the exact platform error.
+
+**Candidate causes, ranked.**
+
+| Cause | Verification |
+|---|---|
+| **Unverified destination address** (most likely) | Email Routing → Destination addresses; recipient must show **Verified**. The `send_email` binding is declared bare (`{ "name": "EMAIL" }`) with no `allowed_destination_addresses`, which means Cloudflare's own verification rules govern delivery — "unrestricted" in `wrangler.jsonc` and README line 145 does not mean "sends anywhere". |
+| **Sender domain not on a zone in this account** | `from` must be `@miautrix.tech`. |
+| **Routing loop guard** | Cloudflare refuses a send whose recipient routes back into the same Worker; `@miautrix.tech` → `@miautrix.tech` can trip this. Test with an external recipient. |
+| **MIME header / envelope mismatch** | The Worker validates only the presence of a blank line; Cloudflare validates `From:`/`To:` headers against the envelope. |
+
+**Status.** Open, pending the `send_failed` log line. Deliberately not remediated by speculative multi-variable changes.
+
+**Scope note.** This is Cloudflare-side account configuration, not a defect in the Worker or origin code. The inbound path (the subject of MIA-91) is complete and verified; this blocks outbound send only.
+
 ### 12.8 Process Lesson: Layered Fail-Closed Guards Require Layered Diagnosis
 
 MIA-91 surfaced four distinct failures in sequence, each masked by the one in front of it:
