@@ -622,6 +622,7 @@ public sealed class MessageService : IMessageService
                 Recipient = recipient,
                 Subject = request.Subject,
                 RawMessage = built.RawMessage,
+                Direction = "Outbound",
                 Status = "Pending",
                 Attempts = 0,
                 NextAttemptAt = DateTimeOffset.UtcNow,

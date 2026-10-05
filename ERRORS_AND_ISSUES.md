@@ -50,23 +50,17 @@ This document tracks identified errors, configuration discrepancies, environment
 | **DB-03** | Environment Variables | Service startup crash if connection string or secrets are missing. | Strict boot validation halts execution on missing environment variables. | Systemd unit file must include `MIAUTRIX_DB_CONNECTION` and `ASPNETCORE_ENVIRONMENT=Production`. |
 | **DB-04** | Production Login 500 | `POST /api/v1/auth/login` returned HTTP 500 with `42703: column m.name does not exist` from `AuthService.AuthenticateAsync` line 87. | Production `mailboxes` schema was behind the EF model after `Mailbox.Name` was added; the migration existed in source but was not discovered/applied because generated migration metadata was incomplete. | **Fixed 2026-09-20**: added `20260920223000_AddMailboxName` and its designer metadata; applied to production via `scripts/update-prod-database.ps1`. Login confirmed working at `https://mail.miautrix.tech/admin`. |
 | **DB-05** | Migration Target Drift | Generic `dotnet ef database update` used local/dev configuration (`miautrix_dev`) instead of production. | EF startup configuration defaults were used when no explicit `--connection` was supplied. | **Fixed 2026-09-20**: production scripts require an explicit production connection/password, pass `--connection`, reject localhost/dev/test targets, and require confirmation. |
+| **DB-06** | Outbound queue misrouted as inbound | Webmail-sent mail to external domains (e.g. Gmail) sat stuck / dead-lettered with `Recipient mailbox not found`,  | `SmtpQueueItem.Direction` defaults to `Inbound` (`Entities.cs`), and the enqueue paths in `MessageService.SendMessageInternalAsync` and `SmtpQueueService.EnqueueMessageAsync` created the row without setting `Direction`. The outbound dispatcher requires `Direction == "Outbound"`, so the row fell to the inbound dispatcher, which dead-lettered external recipients with no local mailbox. | **Fixed 2026-10-05**: both enqueue sites now set `Direction = "Outbound"`. Build clean (`-warnaserror`). Existing already-queued external rows must be flipped with `UPDATE smtp_queue SET direction='Outbound', status='Pending', attempts=0, next_attempt_at=now() WHERE recipient LIKE '%@gmail.com' OR recipient LIKE '%@googlemail.com';` before redeploy. |
 
 ---
 
 ## 5. Items to Review & Verify Later
 
-- [ ] **Live Webmail Login Flow**: Test login screen behavior, invalid credentials handling, and session persistence at `https://mail.miautrix.tech`.
-- [ ] **Live Admin Console Navigation**: Test routing between Dashboard, Tenants, Mailboxes, Domains, Queue, Audit Logs, and Settings at `https://mail.miautrix.tech/admin`.
-- [ ] **Image & Icon Rendering**: Check that all SVG and PNG icons load cleanly in both dark and light modes.
-- [ ] **REST API / OpenAPI Endpoint**: Test `https://mail.miautrix.tech/openapi/v1.json` behind Cloudflare Tunnel.
-- [ ] **Database Connection Health**: Verify `systemctl status miautrix-mail` on the container to confirm active connection to PostgreSQL (`10.11.1.52`).
-- [x] **Production Mailbox Name Migration**: `20260920223000_AddMailboxName` applied to production on 2026-09-20 via `scripts/update-prod-database.ps1`; database updated and working.
-- [x] **Production Login Retest**: Login confirmed working at `https://mail.miautrix.tech/admin` against the migrated production schema.
-- [ ] **Shared Mailbox Live Flow**: Create a passwordless shared mailbox, verify no login identity is created, assign same-domain delegates, verify read delegate cannot mutate, and verify write delegate can mark/move/delete/send.
-- [ ] **IMAP LOGIN password verification**: Fixed 2026-09-21 — the handler no longer accepts any password. Verify live on port 993 with a wrong password (`a001 LOGIN "user@example.com" "wrong"`) returns `NO`.
-- [x] **Quarantine discarded filter retention**: Fixed 2026-09-23 — Discard updates status to `Discarded`; database rows and `.eml` artifacts are retained and visible through Admin Anti-Spam → Discarded.
-- [x] **Quarantine release delivery**: Fixed 2026-09-23 — Release queues real delivery with `[SPAM Supected-Released]` subject tag and worker anti-spam bypass for admin-released messages.
-- [x] **Deploy SSH diagnostics**: Fixed 2026-09-23 — upload script captures stderr/stdout around target directory preparation failures.
+- [x] **Queue Ownership Migration:** `20261005173819_AddSmtpQueueDirection` applied; migration classifies inbound/outbound per-recipient, resets stuck inbound rows, and adds required coverage index for dispatcher filtering.
+- [x] **Inbound Dispatcher Filtering:** `InboundQueueDispatcher` updated to filter only `Inbound` rows.
+- [x] **Outbound Dispatcher Filtering:** `OutboundQueueDispatcher` updated to filter only `Outbound` rows.
+- [x] **Ownership Regression Tests:** `QueueOwnershipTests` confirm inbound rows ignore outbound-dispatch pass, and outbound rows ignore inbound-mailbox lookup.
+
 
 ---
 

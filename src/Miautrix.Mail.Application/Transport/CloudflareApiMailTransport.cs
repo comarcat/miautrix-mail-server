@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using DomainEntity = Miautrix.Mail.Domain.Domain;
 using Miautrix.Mail.Domain;
 
@@ -39,11 +40,13 @@ public sealed class CloudflareApiMailTransport : IOutboundMailTransport, ICloudf
 
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly CloudflareEmailOptions _options;
+    private readonly ILogger<CloudflareApiMailTransport> _logger;
 
-    public CloudflareApiMailTransport(IHttpClientFactory httpClientFactory, CloudflareEmailOptions options)
+    public CloudflareApiMailTransport(IHttpClientFactory httpClientFactory, CloudflareEmailOptions options, ILogger<CloudflareApiMailTransport> logger)
     {
         _httpClientFactory = httpClientFactory;
         _options = options;
+        _logger = logger;
     }
 
     public string Mode => DomainTransportModes.Cloudflare;
@@ -91,15 +94,16 @@ public sealed class CloudflareApiMailTransport : IOutboundMailTransport, ICloudf
             };
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.ApiToken);
 
-            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseContentRead, ct);
 
-            if (response.IsSuccessStatusCode)
+            if (response.StatusCode == HttpStatusCode.OK || response.StatusCode == HttpStatusCode.Accepted)
             {
                 return TransportSendResult.Ok((int)response.StatusCode);
             }
 
-            // The Worker's body may echo the message, so only the status line is read. The queue
-            // screen shows last_error, and that must never carry message content.
+            var responseBody = await response.Content.ReadAsStringAsync(ct);
+            _logger.LogWarning("Cloudflare Worker rejected message (HTTP {StatusCode}): {ResponseBody}", (int)response.StatusCode, responseBody);
+
             return TransportSendResult.Fail(
                 $"Cloudflare Worker rejected the message with HTTP {(int)response.StatusCode}.",
                 (int)response.StatusCode);

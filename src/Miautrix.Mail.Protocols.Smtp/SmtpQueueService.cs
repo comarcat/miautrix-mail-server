@@ -24,6 +24,7 @@ public sealed class SmtpQueueService : ISmtpQueueService
             Sender = sender,
             Recipient = recipient,
             RawMessage = rawMessage,
+            Direction = "Outbound",
             Status = "Pending",
             Attempts = 0,
             NextAttemptAt = DateTimeOffset.UtcNow
