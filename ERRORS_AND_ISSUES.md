@@ -731,9 +731,48 @@ Reaching it proves the request passed Bearer authentication, media-type check, J
 | **Routing loop guard** | Cloudflare refuses a send whose recipient routes back into the same Worker; `@miautrix.tech` → `@miautrix.tech` can trip this. Test with an external recipient. |
 | **MIME header / envelope mismatch** | The Worker validates only the presence of a blank line; Cloudflare validates `From:`/`To:` headers against the envelope. |
 
-**Status.** Open, pending the `send_failed` log line. Deliberately not remediated by speculative multi-variable changes.
+**Status.** Resolved as a diagnosis — see §12.10. The leading hypothesis (unverified destination) was **wrong**; the destination was verified. The actual cause is an application defect, not Cloudflare configuration.
 
-**Scope note.** This is Cloudflare-side account configuration, not a defect in the Worker or origin code. The inbound path (the subject of MIA-91) is complete and verified; this blocks outbound send only.
+### 12.10 Defect: Inbound Messages Are Enqueued Into the Outbound Send Queue
+
+**Evidence.** Worker log line from the live stream, script version `c25a6e66-e25e-4e08-b564-5d0bcbfe5656`:
+
+```
+send_failed email from gmail.com not allowed because domain was not found
+```
+
+Operator-confirmed context: Email Routing destination address **Verified**; envelope sender `@gmail.com`; envelope recipient `@miautrix.tech`.
+
+**Immediate cause.** Cloudflare's `send_email` binding may only send *from* a domain on the account's own zones. `gmail.com` is not a zone on this account, so the platform refuses. This is correct anti-spoofing behaviour and **not a defect in Cloudflare or in the Worker**.
+
+**Real question.** A message from `@gmail.com` to `@miautrix.tech` is **inbound**. It should be received, stored in a mailbox, and go no further. No outbound send should ever be attempted. The `502` is a symptom of the wrong code path running at all.
+
+**Root cause — `SmtpQueue` serves as both inbound spool and outbound queue.**
+
+1. `InboundController.Cloudflare()` authenticates and confirms `IsDomainLocal(envelopeTo)` — correct, `@miautrix.tech` is local, relay correctly denied for anything else.
+2. It calls `_inboundHandler.HandleDataAsync(...)`.
+3. `SmtpInboundHandler.HandleDataAsync()` (`src/Miautrix.Mail.Protocols.Smtp/SmtpInboundHandler.cs:43`) re-checks locality, then calls `_queueManager.EnqueueAsync(...)` and returns `SmtpResponse.Queued`. The row lands in `SmtpQueue` with `Status = "Pending"`.
+4. `OutboundQueueDispatcher.DispatchBatchAsync()` (`src/Miautrix.Mail.Worker/OutboundQueueDispatcher.cs:175`) polls `SmtpQueue` for `Pending`/`Failed` rows, resolves the **recipient** domain against its Cloudflare `domainMap`, and calls `transport.SendAsync()` with `item.Sender` as the `from`.
+5. Because `@miautrix.tech` *is* a Cloudflare-enabled domain, `domainMap.TryGetValue(host)` succeeds and the dispatcher attempts an outbound send of an inbound message, with a `gmail.com` sender.
+6. Cloudflare refuses → Worker `502` → queue `last_error`.
+
+There is no direction discriminator on a `SmtpQueue` row. The dispatcher cannot distinguish "received, awaiting local delivery" from "composed locally, awaiting outbound send".
+
+**Aggravating detail.** The failure is *louder* precisely because the recipient domain is Cloudflare-enabled. An inbound message addressed to a local domain in `local` transport mode would be silently left `Pending` forever by the `else: recipient domain is not Cloudflare-enabled => leave Pending/Failed for retries` branch — the same defect, presenting as silent mail loss instead of a visible error.
+
+**Why the preceding fixes still stand.** §12.5–§12.7 were all genuine and all landed. The inbound chain works end to end: MX → Email Routing → Worker `email()` → allow-list → authenticated webhook → origin → persisted. Mail is **not lost**; it is in `SmtpQueue` accruing failed delivery attempts until it dead-letters. The defect is in what happens *after* successful receipt.
+
+**Remediation (out of MIA-91 scope — application architecture, owner Tabby, scope call Chief Roger).**
+
+1. Add a direction discriminator to the queue (e.g. `Direction` column, or separate inbound-spool and outbound-queue tables). This is a **data-model decision** and should be made deliberately, not patched.
+2. Filter `OutboundQueueDispatcher.DispatchBatchAsync()` to outbound rows only.
+3. Implement local mailbox delivery for inbound rows so received mail reaches `IMailStorage` / the mailbox tables.
+4. Decide the migration for rows already enqueued inbound (reprocess for local delivery vs discard).
+5. Add a regression test asserting that a message accepted by `InboundController` is **never** picked up by the outbound dispatcher — the gap that let this ship.
+
+**Guidance to the operator.** Do not manually retry the stuck queue row; it will hit the same `502` every attempt. The remediation task decides whether it is reprocessed or discarded.
+
+**MIA-91 scope assessment.** MIA-91 was scoped to configuring and verifying Cloudflare Email Routing. That work is complete and verified. §12.10 is a pre-existing application defect that this task's end-to-end testing *surfaced*; it is not a Cloudflare routing problem and not within this task's approved mutation boundary (no application-code changes).
 
 ### 12.8 Process Lesson: Layered Fail-Closed Guards Require Layered Diagnosis
 
