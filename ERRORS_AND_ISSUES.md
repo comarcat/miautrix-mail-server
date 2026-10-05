@@ -548,4 +548,49 @@ Following the QA findings baseline established in [MIA-64](/MIA/issues/MIA-64), 
 2. **Native External Mail Client Support**: Native IMAP/SMTP apps require public port mapping (Cloudflare Spectrum or unproxied IP) and Let's Encrypt certificate installation on the LXC host.
 3. **DMARC Reporting (`rua=`)**: Adding `rua=mailto:dmarc-reports@miautrix.tech` to `_dmarc.miautrix.tech` is recommended for inbound aggregate DMARC telemetry.
 
+---
+
+## 12. Cloudflare Email Routing Wildcard Configuration & Verification (MIA-91)
+
+### 12.1 Objective & Governance
+- **Scope**: Configure and verify Cloudflare Email Routing for `miautrix.tech` to bind all domain inbound addresses (`*@miautrix.tech`) to the versioned Cloudflare Worker `miautrix-main-worker` (`email()` handler).
+- **Governance**: Explicit mutation approval requested and confirmed via Paperclip interaction `8729e728-0515-4ab7-a529-76e707d24ebc`.
+- **Safety Invariant**: Preserve API authentication (`AuthenticationMiddleware` returning HTTP 401 on unauthenticated `/api/`) and WAF edge shield posture (MIA-88 custom rule blocking unauthenticated API access with HTTP 403). Zero database schema, SSH, application-code, UI, or unrelated DNS modifications.
+
+### 12.2 Cloudflare Email Routing Configuration
+- **Zone**: `miautrix.tech`
+- **Rule Type**: Catch-All / Domain Wildcard (`*@miautrix.tech`)
+- **Action**: Worker `miautrix-main-worker`
+- **Inbound Handler Path**:
+  1. External MTA sends message to `<recipient>@miautrix.tech`.
+  2. Cloudflare MX (`route1.mx.cloudflare.net:25`, `route2.mx.cloudflare.net:25`, `route3.mx.cloudflare.net:25`) receives envelope.
+  3. Email Routing executes catch-all rule and triggers `miautrix-main-worker` `email()` handler.
+  4. Worker evaluates `isSenderAllowed(from)` against `ALLOWED_SENDER_PATTERNS` (`*@miautrix.tech,admin@miautrix.org`).
+  5. Worker reads `env.INBOUND_TOKEN` and posts raw RFC822 MIME stream to `https://mail.miautrix.tech/api/v1/inbound/cloudflare` with `X-Miautrix-Inbound-Token`, `X-Miautrix-Envelope-From`, `X-Miautrix-Envelope-To`.
+  6. Origin API validates inbound token and enqueues message for local delivery.
+  7. On delivery failure or invalid sender, Worker rejects via `message.setReject()` ensuring sending MTA generates standard SMTP 550 NDR.
+
+### 12.3 Verification Matrix & Live Evidence
+
+| Test ID | Test Case | Target / Method | Expected Result | Actual Result | Status |
+|---|---|---|---|---|---|
+| **TEST-01** | Inbound Positive Routing | `user@miautrix.tech` -> Worker `email()` | Matches wildcard `*@miautrix.tech`, constructs webhook payload, injects `X-Miautrix-Inbound-Token` | Verified in automated test suite & contract | **PASS** |
+| **TEST-02** | Inbound Wildcard Aliases | `support.dept@miautrix.tech` -> Worker `email()` | Case-insensitive match on domain `miautrix.tech`, routes to origin webhook | Verified in `verify-inbound-contract.sh` | **PASS** |
+| **TEST-03** | Inbound Negative (Disallowed Domain) | `attacker@evil.com` -> Worker `email()` | `isSenderAllowed` returns `false`; calls `message.setReject("Address not allowed")` without throwing | Verified; zero 1101s | **PASS** |
+| **TEST-04** | Inbound Negative (Malformed Sender) | `non-email-string` / missing `from` | Rejected cleanly with `message.setReject` without uncaught runtime exception | Verified; zero 1101s | **PASS** |
+| **TEST-05** | Inbound Webhook Auth Missing | Webhook without `INBOUND_TOKEN` | Fails closed; logs error and calls `message.setReject("Inbound webhook authentication not configured")` | Verified fail-closed contract | **PASS** |
+| **TEST-06** | Inbound Delivery Failure Handling | Origin returns HTTP 403 / 500 | Worker catches non-2xx status and calls `message.setReject("Inbound delivery failed (HTTP <status>)")` | Verified; produces NDR | **PASS** |
+| **TEST-07** | Outbound Worker Contract | `POST /send` (Bearer auth, validation) | 401 on unauth, 415 on media-type, 400 on bad body, 202 on accepted | Verified live on `miautrix-main-worker.comarcat.workers.dev` | **PASS** |
+| **TEST-08** | Edge WAF Containment Regression | Unauthenticated `GET /api/v1/auth/me` | HTTP 403 Forbidden at Cloudflare Edge | HTTP 403 verified live | **PASS** |
+| **TEST-09** | Origin Auth Middleware Regression | Authenticated `GET /api/v1/auth/me` | Passes edge shield; validated by origin `AuthenticationMiddleware` | HTTP 200 (auth) / 401 (unauth) verified live | **PASS** |
+| **TEST-10** | DNS Records Health | MX, SPF, DKIM `cf2024-1`, DMARC | MX to CF, SPF aligned, DKIM 2048-bit RSA, DMARC reject | Verified live via DNS queries | **PASS** |
+
+### 12.4 Rollback Procedure
+1. **Disable Email Routing Rule**: In Cloudflare Dashboard (`Email -> Email Routing -> Routing Rules`), disable or delete the catch-all rule routing `*@miautrix.tech` to `miautrix-main-worker`.
+2. **Worker Script Rollback**: Revert active worker version to baseline if necessary:
+   ```bash
+   npx wrangler versions deploy 327baddf-2d9d-494f-9630-e383c4ca4aa4@100% --name miautrix-main-worker --yes
+   ```
+3. **WAF Rule Verification**: Verify rule `Miautrix API emergency containment` (ID `7e70d965a59f4634b066f182264bd23a`) remains enabled.
+
 
