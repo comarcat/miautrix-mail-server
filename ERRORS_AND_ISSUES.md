@@ -659,4 +659,62 @@ Values must be byte-identical; trailing newlines and stray whitespace are a comm
 
 **Expected outcomes after reconciliation.** `no bounce` = resolved. `HTTP 401` again = values still differ. `HTTP 403` = token correct but the MIA-88 edge WAF rule is intercepting the webhook path (would require a WAF exemption for `/api/v1/inbound/cloudflare`, which the MIA-88 expression already lists — re-verify if seen). `HTTP 503` = origin lost the variable; re-run Option B.
 
+**Outcome.** Resolved by the operator. The subsequent test message was accepted by the origin and persisted to the outbound queue, confirming the full inbound chain (MX → Email Routing → Worker `email()` → allow-list → authenticated webhook → origin `InboundController` → queue) now works end to end.
+
+### 12.7 Defect: Outbound Send Token Mismatch ("Cloudflare Worker rejected the message with HTTP 401")
+
+**Symptom.** With inbound working, the test message reached the server's outbound queue but its `last_error` read `Cloudflare Worker rejected the message with HTTP 401.`
+
+**This is a different leg.** The string is emitted only by `CloudflareApiMailTransport.cs:104`, on the **send** path. Its presence proves inbound succeeded — the message was received, accepted, and stored before any send was attempted.
+
+**The two-token model.** The external mail path uses two independent shared secrets in opposite directions. Conflating them was the source of repeated confusion during MIA-91:
+
+| Secret | Stored as | Presented as | Validated by | Direction |
+|---|---|---|---|---|
+| `INBOUND_TOKEN` | Cloudflare Worker secret | `X-Miautrix-Inbound-Token` header | origin `InboundController` vs env `MIAUTRIX_INBOUND_TOKEN` | Worker → origin (**inbound**) |
+| `SEND_TOKEN` | Cloudflare Worker secret | `Authorization: Bearer …` | Worker `authorize()` vs origin env `CLOUDFLARE_API_TOKEN` | origin → Worker (**outbound**) |
+
+Origin-side locations differ as well: `MIAUTRIX_INBOUND_TOKEN` lives in the systemd drop-in `/etc/systemd/system/miautrix-mail.service.d/10-miautrix-inbound.conf` (Web service), while `CLOUDFLARE_API_TOKEN` lives in `/opt/miautrix-mail/.env` (read by `CloudflareEmailOptions.FromEnvironment()`, consumed by the Worker service dispatcher).
+
+**Diagnosis.** Live read-only probes against `https://miautrix-main-worker.comarcat.workers.dev`:
+
+| Probe | Response |
+|---|---|
+| `GET /health` | **200** (Worker alive, current deployment healthy) |
+| `POST /send` with no `Authorization` header | **401** |
+| `POST /send` with a wrong Bearer token | **401** |
+
+`authorize()` returns **503** `send_disabled` when `SEND_TOKEN` is unset and **401** `unauthorized` when it is set but mismatched. The observed **401** proves `SEND_TOKEN` is configured on the Worker and differs from the origin's `CLOUDFLARE_API_TOKEN`.
+
+**Root cause.** The outbound pair was never reconciled. MIA-91 remediation attention went to the inbound pair; the outbound secrets have been divergent throughout. Configuration gap, not a code defect — both fail-closed guards behaved correctly and produced an accurate, non-content-bearing `last_error` (the Worker body is deliberately not echoed, per the comment at `CloudflareApiMailTransport.cs:101`).
+
+**Resolution (operator, mail host `10.11.1.51`).**
+- **Option A — adopt the origin's existing value.** `sudo sed -n 's/^CLOUDFLARE_API_TOKEN=//p' /opt/miautrix-mail/.env` and set the Cloudflare Worker secret `SEND_TOKEN` to that exact value. No restart required.
+- **Option B — push a value to the origin.** Place `CLOUDFLARE_API_TOKEN=<value>` in a root-only env file and run `sudo scripts/lxc-install-worker-env.sh --cloudflare-env-file <file>`. The script rewrites `/opt/miautrix-mail/.env` at `0640 root:<owner>`, preserves unmanaged variables, and restarts the services.
+
+Values must be byte-identical.
+
+**Secret handling.** Neither token value was requested, transmitted, or recorded in any issue comment or project document.
+
+**Expected outcomes after reconciliation.** Queue drains with no `last_error` = resolved. `HTTP 401` = values still differ. `HTTP 503` = `SEND_TOKEN` cleared on the Worker. `HTTP 400`/`413`/`415` = authentication fixed, failure has moved to payload validation (`POST /send` contract, see §12.3 TEST-07).
+
+### 12.8 Process Lesson: Layered Fail-Closed Guards Require Layered Diagnosis
+
+MIA-91 surfaced four distinct failures in sequence, each masked by the one in front of it:
+
+1. Inbound allow-list rejected all external senders (§12.5) — `Address not allowed`
+2. Repo/live Worker drift — the fix existed in git but was never deployed, and the branch was never pushed
+3. Inbound webhook token mismatch (§12.6) — `Inbound delivery failed (HTTP 401)`
+4. Outbound send token mismatch (§12.7) — `Cloudflare Worker rejected the message with HTTP 401.`
+
+Two practices made each step tractable and should be retained:
+
+- **Treat a changed error string as progress.** Each new message proved the previous layer had been fixed. The two `401`s were different failures in opposite directions and were distinguishable only by their source string and emitting file.
+- **Distinguish fail-closed states by status code.** Both guards separate "not configured" (`503`) from "configured but mismatched" (`401`). That distinction converted an ambiguous auth failure into a definitive statement about which side held which value, without ever reading a secret.
+
+Two gaps to close:
+
+- **Test suites can encode defects.** §12.3 TEST-03 recorded "rejects all external senders" as a PASS, so 14/14 green hid the primary defect. Assert intended *product* behaviour, not observed implementation behaviour.
+- **No end-to-end token reconciliation check exists.** Both mismatches would have been caught before a live test by a diagnostic that verifies each pair without printing values — e.g. comparing SHA-256 prefixes of the two sides, or a Worker `/health` echo of a non-reversible token fingerprint. Worth adding to `lxc-install-worker-env.sh` as a post-install verification step.
+
 
