@@ -175,7 +175,7 @@ public sealed class OutboundQueueDispatcher : BackgroundService
 
 
             var rows = await db.SmtpQueue
-                .Where(q => q.TenantId == tenantId && (q.Status == "Pending" || q.Status == "Failed") && q.NextAttemptAt <= now)
+                .Where(q => q.TenantId == tenantId && q.Direction == QueueDirection.Outbound && (q.Status == "Pending" || q.Status == "Failed") && q.NextAttemptAt <= now)
                 .OrderBy(q => q.NextAttemptAt)
                 .Take(BatchSize - totalProcessed)
                 .ToListAsync(ct);
@@ -189,7 +189,10 @@ public sealed class OutboundQueueDispatcher : BackgroundService
                 {
                     await DeliverAsync(queueManager, transport, row, config.Item1, config.Item2, ct);
                 }
-                // else: recipient domain is not Cloudflare-enabled => leave Pending/Failed for retries.
+                else if (primary != null)
+                {
+                    await DeliverAsync(queueManager, transport, row, primary.CloudflareWorkerUrl, primary.CloudflareZoneId, ct);
+                }
 
                 totalProcessed++;
                 if (totalProcessed >= BatchSize) break;

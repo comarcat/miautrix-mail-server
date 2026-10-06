@@ -66,7 +66,7 @@ public sealed class InboundQueueDispatcher : BackgroundService
         var storage = scope.ServiceProvider.GetRequiredService<IMailStorage>();
 
         var pendingItems = await db.SmtpQueue
-            .Where(q => q.Status == "Pending" && q.NextAttemptAt <= DateTimeOffset.UtcNow)
+            .Where(q => q.Direction == QueueDirection.Inbound && q.Status == "Pending" && q.NextAttemptAt <= DateTimeOffset.UtcNow)
             .OrderBy(q => q.CreatedAt)
             .Take(BatchSize)
             .ToListAsync(ct);

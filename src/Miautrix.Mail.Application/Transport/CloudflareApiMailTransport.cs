@@ -90,19 +90,44 @@ public sealed class CloudflareApiMailTransport : IOutboundMailTransport, ICloudf
                 Content = new StringContent(payload, Encoding.UTF8, "application/json")
             };
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.ApiToken);
-
-            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
-
-            if (response.IsSuccessStatusCode)
+            if (!string.IsNullOrWhiteSpace(_options.AccessClientId) &&
+                !string.IsNullOrWhiteSpace(_options.AccessClientSecret))
             {
-                return TransportSendResult.Ok((int)response.StatusCode);
+                request.Headers.TryAddWithoutValidation("CF-Access-Client-Id", _options.AccessClientId);
+                request.Headers.TryAddWithoutValidation("CF-Access-Client-Secret", _options.AccessClientSecret);
             }
 
-            // The Worker's body may echo the message, so only the status line is read. The queue
-            // screen shows last_error, and that must never carry message content.
+            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+            var responseCode = (int)response.StatusCode;
+            var contentType = response.Content.Headers.ContentType?.MediaType;
+
+            if (response.StatusCode == HttpStatusCode.Accepted &&
+                string.Equals(contentType, "application/json", StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    using var document = await JsonDocument.ParseAsync(
+                        await response.Content.ReadAsStreamAsync(ct),
+                        cancellationToken: ct);
+                    if (document.RootElement.ValueKind == JsonValueKind.Object &&
+                        document.RootElement.TryGetProperty("ok", out var ok) &&
+                        ok.ValueKind == JsonValueKind.True &&
+                        ok.GetBoolean())
+                    {
+                        return TransportSendResult.Ok(responseCode);
+                    }
+                }
+                catch (JsonException)
+                {
+                }
+            }
+
+            var reason = responseCode >= 300 && responseCode < 400
+                ? "redirected instead of reaching the Cloudflare Worker"
+                : $"returned HTTP {responseCode} with content type {contentType ?? "unknown"}";
             return TransportSendResult.Fail(
-                $"Cloudflare Worker rejected the message with HTTP {(int)response.StatusCode}.",
-                (int)response.StatusCode);
+                $"Cloudflare Worker {reason}; message was not confirmed as accepted.",
+                responseCode);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
@@ -143,6 +168,12 @@ public sealed class CloudflareApiMailTransport : IOutboundMailTransport, ICloudf
             if (_options.IsConfigured)
             {
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.ApiToken);
+            }
+            if (!string.IsNullOrWhiteSpace(_options.AccessClientId) &&
+                !string.IsNullOrWhiteSpace(_options.AccessClientSecret))
+            {
+                request.Headers.TryAddWithoutValidation("CF-Access-Client-Id", _options.AccessClientId);
+                request.Headers.TryAddWithoutValidation("CF-Access-Client-Secret", _options.AccessClientSecret);
             }
 
             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);

@@ -428,6 +428,11 @@ public class AppDbContext : DbContext
         ConfigureTenantScoped<SmtpQueueItem>(modelBuilder, "smtp_queue");
         modelBuilder.Entity<SmtpQueueItem>(entity =>
         {
+            entity.Property(e => e.Direction)
+                .HasColumnName("direction")
+                .HasConversion<string>()
+                .HasMaxLength(8)
+                .IsRequired();
             entity.Property(e => e.Sender).HasColumnName("sender").IsRequired();
             entity.Property(e => e.Recipient).HasColumnName("recipient").IsRequired();
             entity.Property(e => e.Subject).HasColumnName("subject");

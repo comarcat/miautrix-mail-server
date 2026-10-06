@@ -67,6 +67,8 @@ done
 
 cf_api_token=""
 cf_api_base=""
+cf_access_client_id=""
+cf_access_client_secret=""
 inbound_token=""
 
 if [[ -n "$CF_FILE" ]]; then
@@ -85,6 +87,8 @@ if [[ -n "$CF_FILE" ]]; then
         case "$name" in
             CLOUDFLARE_API_TOKEN)   cf_api_token="$value" ;;
             CLOUDFLARE_API_BASE)    cf_api_base="$value" ;;
+            CF_ACCESS_CLIENT_ID)    cf_access_client_id="$value" ;;
+            CF_ACCESS_CLIENT_SECRET) cf_access_client_secret="$value" ;;
             MIAUTRIX_INBOUND_TOKEN) inbound_token="$value" ;;
             *)
                 # A typo here would silently disarm the integration, so it is fatal.
@@ -106,6 +110,12 @@ fi
 # what is already on disk.
 if [[ -z "$cf_api_token" && -f "$ENV_FILE" ]]; then
     cf_api_token=$(sed -n 's/^CLOUDFLARE_API_TOKEN=//p' "$ENV_FILE" | tail -n1 || true)
+fi
+if [[ -z "$cf_access_client_id" && -f "$ENV_FILE" ]]; then
+    cf_access_client_id=$(sed -n 's/^CF_ACCESS_CLIENT_ID=//p' "$ENV_FILE" | tail -n1 || true)
+fi
+if [[ -z "$cf_access_client_secret" && -f "$ENV_FILE" ]]; then
+    cf_access_client_secret=$(sed -n 's/^CF_ACCESS_CLIENT_SECRET=//p' "$ENV_FILE" | tail -n1 || true)
 fi
 if [[ -z "$cf_api_base" && -f "$ENV_FILE" ]]; then
     cf_api_base=$(sed -n 's/^CLOUDFLARE_API_BASE=//p' "$ENV_FILE" | tail -n1 || true)
@@ -226,7 +236,7 @@ chmod 0600 "$tmp_env"
 
 # Preserve any variable the operator added that we do not manage.
 if [[ -f "$ENV_FILE" ]]; then
-    grep -v -E '^(MIAUTRIX_DB_CONNECTION|MIAUTRIX_STORAGE_DIR|MIAUTRIX_HOSTNAME|MIAUTRIX_TLS_CERT_PATH|MIAUTRIX_TLS_KEY_PATH|MIAUTRIX_CLAMAV_SOCKET|MIAUTRIX_CLAMAV_REQUIRED|MIAUTRIX_CLAMAV_SCAN_TIMEOUT_SECONDS|CLOUDFLARE_API_TOKEN|CLOUDFLARE_API_BASE)=' "$ENV_FILE" \
+    grep -v -E '^(MIAUTRIX_DB_CONNECTION|MIAUTRIX_STORAGE_DIR|MIAUTRIX_HOSTNAME|MIAUTRIX_TLS_CERT_PATH|MIAUTRIX_TLS_KEY_PATH|MIAUTRIX_CLAMAV_SOCKET|MIAUTRIX_CLAMAV_REQUIRED|MIAUTRIX_CLAMAV_SCAN_TIMEOUT_SECONDS|CLOUDFLARE_API_TOKEN|CLOUDFLARE_API_BASE|CF_ACCESS_CLIENT_ID|CF_ACCESS_CLIENT_SECRET)=' "$ENV_FILE" \
         | grep -v -E '^# Managed by lxc-install-worker-env.sh' \
         >> "$tmp_env" || true
 fi
@@ -249,6 +259,12 @@ fi
     if [[ -n "$cf_api_token" ]]; then
         echo "CLOUDFLARE_API_TOKEN=$cf_api_token"
         echo "CLOUDFLARE_API_BASE=${cf_api_base:-$CF_API_BASE_DEFAULT}"
+    fi
+    if [[ -n "$cf_access_client_id" ]]; then
+        echo "CF_ACCESS_CLIENT_ID=$cf_access_client_id"
+    fi
+    if [[ -n "$cf_access_client_secret" ]]; then
+        echo "CF_ACCESS_CLIENT_SECRET=$cf_access_client_secret"
     fi
 } >> "$tmp_env"
 

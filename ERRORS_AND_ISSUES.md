@@ -776,6 +776,16 @@ There is no direction discriminator on a `SmtpQueue` row. The dispatcher cannot 
 
 **MIA-91 scope assessment.** MIA-91 was scoped to configuring and verifying Cloudflare Email Routing. That work is complete and verified. §12.10 is a pre-existing application defect that this task's end-to-end testing *surfaced*; it is not a Cloudflare routing problem and not within this task's approved mutation boundary (no application-code changes).
 
+### 12.12 Resolved: Cloudflare Access Interception and False Outbound Delivery Success (MIA-92)
+
+**Symptom.** The queue recorded external mail as `Delivered` with HTTP 200, while Cloudflare showed no corresponding email delivery.
+
+**Root cause.** Cloudflare Access returned an HTTP 302 login redirect. The .NET client followed the redirect and interpreted the Access login page's HTTP 200 as a successful Worker send. Separately, the Worker `SEND_TOKEN` had diverged from the mail service bearer.
+
+**Fix.** The named Cloudflare HTTP client now disables automatic redirects; the transport accepts only HTTP 202 with JSON `{ "ok": true }`; Access service-token headers are loaded from bound runtime secrets; the Worker `SEND_TOKEN` was reconciled securely. Queue direction isolation and the primary Worker fallback were also deployed.
+
+**Verification.** Unauthenticated requests return HTTP 302; valid Service Auth `/health` returns HTTP 200; valid Service Auth with an invalid Worker bearer returns HTTP 401; an authenticated controlled send returns HTTP 202; queue `27be5443-d163-47c4-9140-e8636d78564e` was delivered and received by the external mailbox. No secret values were recorded.
+
 ### 12.8 Process Lesson: Layered Fail-Closed Guards Require Layered Diagnosis
 
 MIA-91 surfaced four distinct failures in sequence, each masked by the one in front of it:

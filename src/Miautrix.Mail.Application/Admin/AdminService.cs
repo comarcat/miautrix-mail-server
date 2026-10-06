@@ -1049,6 +1049,7 @@ public sealed class AdminService : IAdminService
             item.Sender,
             item.Recipient,
             item.RawMessage,
+            QueueDirection.Outbound,
             item.Subject,
             ct);
 
@@ -1086,6 +1087,7 @@ public sealed class AdminService : IAdminService
             item.Sender,
             item.Recipient,
             item.RawMessage,
+            QueueDirection.Outbound,
             item.Subject,
             ct);
 

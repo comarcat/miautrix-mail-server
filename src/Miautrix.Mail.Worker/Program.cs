@@ -117,7 +117,14 @@ var host = Host.CreateDefaultBuilder(args)
         // Outbound transports. Registered as a set and selected by Mode, so adding a provider is a
         // registration rather than a branch inside the dispatcher. Only "cloudflare" is present:
         // "local" has no delivery path yet, and its queued mail must keep behaving as it does today.
-        services.AddHttpClient();
+        services.AddHttpClient(nameof(CloudflareApiMailTransport), client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(30);
+        })
+        .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+        {
+            AllowAutoRedirect = false
+        });
         services.AddSingleton(CloudflareEmailOptions.FromEnvironment());
         services.AddSingleton<CloudflareApiMailTransport>();
         services.AddSingleton<IOutboundMailTransport>(

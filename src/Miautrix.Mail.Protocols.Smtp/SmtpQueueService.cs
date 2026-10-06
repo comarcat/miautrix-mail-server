@@ -21,6 +21,7 @@ public sealed class SmtpQueueService : ISmtpQueueService
         var queueItem = new SmtpQueueItem
         {
             TenantId = tenantId,
+            Direction = QueueDirection.Outbound,
             Sender = sender,
             Recipient = recipient,
             RawMessage = rawMessage,

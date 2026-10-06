@@ -304,8 +304,15 @@ public class MailFlowRule : TenantScopedEntityBase
     public string ActionsJson { get; set; } = "[]";
 }
 
+public enum QueueDirection
+{
+    Inbound,
+    Outbound
+}
+
 public class SmtpQueueItem : TenantScopedEntityBase
 {
+    public QueueDirection Direction { get; set; }
     public string Sender { get; set; } = string.Empty;
     public string Recipient { get; set; } = string.Empty;
     public string? Subject { get; set; }

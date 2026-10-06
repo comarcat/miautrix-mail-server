@@ -618,6 +618,7 @@ public sealed class MessageService : IMessageService
             {
                 Id = Guid.NewGuid(),
                 TenantId = tenantId,
+                Direction = QueueDirection.Outbound,
                 Sender = request.From,
                 Recipient = recipient,
                 Subject = request.Subject,

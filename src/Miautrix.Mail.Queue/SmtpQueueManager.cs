@@ -11,6 +11,7 @@ public interface ISmtpQueueManager
         string sender,
         string recipient,
         string rawMessage,
+        QueueDirection direction,
         string? subject = null,
         CancellationToken cancellationToken = default);
 
@@ -43,6 +44,7 @@ public sealed class SmtpQueueManager : ISmtpQueueManager
         string sender,
         string recipient,
         string rawMessage,
+        QueueDirection direction,
         string? subject = null,
         CancellationToken cancellationToken = default)
     {
@@ -50,6 +52,7 @@ public sealed class SmtpQueueManager : ISmtpQueueManager
         {
             Id = Guid.NewGuid(),
             TenantId = tenantId,
+            Direction = direction,
             Sender = sender,
             Recipient = recipient,
             Subject = subject,

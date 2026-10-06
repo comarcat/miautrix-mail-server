@@ -58,7 +58,7 @@
 
 .PARAMETER CloudflareEnvFile
     Local path to a file of Cloudflare settings for the optional Cloudflare transport, one
-    NAME=value per line: CLOUDFLARE_API_TOKEN, CLOUDFLARE_API_BASE, MIAUTRIX_INBOUND_TOKEN.
+    NAME=value per line: CLOUDFLARE_API_TOKEN, CLOUDFLARE_API_BASE, CF_ACCESS_CLIENT_ID, CF_ACCESS_CLIENT_SECRET, MIAUTRIX_INBOUND_TOKEN.
     Passed to lxc-install-worker-env.sh by path so no secret ever reaches argv (world-readable
     via ps, and captured in shell history), uploaded to /tmp, then deleted with the TLS
     staging directory. Requires -WorkerCert and -WorkerKey, since the env script installs TLS

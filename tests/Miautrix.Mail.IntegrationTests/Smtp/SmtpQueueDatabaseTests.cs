@@ -56,6 +56,7 @@ public class SmtpQueueDatabaseTests
             "sender@example.com",
             "recipient@example.com",
             "MIME message body",
+            QueueDirection.Outbound,
             "Test Subject");
 
         Assert.NotNull(queueItem);

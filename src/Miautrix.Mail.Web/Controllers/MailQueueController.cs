@@ -189,6 +189,7 @@ public sealed class MailQueueController : ControllerBase
     private static QueueItemDto ToDto(SmtpQueueItem item) => new(
         item.Id.ToString(),
         item.Id.ToString(),
+        item.Direction.ToString().ToLowerInvariant(),
         item.Sender,
         item.Recipient,
         System.Text.Encoding.UTF8.GetByteCount(item.RawMessage ?? string.Empty),

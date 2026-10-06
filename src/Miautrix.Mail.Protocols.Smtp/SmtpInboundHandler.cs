@@ -58,6 +58,7 @@ public sealed class SmtpInboundHandler : ISmtpInboundHandler
             sender,
             recipient,
             rawMessage,
+            QueueDirection.Inbound,
             subject,
             cancellationToken);
 

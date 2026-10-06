@@ -17,6 +17,7 @@ public class SmtpProtocolTests
             string sender,
             string recipient,
             string rawMessage,
+            QueueDirection direction,
             string? subject = null,
             CancellationToken cancellationToken = default)
         {
@@ -24,6 +25,7 @@ public class SmtpProtocolTests
             {
                 Id = Guid.NewGuid(),
                 TenantId = tenantId,
+                Direction = direction,
                 Sender = sender,
                 Recipient = recipient,
                 Subject = subject,

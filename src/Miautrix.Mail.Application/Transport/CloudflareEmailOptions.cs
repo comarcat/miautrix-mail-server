@@ -14,6 +14,10 @@ public sealed class CloudflareEmailOptions
 {
     public string? ApiToken { get; init; }
 
+    public string? AccessClientId { get; init; }
+
+    public string? AccessClientSecret { get; init; }
+
     public string ApiBase { get; init; } = "https://api.cloudflare.com/client/v4";
 
     public bool IsConfigured => !string.IsNullOrEmpty(ApiToken);
@@ -31,10 +35,14 @@ public sealed class CloudflareEmailOptions
     {
         var token = Environment.GetEnvironmentVariable("CLOUDFLARE_API_TOKEN");
         var apiBase = Environment.GetEnvironmentVariable("CLOUDFLARE_API_BASE");
+        var accessClientId = Environment.GetEnvironmentVariable("CF_ACCESS_CLIENT_ID");
+        var accessClientSecret = Environment.GetEnvironmentVariable("CF_ACCESS_CLIENT_SECRET");
 
         return new CloudflareEmailOptions
         {
             ApiToken = string.IsNullOrWhiteSpace(token) ? null : token.Trim(),
+            AccessClientId = string.IsNullOrWhiteSpace(accessClientId) ? null : accessClientId.Trim(),
+            AccessClientSecret = string.IsNullOrWhiteSpace(accessClientSecret) ? null : accessClientSecret.Trim(),
             ApiBase = string.IsNullOrWhiteSpace(apiBase)
                 ? "https://api.cloudflare.com/client/v4"
                 : apiBase.Trim().TrimEnd('/')
