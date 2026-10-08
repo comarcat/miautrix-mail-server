@@ -1291,6 +1291,11 @@ namespace Miautrix.Mail.Persistence.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("attempts");
 
+                    b.Property<string>("Direction")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("direction");
+
                     b.Property<DateTimeOffset?>("LastAttemptAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("last_attempt_at");
@@ -1326,6 +1331,8 @@ namespace Miautrix.Mail.Persistence.Migrations
                     b.Property<string>("Subject")
                         .HasColumnType("text")
                         .HasColumnName("subject");
+
+                    b.HasIndex("TenantId", "Direction", "Status", "NextAttemptAt");
 
                     b.ToTable("smtp_queue", (string)null);
                 });

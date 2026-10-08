@@ -3,6 +3,7 @@ export interface QueueItem {
   message_id: string;
   sender: string;
   recipient: string;
+  direction: 'Inbound' | 'Outbound';
   size_bytes: number;
   status: 'queued' | 'retrying' | 'dead_letter' | 'delivered';
   attempts: number;
@@ -26,6 +27,7 @@ export interface QueueQueryParams {
   cursor?: string | null;
   limit?: number;
   status?: string;
+  direction?: string;
   search?: string;
   start_at?: string;
   end_at?: string;

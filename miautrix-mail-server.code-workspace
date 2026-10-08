@@ -1,0 +1,17 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"sshfs.configs": [
+			{
+				"name": "omniroute-srv",
+				"host": "10.11.1.251",
+				"username": "root",
+				"password": "Mi@usito#2030"
+			}
+		]
+	}
+}

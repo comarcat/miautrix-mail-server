@@ -9,6 +9,7 @@ const makeItem = (overrides: Partial<QueueItem> = {}): QueueItem => ({
   message_id: 'msg-1',
   sender: 'alice@example.com',
   recipient: 'bob@example.com',
+  direction: 'Outbound',
   size_bytes: 2048,
   status: 'queued',
   attempts: 2,

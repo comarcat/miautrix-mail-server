@@ -1,0 +1,35 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  Miautrix.Mail.Domain -> C:\Users\miauadmin\OneDrive\Documentos\GitHub\miautrix-mail-server\src\Miautrix.Mail.Domain\bin\Debug\net10.0\Miautrix.Mail.Domain.dll
+  Miautrix.Mail.AntiMalware -> C:\Users\miauadmin\OneDrive\Documentos\GitHub\miautrix-mail-server\src\Miautrix.Mail.AntiMalware\bin\Debug\net10.0\Miautrix.Mail.AntiMalware.dll
+  Miautrix.Mail.Storage -> C:\Users\miauadmin\OneDrive\Documentos\GitHub\miautrix-mail-server\src\Miautrix.Mail.Storage\bin\Debug\net10.0\Miautrix.Mail.Storage.dll
+  Miautrix.Mail.Identity -> C:\Users\miauadmin\OneDrive\Documentos\GitHub\miautrix-mail-server\src\Miautrix.Mail.Identity\bin\Debug\net10.0\Miautrix.Mail.Identity.dll
+  Miautrix.Mail.Security -> C:\Users\miauadmin\OneDrive\Documentos\GitHub\miautrix-mail-server\src\Miautrix.Mail.Security\bin\Debug\net10.0\Miautrix.Mail.Security.dll
+  Miautrix.Mail.Persistence -> C:\Users\miauadmin\OneDrive\Documentos\GitHub\miautrix-mail-server\src\Miautrix.Mail.Persistence\bin\Debug\net10.0\Miautrix.Mail.Persistence.dll
+  Miautrix.Mail.MailFlow -> C:\Users\miauadmin\OneDrive\Documentos\GitHub\miautrix-mail-server\src\Miautrix.Mail.MailFlow\bin\Debug\net10.0\Miautrix.Mail.MailFlow.dll
+  Miautrix.Mail.Queue -> C:\Users\miauadmin\OneDrive\Documentos\GitHub\miautrix-mail-server\src\Miautrix.Mail.Queue\bin\Debug\net10.0\Miautrix.Mail.Queue.dll
+  Miautrix.Mail.Infrastructure -> C:\Users\miauadmin\OneDrive\Documentos\GitHub\miautrix-mail-server\src\Miautrix.Mail.Infrastructure\bin\Debug\net10.0\Miautrix.Mail.Infrastructure.dll
+  Miautrix.Mail.Protocols.Imap -> C:\Users\miauadmin\OneDrive\Documentos\GitHub\miautrix-mail-server\src\Miautrix.Mail.Protocols.Imap\bin\Debug\net10.0\Miautrix.Mail.Protocols.Imap.dll
+  Miautrix.Mail.Search -> C:\Users\miauadmin\OneDrive\Documentos\GitHub\miautrix-mail-server\src\Miautrix.Mail.Search\bin\Debug\net10.0\Miautrix.Mail.Search.dll
+  Miautrix.Mail.Protocols.Sieve -> C:\Users\miauadmin\OneDrive\Documentos\GitHub\miautrix-mail-server\src\Miautrix.Mail.Protocols.Sieve\bin\Debug\net10.0\Miautrix.Mail.Protocols.Sieve.dll
+  Miautrix.Mail.Licensing -> C:\Users\miauadmin\OneDrive\Documentos\GitHub\miautrix-mail-server\src\Miautrix.Mail.Licensing\bin\Debug\net10.0\Miautrix.Mail.Licensing.dll
+  Miautrix.Mail.Application -> C:\Users\miauadmin\OneDrive\Documentos\GitHub\miautrix-mail-server\src\Miautrix.Mail.Application\bin\Debug\net10.0\Miautrix.Mail.Application.dll
+  Miautrix.Mail.Protocols.Smtp -> C:\Users\miauadmin\OneDrive\Documentos\GitHub\miautrix-mail-server\src\Miautrix.Mail.Protocols.Smtp\bin\Debug\net10.0\Miautrix.Mail.Protocols.Smtp.dll
+  Miautrix.Mail.Cli -> C:\Users\miauadmin\OneDrive\Documentos\GitHub\miautrix-mail-server\src\Miautrix.Mail.Cli\bin\Debug\net10.0\Miautrix.Mail.Cli.dll
+  Miautrix.Mail.AntiSpam -> C:\Users\miauadmin\OneDrive\Documentos\GitHub\miautrix-mail-server\src\Miautrix.Mail.AntiSpam\bin\Debug\net10.0\Miautrix.Mail.AntiSpam.dll
+  Miautrix.Mail.Web -> C:\Users\miauadmin\OneDrive\Documentos\GitHub\miautrix-mail-server\src\Miautrix.Mail.Web\bin\Debug\net10.0\Miautrix.Mail.Web.dll
+  Miautrix.Mail.Worker -> C:\Users\miauadmin\OneDrive\Documentos\GitHub\miautrix-mail-server\src\Miautrix.Mail.Worker\bin\Debug\net10.0\Miautrix.Mail.Worker.dll
+  Miautrix.Mail.IntegrationTests -> C:\Users\miauadmin\OneDrive\Documentos\GitHub\miautrix-mail-server\tests\Miautrix.Mail.IntegrationTests\bin\Debug\net10.0\Miautrix.Mail.IntegrationTests.dll
+Test run for C:\Users\miauadmin\OneDrive\Documentos\GitHub\miautrix-mail-server\tests\Miautrix.Mail.IntegrationTests\bin\Debug\net10.0\Miautrix.Mail.IntegrationTests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:01.90]     Miautrix.Mail.IntegrationTests.Calendar.CalendarServiceAccountTests.Updating_a_meeting_keeps_the_room_accepted_and_moves_the_mirror [FAIL]
+  Failed Miautrix.Mail.IntegrationTests.Calendar.CalendarServiceAccountTests.Updating_a_meeting_keeps_the_room_accepted_and_moves_the_mirror [1 s]
+  Error Message:
+   Expected 201 Created but got 500 InternalServerError. Body: {"error":{"code":"server_error","message":"An unexpected error occurred.","request_id":"00-a89b3c6b20567f3f5de4e0fe701eddaf-268bd30c5cc19fa7-00"}}
+  Stack Trace:
+     at Miautrix.Mail.IntegrationTests.Calendar.CalendarTestHelpers.AssertStatusAsync(HttpResponseMessage response, HttpStatusCode expected) in C:\Users\miauadmin\OneDrive\Documentos\GitHub\miautrix-mail-server\tests\Miautrix.Mail.IntegrationTests\Calendar\CalendarTestHelpers.cs:line 474
+   at Miautrix.Mail.IntegrationTests.Calendar.CalendarServiceAccountTests.Updating_a_meeting_keeps_the_room_accepted_and_moves_the_mirror() in C:\Users\miauadmin\OneDrive\Documentos\GitHub\miautrix-mail-server\tests\Miautrix.Mail.IntegrationTests\Calendar\CalendarServiceAccountTests.cs:line 118
+   at Miautrix.Mail.IntegrationTests.Calendar.CalendarServiceAccountTests.Updating_a_meeting_keeps_the_room_accepted_and_moves_the_mirror() in C:\Users\miauadmin\OneDrive\Documentos\GitHub\miautrix-mail-server\tests\Miautrix.Mail.IntegrationTests\Calendar\CalendarServiceAccountTests.cs:line 157
+--- End of stack trace from previous location ---
+
+Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 1 s - Miautrix.Mail.IntegrationTests.dll (net10.0)

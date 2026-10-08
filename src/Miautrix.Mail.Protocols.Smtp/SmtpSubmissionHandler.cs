@@ -79,6 +79,7 @@ public sealed class SmtpSubmissionHandler : ISmtpSubmissionHandler
             sender,
             recipient,
             rawMessage,
+            "Outbound",
             subject,
             cancellationToken);
 

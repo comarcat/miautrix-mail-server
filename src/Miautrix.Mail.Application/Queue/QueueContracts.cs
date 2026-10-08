@@ -23,7 +23,8 @@ public sealed record QueueFilter(
     string? Cursor,
     DateTimeOffset? StartAt,
     DateTimeOffset? EndAt,
-    string? Domain);
+    string? Domain,
+    string? Direction);
 
 /// <summary>One page of queue items plus the cursor to fetch the next page.</summary>
 public sealed record QueuePage(

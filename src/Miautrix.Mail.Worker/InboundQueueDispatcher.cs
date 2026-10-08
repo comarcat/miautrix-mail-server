@@ -66,7 +66,7 @@ public sealed class InboundQueueDispatcher : BackgroundService
         var storage = scope.ServiceProvider.GetRequiredService<IMailStorage>();
 
         var pendingItems = await db.SmtpQueue
-            .Where(q => q.Status == "Pending" && q.NextAttemptAt <= DateTimeOffset.UtcNow)
+            .Where(q => q.Direction == "Inbound" && q.Status == "Pending" && q.NextAttemptAt <= DateTimeOffset.UtcNow)
             .OrderBy(q => q.CreatedAt)
             .Take(BatchSize)
             .ToListAsync(ct);
@@ -228,12 +228,18 @@ public sealed class InboundQueueDispatcher : BackgroundService
 
         if (mailbox == null)
         {
+            var allTenantMailboxes = await db.Mailboxes
+                .Where(m => m.TenantId == item.TenantId)
+                .Select(m => m.Address)
+                .ToListAsync(ct);
             _logger.LogWarning(
-                "No mailbox found for recipient {Recipient} in tenant {TenantId}",
+                "No mailbox found for recipient {Recipient} in tenant {TenantId}. Searching for address: {Address}. Available mailboxes in tenant: {Addresses}",
                 item.Recipient,
-                item.TenantId);
+                item.TenantId,
+                recipient,
+                string.Join(", ", allTenantMailboxes));
             item.Status = "DeadLetter";
-            item.LastError = "Recipient mailbox not found.";
+            item.LastError = $"Recipient mailbox not found: {item.Recipient}";
             item.UpdatedAt = DateTimeOffset.UtcNow;
             return;
         }
@@ -300,7 +306,7 @@ public sealed class InboundQueueDispatcher : BackgroundService
             Sender = item.Sender,
             Recipient = item.Recipient,
             Subject = subject,
-            Date = parsed.Date ?? DateTimeOffset.UtcNow,
+            Date = parsed.Date?.ToUniversalTime() ?? DateTimeOffset.UtcNow,
             ContentHash = storageResult.ContentHash,
             StoragePath = storageResult.StoragePath,
             SizeBytes = storageResult.SizeBytes,

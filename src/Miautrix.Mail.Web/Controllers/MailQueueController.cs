@@ -38,6 +38,7 @@ public sealed class MailQueueController : ControllerBase
         [FromQuery(Name = "start_at")] string? startAt = null,
         [FromQuery(Name = "end_at")] string? endAt = null,
         [FromQuery] string? domain = null,
+        [FromQuery] string? direction = null,
         CancellationToken cancellationToken = default)
     {
         QueueStatusFilter? statusFilter = null;
@@ -83,7 +84,24 @@ public sealed class MailQueueController : ControllerBase
                 new Dictionary<string, string[]> { ["end_at"] = [$"Received '{endAt}'."] });
         }
 
-        var filter = new QueueFilter(statusFilter, search, limit, cursor, parsedStartAt, parsedEndAt, domain);
+        if (!string.IsNullOrWhiteSpace(direction) &&
+            !string.Equals(direction, "all", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(direction, "Inbound", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(direction, "Outbound", StringComparison.OrdinalIgnoreCase))
+        {
+            return ApiResults.Error(
+                HttpContext,
+                StatusCodes.Status422UnprocessableEntity,
+                "validation_failed",
+                "Query parameter 'direction' must be one of: all, Inbound, Outbound.",
+                new Dictionary<string, string[]> { ["direction"] = [$"Received '{direction}'."] });
+        }
+
+        var directionFilter = string.IsNullOrWhiteSpace(direction) || string.Equals(direction, "all", StringComparison.OrdinalIgnoreCase)
+            ? null
+            : direction[..1].ToUpperInvariant() + direction[1..].ToLowerInvariant();
+
+        var filter = new QueueFilter(statusFilter, search, limit, cursor, parsedStartAt, parsedEndAt, domain, directionFilter);
         var page = await _queueService.ListAsync(
             _contextAccessor.CurrentTenantId,
             _contextAccessor.CurrentUserId,
@@ -191,6 +209,7 @@ public sealed class MailQueueController : ControllerBase
         item.Id.ToString(),
         item.Sender,
         item.Recipient,
+        item.Direction,
         System.Text.Encoding.UTF8.GetByteCount(item.RawMessage ?? string.Empty),
         ToWireStatus(item.Status),
         item.Attempts,

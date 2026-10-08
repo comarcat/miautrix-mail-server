@@ -1,0 +1,55 @@
+
+$env:SMTP_HOST="10.11.1.51"
+$env:SMTP_PORT="587"
+$env:SMTP_USERNAME="admin@miautrix.tech"
+$env:SMTP_PASSWORD="Mi@usito#2030"      # not echoed/logged
+$env:SMTP_FROM=$env:SMTP_USERNAME   # optional
+$env:TEST_SUBJECT="[miautrix] ZIP attachment empty.txt test"   # optional
+$env:SMTP_SKIP_TLS_VERIFY="true"
+.\scripts\inject-flow-mail-test.ps1 -ToAddress "cristobal@miautrix.tech"
+
+
+
+1. Strict TLS 1.3 Preferred
+2. DANE DNSSEC Inbound & Outbound Validation
+3. Mandatory Two-Factor Authentication
+
+
+Pick one:
+1. Quarantine UI ↔ API data correctness (fields/filters/status values: quarantined/released/discarded etc.)
+2. Spam scoring behavior review (threshold semantics, what inputs are actually available in InboundMailContext, etc.)
+3. Auth/tenant isolation audit specifically for quarantine endpoints and UI flows
+
+
+Mi@usito#2030
+
+
+- From (sender): admin@miautrix.org
+- To (recipient): cristobal@miautrix.tech
+- Protocol: local SMTP (so we’ll set SMTP_HOST/SMTP_PORT to your local listener)
+
+
+$env:SMTP_FROM="admin@miautrix.org"
+
+$env:SMTP_HOST="10.11.1.51"   # e.g. 127.0.0.1 or your server name
+$env:SMTP_PORT="587"               # use your local SMTP submission/starttls port
+$env:SMTP_USERNAME="admin@miautrix.org"
+$env:SMTP_PASSWORD="Mi@usito#2030"
+
+.\scripts\inject-antispam-spam-test.ps1 -ToAddress "cristobal@miautrix.tech"
+
+ host 10.11.1.52, db miautrix-mail-pro, username mmdb-user
+
+$env:MIAUTRIX_DB_CONNECTION = "Host=10.11.1.52;Port=5432;Database='miautrix-mail-pro';Username='mmdb-user';Password='Mi@usito#2026!';"
+.\scripts\deploy-compile-upload.ps1
+
+
+- Skip tests: -SkipTests -SkipMigrations
+- Skip building React frontends: -SkipFrontends
+- Skip EF migrations: -SkipMigrations
+
+
+
+$env:MIAUTRIX_DB_CONNECTION = "Host=10.11.1.52;Port=5432;Database=miautrix-mail-dev;Username=mmdb-user;Password=TrCPINuQpPm0lIOTdv1gSzPIpZRkQr7k"
+.\scripts\deploy-compile-upload.ps1 -TargetIp 10.11.1.51 -TargetUser root
+

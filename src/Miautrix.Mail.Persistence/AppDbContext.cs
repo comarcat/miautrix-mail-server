@@ -432,11 +432,13 @@ public class AppDbContext : DbContext
             entity.Property(e => e.Recipient).HasColumnName("recipient").IsRequired();
             entity.Property(e => e.Subject).HasColumnName("subject");
             entity.Property(e => e.RawMessage).HasColumnName("raw_message").IsRequired();
+            entity.Property(e => e.Direction).HasColumnName("direction").IsRequired();
             entity.Property(e => e.Status).HasColumnName("status").IsRequired();
             entity.Property(e => e.Attempts).HasColumnName("attempts");
             entity.Property(e => e.NextAttemptAt).HasColumnName("next_attempt_at");
             entity.Property(e => e.LastAttemptAt).HasColumnName("last_attempt_at");
             entity.Property(e => e.LastError).HasColumnName("last_error");
+            entity.HasIndex(e => new { e.TenantId, e.Direction, e.Status, e.NextAttemptAt });
         });
 
         ConfigureTenantScoped<SmtpDeliveryAttempt>(modelBuilder, "smtp_delivery_attempts");

@@ -54,6 +54,12 @@ public sealed class MailQueueService : IMailQueueService
             }
         }
 
+        if (!string.IsNullOrWhiteSpace(filter.Direction) && !string.Equals(filter.Direction, "all", StringComparison.OrdinalIgnoreCase))
+        {
+            var direction = filter.Direction.Trim();
+            query = query.Where(q => q.Direction == direction);
+        }
+
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
             var term = filter.Search.Trim();

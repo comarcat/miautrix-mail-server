@@ -16,6 +16,7 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({
 }) => {
   const [items, setItems] = useState<QueueItem[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [directionFilter, setDirectionFilter] = useState<string>('all');
   const [searchInput, setSearchInput] = useState<string>('');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
@@ -39,6 +40,7 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({
       cursor: string | null,
       status: string,
       search: string,
+      direction: string,
       fromDate: string,
       toDate: string,
     ) => {
@@ -52,6 +54,7 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({
           limit: pageSize,
           cursor: cursor || undefined,
           status: status !== 'all' ? status : undefined,
+          direction: direction !== 'all' ? direction : undefined,
           search: search.trim() || undefined,
           start_at: toStartAt(fromDate),
           end_at: toEndAt(toDate),
@@ -73,12 +76,13 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({
   );
 
   useEffect(() => {
-    fetchQueuePage(currentCursor, statusFilter, activeSearch, startDate, endDate);
+    fetchQueuePage(currentCursor, statusFilter, activeSearch, directionFilter, startDate, endDate);
   }, [
     fetchQueuePage,
     currentCursor,
     statusFilter,
     activeSearch,
+    directionFilter,
     startDate,
     endDate,
   ]);
@@ -91,6 +95,12 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({
 
   const handleStatusChange = (status: string) => {
     setStatusFilter(status);
+    setCurrentCursor(null);
+    setCursorHistory([]);
+  };
+
+  const handleDirectionChange = (direction: string) => {
+    setDirectionFilter(direction);
     setCurrentCursor(null);
     setCursorHistory([]);
   };
@@ -123,7 +133,7 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({
     try {
       const res = await client.retryQueueItem(id, 'Manual retry from Admin UI');
       setActionMessage(res.message || 'Queued for immediate retry');
-      fetchQueuePage(currentCursor, statusFilter, activeSearch, startDate, endDate);
+      fetchQueuePage(currentCursor, statusFilter, activeSearch, directionFilter, startDate, endDate);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Retry failed');
     }
@@ -144,7 +154,7 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({
       setActionMessage('Queue item reassigned; persistence will re-deliver.');
       setSelectedItem(null);
       setReassignAddress('');
-      fetchQueuePage(currentCursor, statusFilter, activeSearch, startDate, endDate);
+      fetchQueuePage(currentCursor, statusFilter, activeSearch, directionFilter, startDate, endDate);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Reassign failed');
     } finally {
@@ -157,7 +167,7 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({
     try {
       await client.deleteQueueItem(id);
       setActionMessage('Message removed from queue');
-      fetchQueuePage(currentCursor, statusFilter, activeSearch, startDate, endDate);
+      fetchQueuePage(currentCursor, statusFilter, activeSearch, directionFilter, startDate, endDate);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Delete failed');
     }
@@ -199,7 +209,7 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({
           <button
             className="btn btn-secondary"
             onClick={() =>
-              fetchQueuePage(currentCursor, statusFilter, activeSearch, startDate, endDate)
+              fetchQueuePage(currentCursor, statusFilter, activeSearch, directionFilter, startDate, endDate)
             }
             title="Refresh queue view"
           >
@@ -240,6 +250,21 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({
               {status === 'all'
                 ? 'All Messages'
                 : status.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
+            </button>
+          ))}
+        </div>
+
+        <div className="chip-group" role="tablist" aria-label="Queue direction filter">
+          {['all', 'Inbound', 'Outbound'].map((direction) => (
+            <button
+              key={direction}
+              role="tab"
+              aria-selected={directionFilter === direction}
+              className={`chip ${directionFilter === direction ? 'chip-active' : ''}`}
+              onClick={() => handleDirectionChange(direction)}
+              data-testid={`filter-direction-${direction.toLowerCase()}`}
+            >
+              {direction === 'all' ? 'All Directions' : direction}
             </button>
           ))}
         </div>
@@ -309,6 +334,7 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({
               <thead>
                 <tr>
                   <th>Status</th>
+                  <th>Direction</th>
                   <th>Recipient</th>
                   <th>Sender</th>
                   <th>Attempts</th>
@@ -325,6 +351,9 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({
                       <span className={`badge ${getStatusBadgeClass(item.status)}`}>
                         {item.status.replace('_', ' ')}
                       </span>
+                    </td>
+                    <td>
+                      <span className="badge badge-neutral">{item.direction}</span>
                     </td>
                     <td className="cell-emphasis cell-mono">{item.recipient}</td>
                     <td className="cell-dim cell-mono">{item.sender}</td>
@@ -428,6 +457,10 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({
                 <span className={`badge ${getStatusBadgeClass(selectedItem.status)}`}>
                   {selectedItem.status}
                 </span>
+              </div>
+              <div className="detail-row">
+                <span className="detail-label">Direction:</span>
+                <span className="badge badge-neutral">{selectedItem.direction}</span>
               </div>
               <div className="detail-row">
                 <span className="detail-label">Attempts:</span>

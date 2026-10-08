@@ -1,0 +1,171 @@
+[
+  {
+    "id": "E1-T1",
+    "title": "Disable outbound dispatcher temporarily",
+    "epic": "01-queue-ownership",
+    "dependencies": [],
+    "priority": "p0",
+    "acceptance": [
+      "WHEN the worker application starts during mitigation THE SYSTEM SHALL not register OutboundQueueDispatcher as a hosted service.",
+      "WHEN the solution builds THE SYSTEM SHALL compile with zero warnings treated as errors."
+    ],
+    "verify": [
+      "dotnet build Miautrix.Mail.sln -warnaserror"
+    ],
+    "checkpoint": "step-01-disable-outbound-dispatcher",
+    "files": [
+      "src/Miautrix.Mail.Worker/Program.cs"
+    ],
+    "status": "done"
+  },
+  {
+    "id": "E1-T2",
+    "title": "Add queue direction schema",
+    "epic": "01-queue-ownership",
+    "dependencies": ["E1-T1"],
+    "priority": "p0",
+    "acceptance": [
+      "WHEN EF Core maps SmtpQueueItem THE SYSTEM SHALL persist a required direction column on smtp_queue.",
+      "WHEN workers poll smtp_queue THE SYSTEM SHALL have an index covering tenant_id, direction, status, and next_attempt_at."
+    ],
+    "verify": [
+      "dotnet build Miautrix.Mail.sln -warnaserror"
+    ],
+    "checkpoint": "step-02-add-queue-direction-schema",
+    "files": [
+      "src/Miautrix.Mail.Domain/Entities.cs",
+      "src/Miautrix.Mail.Persistence/AppDbContext.cs",
+      "src/Miautrix.Mail.Persistence/Migrations/*QueueDirection*"
+    ],
+    "status": "done"
+  },
+  {
+    "id": "E1-T3",
+    "title": "Backfill existing queue rows",
+    "epic": "01-queue-ownership",
+    "dependencies": ["E1-T2"],
+    "priority": "p0",
+    "acceptance": [
+      "WHEN the migration runs THE SYSTEM SHALL classify existing local-recipient queue rows as Inbound and external-recipient queue rows as Outbound.",
+      "WHEN stuck inbound rows contain Cloudflare outbound send failures THE SYSTEM SHALL reset those rows to Pending with attempts cleared."
+    ],
+    "verify": [
+      "dotnet ef migrations list --project src/Miautrix.Mail.Persistence --startup-project src/Miautrix.Mail.Web",
+      "dotnet build Miautrix.Mail.sln -warnaserror"
+    ],
+    "checkpoint": "step-03-backfill-queue-direction",
+    "files": [
+      "src/Miautrix.Mail.Persistence/Migrations/*QueueDirection*"
+    ],
+    "status": "done"
+  },
+  {
+    "id": "E2-T1",
+    "title": "Require explicit enqueue direction",
+    "epic": "02-enqueue-contract",
+    "dependencies": ["E1-T2"],
+    "priority": "p0",
+    "acceptance": [
+      "WHEN any code calls EnqueueAsync THE SYSTEM SHALL require an explicit Inbound or Outbound direction argument.",
+      "WHEN source is searched for EnqueueAsync THE SYSTEM SHALL show no production call site missing the direction argument."
+    ],
+    "verify": [
+      "dotnet build Miautrix.Mail.sln -warnaserror"
+    ],
+    "checkpoint": "step-04-explicit-enqueue-direction",
+    "files": [
+      "src/Miautrix.Mail.Queue/SmtpQueueManager.cs",
+      "src/Miautrix.Mail.Protocols.Smtp/SmtpInboundHandler.cs",
+      "src/Miautrix.Mail.Protocols.Smtp/SmtpSubmissionHandler.cs",
+      "src/Miautrix.Mail.Application/Admin/AdminService.cs",
+      "tests/**/*.cs"
+    ],
+    "status": "done"
+  },
+  {
+    "id": "E3-T1",
+    "title": "Filter workers by queue direction",
+    "epic": "03-worker-dispatch",
+    "dependencies": ["E1-T3", "E2-T1"],
+    "priority": "p0",
+    "acceptance": [
+      "WHEN InboundQueueDispatcher polls smtp_queue THE SYSTEM SHALL select only rows whose direction is Inbound.",
+      "WHEN OutboundQueueDispatcher polls smtp_queue THE SYSTEM SHALL select only rows whose direction is Outbound.",
+      "WHEN the worker application starts after the full fix THE SYSTEM SHALL register both inbound and outbound dispatchers."
+    ],
+    "verify": [
+      "dotnet build Miautrix.Mail.sln -warnaserror"
+    ],
+    "checkpoint": "step-05-filter-workers-by-direction",
+    "files": [
+      "src/Miautrix.Mail.Worker/InboundQueueDispatcher.cs",
+      "src/Miautrix.Mail.Worker/OutboundQueueDispatcher.cs",
+      "src/Miautrix.Mail.Worker/Program.cs"
+    ],
+    "status": "done"
+  },
+  {
+    "id": "E4-T1",
+    "title": "Expose direction in admin queue",
+    "epic": "04-admin-visibility",
+    "dependencies": ["E1-T2"],
+    "priority": "p1",
+    "acceptance": [
+      "WHEN MailQueueController returns queue rows THE SYSTEM SHALL include the row direction in the response.",
+      "WHEN a queue direction filter is supplied THE SYSTEM SHALL return only queue rows matching that direction."
+    ],
+    "verify": [
+      "dotnet build Miautrix.Mail.sln -warnaserror",
+      "pnpm --filter admin build"
+    ],
+    "checkpoint": "step-06-admin-queue-direction",
+    "files": [
+      "src/Miautrix.Mail.Web/Controllers/MailQueueController.cs",
+      "admin/src/**/*Queue*.tsx",
+      "admin/src/api/client.ts"
+    ],
+    "status": "done"
+  },
+  {
+    "id": "E5-T1",
+    "title": "Add ownership regression tests",
+    "epic": "05-tests-and-release",
+    "dependencies": ["E3-T1"],
+    "priority": "p0",
+    "acceptance": [
+      "WHEN an Inbound queue row exists THE SYSTEM SHALL not dispatch it through outbound transport.",
+      "WHEN an Outbound queue row exists THE SYSTEM SHALL not dead-letter it through inbound mailbox lookup.",
+      "WHEN the Cloudflare inbound webhook accepts a valid local-recipient message THE SYSTEM SHALL create a mailbox message and mark the queue row Delivered."
+    ],
+    "verify": [
+      "dotnet test",
+      "dotnet build Miautrix.Mail.sln -warnaserror"
+    ],
+    "checkpoint": "step-07-ownership-regression-tests",
+    "files": [
+      "tests/**/*.cs",
+      "src/Miautrix.Mail.Worker/InboundQueueDispatcher.cs",
+      "src/Miautrix.Mail.Worker/OutboundQueueDispatcher.cs"
+    ],
+    "status": "done"
+  },
+  {
+    "id": "E5-T2",
+    "title": "Document release evidence",
+    "epic": "05-tests-and-release",
+    "dependencies": ["E4-T1", "E5-T1"],
+    "priority": "p1",
+    "acceptance": [
+      "WHEN ERRORS_AND_ISSUES.md is updated THE SYSTEM SHALL record the chosen option, migration name, backfill counts, and live validation evidence.",
+      "WHEN final verification runs THE SYSTEM SHALL build with warnings as errors."
+    ],
+    "verify": [
+      "dotnet build Miautrix.Mail.sln -warnaserror"
+    ],
+    "checkpoint": "step-08-document-release-evidence",
+    "files": [
+      "ERRORS_AND_ISSUES.md"
+    ],
+    "status": "done"
+  }
+]

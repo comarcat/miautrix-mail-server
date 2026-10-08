@@ -1,0 +1,32 @@
+--- src/Miautrix.Mail.Application/Mail/MessageService.cs
++++ src/Miautrix.Mail.Application/Mail/MessageService.cs
+@@ -510,7 +510,7 @@
+         var bodyContent = request.BodyText ?? request.BodyHtml ?? string.Empty;
+         var rawContent = $"From: {request.From}\r\nTo: {string.Join(", ", request.To)}\r\nSubject: {request.Subject}\r\nDate: {DateTimeOffset.UtcNow:R}\r\n\r\n{bodyContent}";
+-        var sizeBytes = Encoding.UTF8.GetByteCount(rawContent);
++        var sizeBytes = Encoding.UTF8.GetByteCount(rawContent) + sourceAttachments.Sum(a => a.SizeBytes);
+         var contentHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(rawContent))).ToLowerInvariant();
+ 
+         var messageId = Guid.NewGuid();
+@@ -754,7 +754,7 @@
+         var bodyContent = request.BodyText ?? request.BodyHtml ?? string.Empty;
+         var rawContent = $"From: {request.From}\r\nTo: {recipients}\r\nSubject: {request.Subject}\r\nDate: {now:R}\r\n\r\n{bodyContent}";
+-        var sizeBytes = Encoding.UTF8.GetByteCount(rawContent);
+         var contentHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(rawContent))).ToLowerInvariant();
+ 
+         Message? draft = null;
+@@ -787,7 +787,14 @@
+         draft.Date = now;
+         draft.ContentHash = contentHash;
+         draft.StoragePath = $"/storage/mail/{tenantId}/{mailboxId}/{draft.Id}.eml";
+-        draft.SizeBytes = sizeBytes;
++        if (!request.DraftId.HasValue)
++        {
++            draft.SizeBytes = Encoding.UTF8.GetByteCount(rawContent);
++        }
++        else
++        {
++            // Do not overwrite attachment size accumulation when saving existing drafts
++        }
+         draft.Flags = "\Draft";
+         draft.IsRead = true;

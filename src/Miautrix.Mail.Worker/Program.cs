@@ -155,7 +155,7 @@ var host = Host.CreateDefaultBuilder(args)
 
         // Hosted service — inbound processing for local storage
         services.AddHostedService<InboundQueueDispatcher>();
-        // Hosted service — outbound delivery for domains on a non-local transport
+        // Hosted service — outbound delivery for domains on a non-local transport.
         services.AddHostedService<OutboundQueueDispatcher>();
     })
     .Build();

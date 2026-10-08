@@ -11,6 +11,7 @@ public interface ISmtpQueueManager
         string sender,
         string recipient,
         string rawMessage,
+        string direction,
         string? subject = null,
         CancellationToken cancellationToken = default);
 
@@ -43,6 +44,7 @@ public sealed class SmtpQueueManager : ISmtpQueueManager
         string sender,
         string recipient,
         string rawMessage,
+        string direction,
         string? subject = null,
         CancellationToken cancellationToken = default)
     {
@@ -54,6 +56,7 @@ public sealed class SmtpQueueManager : ISmtpQueueManager
             Recipient = recipient,
             Subject = subject,
             RawMessage = rawMessage,
+            Direction = direction,
             Status = "Pending",
             Attempts = 0,
             NextAttemptAt = DateTimeOffset.UtcNow,

@@ -1752,9 +1752,9 @@
     "semantic_hash": ""
   },
   "webmail/src/App.tsx": {
-    "mtime": 1790479868.5394669,
-    "seen": 1790482281.1119046,
-    "ast_hash": "a1d0b122379244556c14f9bc3bc5db6e",
+    "mtime": 1790487038.2953024,
+    "seen": 1790487165.833674,
+    "ast_hash": "ddd9671240b93a481a35be8dc0e9bff4",
     "semantic_hash": ""
   },
   "webmail/src/components/CalendarView.tsx": {
@@ -1776,9 +1776,9 @@
     "semantic_hash": "32d12924339c9b801cfbf5ec79b142bf"
   },
   "webmail/src/components/InboxView.tsx": {
-    "mtime": 1790483808.432298,
-    "seen": 1790485394.4401312,
-    "ast_hash": "575aee6d45cc4e8e1386b84c0c09206c",
+    "mtime": 1790487038.0923789,
+    "seen": 1790487165.833674,
+    "ast_hash": "039a6f8f5e4f585bf5d307d85e5e28d4",
     "semantic_hash": ""
   },
   "webmail/src/components/LoginView.tsx": {
@@ -1794,9 +1794,9 @@
     "semantic_hash": "83d1321b10cd6b40f9b3b1fcfa21891d"
   },
   "webmail/src/components/SieveRulesView.tsx": {
-    "mtime": 1790475094.8455951,
-    "seen": 1790482281.1119046,
-    "ast_hash": "a9ba9cfd92b765cf174c40937679481d",
+    "mtime": 1790487038.3322265,
+    "seen": 1790487165.833674,
+    "ast_hash": "f08875b41cbbf79ed62764e3fd615568",
     "semantic_hash": ""
   },
   "webmail/src/main.tsx": {
@@ -5265,6 +5265,18 @@
     "mtime": 1790484899.635051,
     "seen": 1790485394.4401312,
     "ast_hash": "9031745c50e961dad94c30da1d6de387",
+    "semantic_hash": ""
+  },
+  "scripts/cleanup-test-mailboxes.sql": {
+    "mtime": 1790485914.348625,
+    "seen": 1790487165.833674,
+    "ast_hash": "dcb86bb7a299e192c2a432ea776041de",
+    "semantic_hash": ""
+  },
+  ".claude/plans/rosy-toasting-aurora.md": {
+    "mtime": 1790486639.4947429,
+    "seen": 1790487165.833674,
+    "ast_hash": "7c541c14a3402b44b534af9cc5680dfe",
     "semantic_hash": ""
   }
 }

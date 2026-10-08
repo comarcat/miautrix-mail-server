@@ -224,6 +224,7 @@ export class AdminApiClient {
     if (params.cursor) query.set('cursor', params.cursor);
     if (params.limit) query.set('limit', params.limit.toString());
     if (params.status && params.status !== 'all') query.set('status', params.status);
+    if (params.direction && params.direction !== 'all') query.set('direction', params.direction);
     if (params.search) query.set('search', params.search);
     if (params.start_at) query.set('start_at', params.start_at);
     if (params.end_at) query.set('end_at', params.end_at);
@@ -427,14 +428,14 @@ export class AdminApiClient {
 
   // Rules
   async getRules(): Promise<ApiResponse<MailFlowRuleItem[]>> {
-    return this.request<ApiResponse<MailFlowRuleItem[]>>('/mail/rules');
+    return this.request<ApiResponse<MailFlowRuleItem[]>>('/admin/mail/rules');
   }
 
   async simulateRule(payload: {
     rule: unknown;
     sampleMessage: { sender: string; recipient: string; subject: string; headers: Record<string, string>; hasAttachment: boolean; spamScore?: number };
   }): Promise<{ matched: boolean; actionsTaken: string[]; score: number; log: string[] }> {
-    return this.request<{ matched: boolean; actionsTaken: string[]; score: number; log: string[] }>('/mail/rules/simulate', {
+    return this.request<{ matched: boolean; actionsTaken: string[]; score: number; log: string[] }>('/admin/mail/rules/simulate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),

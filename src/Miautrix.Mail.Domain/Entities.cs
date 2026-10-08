@@ -310,6 +310,7 @@ public class SmtpQueueItem : TenantScopedEntityBase
     public string Recipient { get; set; } = string.Empty;
     public string? Subject { get; set; }
     public string RawMessage { get; set; } = string.Empty;
+    public string Direction { get; set; } = "Inbound";
     public string Status { get; set; } = "Pending";
     public int Attempts { get; set; }
     public DateTimeOffset NextAttemptAt { get; set; } = DateTimeOffset.UtcNow;

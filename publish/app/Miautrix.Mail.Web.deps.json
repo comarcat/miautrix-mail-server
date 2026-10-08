@@ -1445,6 +1445,7 @@
           "Miautrix.Mail.Identity": "1.0.0",
           "Miautrix.Mail.Infrastructure": "1.0.0",
           "Miautrix.Mail.Persistence": "1.0.0",
+          "Miautrix.Mail.Protocols.Sieve": "1.0.0",
           "Miautrix.Mail.Queue": "1.0.0",
           "Miautrix.Mail.Security": "1.0.0"
         },
@@ -1511,6 +1512,18 @@
         },
         "runtime": {
           "Miautrix.Mail.Persistence.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      },
+      "Miautrix.Mail.Protocols.Sieve/1.0.0": {
+        "dependencies": {
+          "Miautrix.Mail.Domain": "1.0.0",
+          "Miautrix.Mail.Persistence": "1.0.0"
+        },
+        "runtime": {
+          "Miautrix.Mail.Protocols.Sieve.dll": {
             "assemblyVersion": "1.0.0.0",
             "fileVersion": "1.0.0.0"
           }
@@ -1686,6 +1699,11 @@
       "sha512": ""
     },
     "Miautrix.Mail.Persistence/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "Miautrix.Mail.Protocols.Sieve/1.0.0": {
       "type": "project",
       "serviceable": false,
       "sha512": ""

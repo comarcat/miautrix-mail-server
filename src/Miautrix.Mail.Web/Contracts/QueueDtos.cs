@@ -9,6 +9,7 @@ public sealed record QueueItemDto(
     string MessageId,
     string Sender,
     string Recipient,
+    string Direction,
     long SizeBytes,
     string Status,
     int Attempts,

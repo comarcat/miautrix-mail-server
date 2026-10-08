@@ -204,7 +204,7 @@ public sealed class OutboundQueueDispatcherTests
         var conn = Environment.GetEnvironmentVariable("MIAUTRIX_DB_CONNECTION");
         if (string.IsNullOrWhiteSpace(conn))
         {
-            conn = "Host=10.11.1.52;Port=5432;Database=miautrix-mail-dev;Username=mmdb-user;Password=Mi@usito#2026!";
+            conn = "Host=10.11.1.52;Port=5432;Database=miautrix-mail-dev;Username=mmdb-user;Password=TrCPINuQpPm0lIOTdv1gSzPIpZRkQr7k";
         }
         return conn;
     }
@@ -258,6 +258,7 @@ public sealed class OutboundQueueDispatcherTests
             TenantId = tenantId,
             Sender = "sender@example.com",
             Recipient = recipient,
+            Direction = "Outbound",
             Subject = "queued before the dispatcher existed",
             RawMessage = "From: sender@example.com\r\nSubject: queued\r\n\r\nBody.",
             Status = "Pending",
