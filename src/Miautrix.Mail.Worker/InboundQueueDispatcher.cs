@@ -57,38 +57,70 @@ public sealed class InboundQueueDispatcher : BackgroundService
         }
     }
 
-    private async Task ProcessPendingMessagesAsync(CancellationToken ct)
+    internal async Task ProcessPendingMessagesAsync(CancellationToken ct)
     {
-        using var scope = _scopeFactory.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var quarantineService = scope.ServiceProvider.GetRequiredService<IQuarantineService>();
-        var antiMalwareScanner = scope.ServiceProvider.GetRequiredService<IAntiMalwareScanner>();
-        var storage = scope.ServiceProvider.GetRequiredService<IMailStorage>();
-
-        var pendingItems = await db.SmtpQueue
-            .Where(q => q.Direction == QueueDirection.Inbound && q.Status == "Pending" && q.NextAttemptAt <= DateTimeOffset.UtcNow)
-            .OrderBy(q => q.CreatedAt)
-            .Take(BatchSize)
-            .ToListAsync(ct);
-
-        if (pendingItems.Count == 0) return;
-
-        foreach (var item in pendingItems)
+        List<Guid> pendingItemIds;
+        using (var listScope = _scopeFactory.CreateScope())
         {
+            var listDb = listScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            pendingItemIds = await listDb.SmtpQueue
+                .Where(q => q.Direction == QueueDirection.Inbound && q.Status == "Pending" && q.NextAttemptAt <= DateTimeOffset.UtcNow)
+                .OrderBy(q => q.CreatedAt)
+                .Take(BatchSize)
+                .Select(q => q.Id)
+                .ToListAsync(ct);
+        }
+
+        if (pendingItemIds.Count == 0) return;
+
+        // Each item gets its own scope (and therefore its own AppDbContext/ChangeTracker and
+        // database transaction). One item's processing or persistence failure can then only ever
+        // affect that item's own SaveChangesAsync call; it cannot roll back, detach, or otherwise
+        // hide the result of any other item in the same batch -- including items processed earlier
+        // or later in this same pass.
+        foreach (var itemId in pendingItemIds)
+        {
+            using var itemScope = _scopeFactory.CreateScope();
+            var db = itemScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var quarantineService = itemScope.ServiceProvider.GetRequiredService<IQuarantineService>();
+            var antiMalwareScanner = itemScope.ServiceProvider.GetRequiredService<IAntiMalwareScanner>();
+            var storage = itemScope.ServiceProvider.GetRequiredService<IMailStorage>();
+
+            var item = await db.SmtpQueue.FirstOrDefaultAsync(q => q.Id == itemId, ct);
+            if (item == null) continue;
+
             try
             {
                 await ProcessItemAsync(db, quarantineService, antiMalwareScanner, storage, item, ct);
+                await db.SaveChangesAsync(ct);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to process inbound message {ItemId} for {Recipient}", item.Id, item.Recipient);
+
+                // Discard every change this item's failed attempt made (new Message/Quarantine/
+                // MalwareVerdict rows, folder creation, etc.) and record the failure on a clean
+                // tracked copy of just this item, in its own dedicated scope/context.
+                foreach (var entry in db.ChangeTracker.Entries().ToList())
+                {
+                    entry.State = EntityState.Detached;
+                }
+
+                db.Attach(item);
                 item.Status = "Failed";
                 item.LastError = ex.Message;
                 item.UpdatedAt = DateTimeOffset.UtcNow;
+
+                try
+                {
+                    await db.SaveChangesAsync(ct);
+                }
+                catch (Exception saveEx)
+                {
+                    _logger.LogError(saveEx, "Failed to record failure status for inbound message {ItemId} for {Recipient}", item.Id, item.Recipient);
+                }
             }
         }
-
-        await db.SaveChangesAsync(ct);
     }
 
     private async Task ProcessItemAsync(AppDbContext db, IQuarantineService quarantineService, IAntiMalwareScanner antiMalwareScanner, IMailStorage storage, SmtpQueueItem item, CancellationToken ct)
@@ -369,7 +401,11 @@ public sealed class InboundQueueDispatcher : BackgroundService
             {
                 RawHeaders = rawHeaders.Replace("\n", "\r\n"),
                 Subject = headers.TryGetValue("subject", out var subject) ? subject : null,
-                Date = headers.TryGetValue("date", out var date) && DateTimeOffset.TryParse(date, out var parsedDate) ? parsedDate : null,
+                // Postgres timestamptz columns require UTC; a sender's own offset (e.g. -07:00)
+                // must never reach the entity as-is or SaveChangesAsync throws.
+                Date = headers.TryGetValue("date", out var date) && DateTimeOffset.TryParse(date, out var parsedDate)
+                    ? parsedDate.ToUniversalTime()
+                    : null,
                 BodyText = bodyText,
                 BodyHtml = bodyHtml,
                 Attachments = attachments

@@ -256,6 +256,7 @@ public sealed class OutboundQueueDispatcherTests
         {
             Id = id,
             TenantId = tenantId,
+            Direction = QueueDirection.Outbound,
             Sender = "sender@example.com",
             Recipient = recipient,
             Subject = "queued before the dispatcher existed",
