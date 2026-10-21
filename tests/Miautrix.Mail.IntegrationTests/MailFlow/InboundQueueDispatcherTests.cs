@@ -68,6 +68,49 @@ public sealed class InboundQueueDispatcherTests
     }
 
     [Fact]
+    public async Task Quoted_printable_html_is_decoded_and_persisted()
+    {
+        var tenantId = await SeedTenantAsync();
+        try
+        {
+            var mailboxId = await SeedDomainAndMailboxAsync(tenantId, $"user@{TestDomain}");
+            var queueItemId = await SeedQueueItemAsync(
+                tenantId,
+                $"user@{TestDomain}",
+                rawMessage: "From: sender@example.com\r\n" +
+                            "Subject: Quoted printable HTML\r\n" +
+                            "Content-Type: multipart/alternative; boundary=html-boundary\r\n" +
+                            "\r\n" +
+                            "--html-boundary\r\n" +
+                            "Content-Type: text/plain; charset=utf-8\r\n" +
+                            "Content-Transfer-Encoding: quoted-printable\r\n" +
+                            "\r\n" +
+                            "Plain=20fallback\r\n" +
+                            "--html-boundary\r\n" +
+                            "Content-Type: text/html; charset=utf-8\r\n" +
+                            "Content-Transfer-Encoding: quoted-printable\r\n" +
+                            "\r\n" +
+                            "<html><body><strong>Rich=20HTML</strong></body></html>\r\n" +
+                            "--html-boundary--\r\n");
+
+            await RunOnePassAsync();
+
+            await using var context = CreateContext();
+            var item = await context.SmtpQueue.AsNoTracking().FirstAsync(q => q.Id == queueItemId);
+            Assert.Equal("Delivered", item.Status);
+
+            var message = await context.Messages.AsNoTracking()
+                .FirstAsync(m => m.TenantId == tenantId && m.MailboxId == mailboxId);
+            Assert.Equal("<html><body><strong>Rich HTML</strong></body></html>", message.BodyHtml);
+            Assert.Equal("Plain fallback", message.BodyText);
+        }
+        finally
+        {
+            await CleanupAsync(tenantId);
+        }
+    }
+
+    [Fact]
     public async Task One_bad_row_in_a_batch_does_not_block_or_hide_the_other_rows()
     {
         const string poisonSubjectMarker = "[[POISON-ROW]]";

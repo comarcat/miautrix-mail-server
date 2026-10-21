@@ -549,13 +549,9 @@ export const InboxView: React.FC<InboxViewProps> = ({
       if (!currentMessage) return;
 
       setIsLoadingDetail(true);
+      setDetailMessage(null);
       try {
-        // Detail fetch only if bodyHtml is missing.
-        if (currentMessage.bodyHtml) {
-          if (!cancelled) setDetailMessage(currentMessage);
-          return;
-        }
-
+        // The list endpoint intentionally omits message bodies; always hydrate the selected row.
         const d = await webmailClient.getMessageDetail(currentMessage.mailboxId, selectedMessageId);
         if (!cancelled) setDetailMessage(d.data);
       } catch (e) {
@@ -570,7 +566,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [selectedMessageId]);
+  }, [selectedMessageId, currentMessage?.id, currentMessage?.mailboxId]);
 
   const displayedMessage = detailMessage ?? currentMessage;
 

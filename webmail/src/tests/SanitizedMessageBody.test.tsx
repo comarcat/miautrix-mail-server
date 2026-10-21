@@ -55,6 +55,15 @@ describe('SanitizedMessageBody (Security & Acceptance Criteria)', () => {
     expect(clean).not.toContain('<embed');
   });
 
+  it('renders ordinary HTML content while keeping active content removed', () => {
+    render(<SanitizedMessageBody htmlContent="<h1>Invoice</h1><p><strong>Total:</strong> €42</p>" />);
+
+    const container = screen.getByTestId('sanitized-email-body');
+    expect(container.querySelector('h1')?.textContent).toBe('Invoice');
+    expect(container.querySelector('strong')?.textContent).toBe('Total:');
+    expect(container.textContent).toContain('€42');
+  });
+
   it('blocks remote images by default to prevent tracking pixels until user clicks load', () => {
     const emailWithTrackingPixel = `
       <p>Invoice details</p>

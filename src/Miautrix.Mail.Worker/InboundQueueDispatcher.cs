@@ -487,11 +487,13 @@ public sealed class InboundQueueDispatcher : BackgroundService
             if (string.IsNullOrWhiteSpace(body)) return null;
             if (depth > 5) return null;
 
-            var split = body.StartsWith("--", StringComparison.Ordinal)
+            var startsWithBoundary = body.StartsWith("--", StringComparison.Ordinal);
+
+            var split = startsWithBoundary
                 ? 0
                 : body.IndexOf("\n--", StringComparison.Ordinal);
 
-            if (split > 0)
+            if (!startsWithBoundary && split >= 0)
             {
                 // IndexOf("\n--") points at the leading newline; shift to the boundary marker.
                 split += 1;
@@ -533,9 +535,7 @@ public sealed class InboundQueueDispatcher : BackgroundService
                 if (contentType.Contains("text/html", StringComparison.OrdinalIgnoreCase))
                 {
                     var transferEncoding = partHeaders.TryGetValue("content-transfer-encoding", out var cte) ? cte : string.Empty;
-                    var html = transferEncoding.Equals("base64", StringComparison.OrdinalIgnoreCase)
-                        ? Encoding.UTF8.GetString(DecodeBase64(partBody))
-                        : partBody;
+                    var html = DecodeTextPart(partBody, transferEncoding);
 
                     var trimmed = html.Trim();
                     return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
@@ -573,9 +573,16 @@ public sealed class InboundQueueDispatcher : BackgroundService
             // - non-multipart: treat everything after headers as text.
             // Some emails may start multipart boundaries immediately after the initial headers,
             // so handle both "--boundary" at position 0 and the more common "\n--boundary" case.
-            var split = body.StartsWith("--", StringComparison.Ordinal)
+            var startsWithBoundary = body.StartsWith("--", StringComparison.Ordinal);
+
+            var split = startsWithBoundary
                 ? 0
                 : body.IndexOf("\n--", StringComparison.Ordinal);
+
+            if (!startsWithBoundary && split >= 0)
+            {
+                split += 1;
+            }
 
             // Non-multipart fallback.
             if (split < 0)
@@ -614,9 +621,7 @@ public sealed class InboundQueueDispatcher : BackgroundService
                 {
                     var transferEncoding = partHeaders.TryGetValue("content-transfer-encoding", out var cte) ? cte : string.Empty;
 
-                    var text = transferEncoding.Equals("base64", StringComparison.OrdinalIgnoreCase)
-                        ? Encoding.UTF8.GetString(DecodeBase64(partBody))
-                        : partBody;
+                    var text = DecodeTextPart(partBody, transferEncoding);
 
                     var trimmed = text.Trim();
                     return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
@@ -648,6 +653,54 @@ public sealed class InboundQueueDispatcher : BackgroundService
 
             if (!match.Success) return null;
             return match.Groups[1].Value.Trim();
+        }
+
+        private static string DecodeTextPart(string value, string transferEncoding)
+        {
+            if (transferEncoding.Equals("base64", StringComparison.OrdinalIgnoreCase))
+                return Encoding.UTF8.GetString(DecodeBase64(value));
+
+            if (transferEncoding.Equals("quoted-printable", StringComparison.OrdinalIgnoreCase))
+                return DecodeQuotedPrintable(value);
+
+            return value;
+        }
+
+        private static string DecodeQuotedPrintable(string value)
+        {
+            var builder = new StringBuilder(value.Length);
+            for (var i = 0; i < value.Length; i++)
+            {
+                if (value[i] != '=')
+                {
+                    builder.Append(value[i]);
+                    continue;
+                }
+
+                if (i + 2 < value.Length && value[i + 1] == '\r' && value[i + 2] == '\n')
+                {
+                    i += 2;
+                    continue;
+                }
+
+                if (i + 2 < value.Length && value[i + 1] == '\n')
+                {
+                    i += 1;
+                    continue;
+                }
+
+                if (i + 2 < value.Length &&
+                    byte.TryParse(value.AsSpan(i + 1, 2), System.Globalization.NumberStyles.HexNumber, null, out var decoded))
+                {
+                    builder.Append((char)decoded);
+                    i += 2;
+                    continue;
+                }
+
+                builder.Append('=');
+            }
+
+            return builder.ToString();
         }
 
         private static byte[] DecodeBase64(string value)
