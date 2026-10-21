@@ -80,6 +80,7 @@ export interface RawEmailMessage {
   mailbox_id: string;
   folder_id: string;
   sender: string;
+  sender_name?: string | null;
   recipient: string;
   subject: string;
   preview: string;

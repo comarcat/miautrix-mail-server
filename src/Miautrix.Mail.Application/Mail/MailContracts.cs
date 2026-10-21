@@ -43,7 +43,8 @@ public sealed record MessageSummaryDto(
     bool IsRead,
     bool HasAttachments,
     string? FlagColor = null,
-    string? Preview = null);
+    string? Preview = null,
+    string? SenderName = null);
 
 public sealed record AttachmentDto(
     Guid Id,
@@ -82,7 +83,8 @@ public sealed record MessageDetailDto(
     string? FlagColor,
     IReadOnlyList<AttachmentDto> Attachments,
     IReadOnlyList<string>? Cc = null,
-    IReadOnlyList<string>? Bcc = null);
+    IReadOnlyList<string>? Bcc = null,
+    string? SenderName = null);
 
 public sealed record SendMessageRequest(
     string From,

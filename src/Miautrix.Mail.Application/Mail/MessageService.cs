@@ -109,6 +109,8 @@ public sealed class MessageService : IMessageService
             .Where(f => f.TenantId == tenantId && messageIds.Contains(f.MessageId))
             .ToDictionaryAsync(f => f.MessageId, f => f.Flag, cancellationToken);
 
+        var senderNames = await ResolveSenderNamesAsync(tenantId, userId, items, cancellationToken);
+
         var dtoList = items.Select(m => new MessageSummaryDto(
             m.Id,
             m.MailboxId,
@@ -121,7 +123,8 @@ public sealed class MessageService : IMessageService
             m.IsRead,
             attachmentSet.Contains(m.Id),
             messageFlags.GetValueOrDefault(m.Id),
-            GetPreview(m.BodyText))).ToList();
+            GetPreview(m.BodyText),
+            senderNames.GetValueOrDefault(m.Sender))).ToList();
 
         return new MessageListPage(dtoList, null, hasMore, totalCount);
     }
@@ -166,6 +169,8 @@ public sealed class MessageService : IMessageService
         var cc = recipients.Where(r => r.Type.Equals("cc", StringComparison.OrdinalIgnoreCase)).Select(r => r.Address).ToList();
         var bcc = recipients.Where(r => r.Type.Equals("bcc", StringComparison.OrdinalIgnoreCase)).Select(r => r.Address).ToList();
 
+        var senderNames = await ResolveSenderNamesAsync(tenantId, userId, [message], cancellationToken);
+
         return new MessageDetailDto(
             message.Id,
             message.MailboxId,
@@ -182,7 +187,8 @@ public sealed class MessageService : IMessageService
             flagColor,
             attachmentDtos,
             cc,
-            bcc);
+            bcc,
+            senderNames.GetValueOrDefault(message.Sender));
     }
 
     public async Task<bool> MarkReadAsync(
@@ -739,6 +745,104 @@ public sealed class MessageService : IMessageService
                 entry.State = EntityState.Detached;
             }
         }
+    }
+
+    // Display name for the sender, in priority order:
+    //   1. the RFC 5322 From: display name stored with the message,
+    //   2. the name saved in the user's own contact list for that address.
+    // Returns null when neither exists so the client can fall back to the local-part.
+    private async Task<Dictionary<string, string?>> ResolveSenderNamesAsync(
+        Guid tenantId,
+        Guid userId,
+        IReadOnlyCollection<Message> messages,
+        CancellationToken cancellationToken)
+    {
+        var result = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        if (messages.Count == 0)
+        {
+            return result;
+        }
+
+        var senderEmails = messages
+            .Select(m => m.Sender)
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var contactRows = await _db.Contacts
+            .Where(c => c.TenantId == tenantId && c.UserId == userId && senderEmails.Contains(c.Email))
+            .Select(c => new { c.Email, c.Name })
+            .ToListAsync(cancellationToken);
+
+        var contactNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in contactRows)
+        {
+            if (!string.IsNullOrWhiteSpace(row.Name))
+            {
+                contactNames.TryAdd(row.Email, row.Name);
+            }
+        }
+
+        foreach (var sender in senderEmails)
+        {
+            var message = messages.First(m => string.Equals(m.Sender, sender, StringComparison.OrdinalIgnoreCase));
+            result[sender] = ExtractFromDisplayName(message.RawHeaders)
+                ?? (contactNames.TryGetValue(sender, out var contactName) ? contactName : null);
+        }
+
+        return result;
+    }
+
+    private static string? ExtractFromDisplayName(string rawHeaders)
+    {
+        if (string.IsNullOrWhiteSpace(rawHeaders))
+        {
+            return null;
+        }
+
+        var normalized = rawHeaders.Replace("\r\n", "\n").Replace('\r', '\n');
+        var lines = normalized.Split('\n');
+        string? fromValue = null;
+
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var line = lines[i];
+            if (line.StartsWith("From:", StringComparison.OrdinalIgnoreCase))
+            {
+                // Unfold continuation lines (leading whitespace).
+                var value = line[5..];
+                while (i + 1 < lines.Length && (lines[i + 1].StartsWith(' ') || lines[i + 1].StartsWith('\t')))
+                {
+                    i++;
+                    value += " " + lines[i].Trim();
+                }
+
+                fromValue = value.Trim();
+                break;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(fromValue))
+        {
+            return null;
+        }
+
+        // MailAddress decodes RFC 2047 encoded words (=?UTF-8?B?...?=) in DisplayName.
+        if (MailAddress.TryCreate(fromValue, out var address) && !string.IsNullOrWhiteSpace(address.DisplayName))
+        {
+            return address.DisplayName.Trim();
+        }
+
+        // Multiple senders: take the first one that parses.
+        foreach (var candidate in fromValue.Split(','))
+        {
+            if (MailAddress.TryCreate(candidate.Trim(), out var parsed) && !string.IsNullOrWhiteSpace(parsed.DisplayName))
+            {
+                return parsed.DisplayName.Trim();
+            }
+        }
+
+        return null;
     }
 
     private static bool TryNormalizeEmail(string raw, out string email, out string? displayName)

@@ -1770,9 +1770,9 @@
     "semantic_hash": ""
   },
   "webmail/src/components/InboxView.tsx": {
-    "mtime": 1791037792.0,
-    "seen": 1792547450.3810804,
-    "ast_hash": "620552d0d6d79bc9e505e10349b799e7",
+    "mtime": 1792548779.8174913,
+    "seen": 1792553612.3867962,
+    "ast_hash": "44c642900c7d546ca923b6f19a27190a",
     "semantic_hash": ""
   },
   "webmail/src/components/LoginView.tsx": {
@@ -1806,10 +1806,10 @@
     "semantic_hash": ""
   },
   "webmail/src/tests/SanitizedMessageBody.test.tsx": {
-    "mtime": 1789857417.0,
-    "seen": 1792547450.381086,
-    "ast_hash": "da1c6e84458ecac1a3f7df0dcc9271f9",
-    "semantic_hash": "da1c6e84458ecac1a3f7df0dcc9271f9"
+    "mtime": 1792548795.6258705,
+    "seen": 1792553612.386803,
+    "ast_hash": "fbfdca9230c88e899dc71143efb7f8f7",
+    "semantic_hash": ""
   },
   "webmail/src/tests/setup.ts": {
     "mtime": 1789857417.0,
@@ -2406,20 +2406,20 @@
     "semantic_hash": "615e235f15b4b41e3519977620c2aa10"
   },
   "publish/app/Miautrix.Mail.Web.deps.json": {
-    "mtime": 1792547430.0630972,
-    "seen": 1792547450.3808634,
-    "ast_hash": "aafcc212d0160dada7541ef0902ecbb9",
+    "mtime": 1792552939.2927618,
+    "seen": 1792553612.386557,
+    "ast_hash": "e685e8f97c2463b67b79d45ea566b767",
     "semantic_hash": ""
   },
   "publish/app/Miautrix.Mail.Web.runtimeconfig.json": {
-    "mtime": 1791238991.0,
-    "seen": 1792547450.3808641,
-    "ast_hash": "3ae02902fa0fc55749114bce10b575d1",
-    "semantic_hash": "3ae02902fa0fc55749114bce10b575d1"
+    "mtime": 1792552938.8117392,
+    "seen": 1792553612.3865583,
+    "ast_hash": "c8acaabfb239e9f39c9efda789f5285d",
+    "semantic_hash": ""
   },
   "publish/app/Miautrix.Mail.Web.staticwebassets.endpoints.json": {
-    "mtime": 1789781448.0,
-    "seen": 1792547450.380865,
+    "mtime": 1792550522.1283324,
+    "seen": 1792553612.3865592,
     "ast_hash": "c257f74d704f9d4fdd2c1313d6fd7a72",
     "semantic_hash": "c257f74d704f9d4fdd2c1313d6fd7a72"
   },
@@ -3708,9 +3708,9 @@
     "semantic_hash": ""
   },
   "migrations.sql": {
-    "mtime": 1789787693.1218731,
-    "seen": 1790485394.4401312,
-    "ast_hash": "",
+    "mtime": 1789787693.0,
+    "seen": 1792553612.3865523,
+    "ast_hash": "9902ae9c1aeb571bf0ef6b23d090b8a4",
     "semantic_hash": ""
   },
   "admin/src/components/ChangePasswordView.tsx": {
@@ -3828,21 +3828,21 @@
     "semantic_hash": "615e235f15b4b41e3519977620c2aa10"
   },
   "publish/worker/Miautrix.Mail.Worker.deps.json": {
-    "mtime": 1792547430.0825465,
-    "seen": 1792547450.380869,
-    "ast_hash": "63b1401094195689b8a2c3e4e96b5b61",
+    "mtime": 1792550524.6578798,
+    "seen": 1792553612.386562,
+    "ast_hash": "6639968ab6fd513818c53f9b0d1bb443",
     "semantic_hash": ""
   },
   "publish/worker/Miautrix.Mail.Worker.runtimeconfig.json": {
-    "mtime": 1790595002.0,
-    "seen": 1792547450.3808696,
-    "ast_hash": "d5b9c06b0287086d2e162d0b47580650",
-    "semantic_hash": "d5b9c06b0287086d2e162d0b47580650"
+    "mtime": 1792550524.6759949,
+    "seen": 1792553612.3865628,
+    "ast_hash": "14d3043b2ac9bfa7ce1e7f61f5158782",
+    "semantic_hash": ""
   },
   "scripts/init-db-permissions.sql": {
-    "mtime": 1789839391.504161,
-    "seen": 1790485394.4401312,
-    "ast_hash": "",
+    "mtime": 1789839391.0,
+    "seen": 1792553612.3865683,
+    "ast_hash": "6d5cd9bd694bf2500127165a95b285bd",
     "semantic_hash": ""
   },
   "scripts/inject-flow-mail-test.ps1": {
@@ -4008,15 +4008,15 @@
     "semantic_hash": ""
   },
   "publish/admin/index.html": {
-    "mtime": 1792547430.0357583,
-    "seen": 1792547450.381314,
-    "ast_hash": "264a05ba6eeb0e0ade4e872ff1b068a1",
+    "mtime": 1792552948.2124004,
+    "seen": 1792553612.386845,
+    "ast_hash": "d5310b45c39e380fb261d14205115cba",
     "semantic_hash": ""
   },
   "publish/webmail/index.html": {
-    "mtime": 1792547430.0666034,
-    "seen": 1792547450.3813148,
-    "ast_hash": "4c1c75e7e67a930ee4ea217e76cb7877",
+    "mtime": 1792552951.3091888,
+    "seen": 1792553612.3868456,
+    "ast_hash": "fb790c9162c247d6dcd48d33f7e5e95c",
     "semantic_hash": ""
   },
   "publish/admin/images/Admin-Icons.jpg": {
@@ -5058,9 +5058,9 @@
     "semantic_hash": "d59306591dc4df7b218d36644d9d1509"
   },
   "src/Miautrix.Mail.Worker/InboundQueueDispatcher.cs": {
-    "mtime": 1792547430.1055815,
-    "seen": 1792547450.3810341,
-    "ast_hash": "66337b59cf5af7cef3934f8eaf31a9fd",
+    "mtime": 1792552743.9178288,
+    "seen": 1792553612.3867466,
+    "ast_hash": "710d69d6d7b333c59ca851f6b43cf7ef",
     "semantic_hash": ""
   },
   "docs/security.md": {
@@ -5226,9 +5226,9 @@
     "semantic_hash": ""
   },
   "publish/admin/assets/index-7_LIhLyZ.js": {
-    "mtime": 1792547430.0357583,
-    "seen": 1792547450.380862,
-    "ast_hash": "2707f61a2f9c81dd60d671e26c39d44b",
+    "mtime": 1792552948.2124004,
+    "seen": 1792553612.3865554,
+    "ast_hash": "a8bcf6766a6511702fbedbf5d111156d",
     "semantic_hash": ""
   },
   "src/Miautrix.Mail.Persistence/Migrations/20260927020255_UpdateFlagSystem.Designer.cs": {
@@ -5250,15 +5250,9 @@
     "semantic_hash": ""
   },
   "scripts/cleanup-test-mailboxes.sql": {
-    "mtime": 1790485914.348625,
-    "seen": 1790487165.833674,
-    "ast_hash": "",
-    "semantic_hash": ""
-  },
-  "publish/webmail/assets/index-SHp2FWM5.js": {
-    "mtime": 1792547430.0666034,
-    "seen": 1792547450.3808663,
-    "ast_hash": "7596a8504e4f8fea5292c6d74715debf",
+    "mtime": 1790485914.0,
+    "seen": 1792553612.3865635,
+    "ast_hash": "dcb86bb7a299e192c2a432ea776041de",
     "semantic_hash": ""
   },
   "src/Miautrix.Mail.Application/Mail/CalendarIcalBuilder.cs": {
@@ -5532,9 +5526,9 @@
     "semantic_hash": ""
   },
   "tests/Miautrix.Mail.IntegrationTests/MailFlow/InboundQueueDispatcherTests.cs": {
-    "mtime": 1792547430.1136856,
-    "seen": 1792547450.3810549,
-    "ast_hash": "b338f2234b0f58d5f53744dd28e89391",
+    "mtime": 1792548788.8853393,
+    "seen": 1792553612.38677,
+    "ast_hash": "440f513336b6324fbb47dca475439f91",
     "semantic_hash": ""
   },
   "tests/Miautrix.Mail.UnitTests/Calendar/CalendarIcalBuilderTests.cs": {
@@ -5691,6 +5685,12 @@
     "mtime": 1792547430.1136856,
     "seen": 1792547450.3813195,
     "ast_hash": "515c3be09cc4adb97589058e044df808",
+    "semantic_hash": ""
+  },
+  "publish/webmail/assets/index-DpCImcBM.js": {
+    "mtime": 1792552951.3081882,
+    "seen": 1792553612.3865602,
+    "ast_hash": "976a1528454ab41b3879492c1a18251e",
     "semantic_hash": ""
   }
 }
