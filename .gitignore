@@ -38,3 +38,4 @@ certificates/
 *.key
 *.pfx
 *.p12
+/graphify-out
