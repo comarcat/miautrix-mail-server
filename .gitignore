@@ -39,3 +39,4 @@ certificates/
 *.pfx
 *.p12
 /graphify-out
+/graphify-out/cache
