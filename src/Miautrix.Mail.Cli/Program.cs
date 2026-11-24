@@ -32,6 +32,7 @@ public class Program
         {
             options.UseNpgsql(connectionString);
         });
+        services.AddSingleton<IPasswordHasher, Argon2idPasswordHasher>();
         var environment = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
             ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
         var isDevelopment = environment.Equals("Development", StringComparison.OrdinalIgnoreCase);
@@ -68,6 +69,13 @@ public class Program
                     .WithDescription("Create a new mailbox for a tenant");
                 mailbox.AddCommand<MailboxDeleteCommand>("delete")
                     .WithDescription("Delete a mailbox for a tenant");
+            });
+
+            config.AddBranch("users", users =>
+            {
+                users.SetDescription("Manage user credentials");
+                users.AddCommand<BootstrapAdminCommand>("bootstrap-admin")
+                    .WithDescription("Securely create the initial admin credential");
             });
 
             config.AddBranch("messages", messages =>

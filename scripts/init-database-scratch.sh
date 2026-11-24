@@ -4,12 +4,14 @@
 # ==============================================================================
 set -euo pipefail
 
-DB_HOST="${1:-10.11.1.52}"
+DB_HOST="${1:-127.0.0.1}"
 DB_PORT="${2:-5432}"
-DB_NAME="${3:-miautrix-mail-pro}"
-DB_USER="${4:-mmdb-user}"
+DB_NAME="${3:-miautrix-mail-scratch}"
+DB_USER="${4:-miautrix_mail_scratch}"
+ADMIN_EMAIL="${5:-admin@miautrix.org}"
 DB_PASS="${MIAUTRIX_DB_PASSWORD:-}"
 if [[ -z "$DB_PASS" ]]; then echo "Set MIAUTRIX_DB_PASSWORD in the environment." >&2; exit 1; fi
+if [[ "$DB_HOST" =~ (10\.11\.1\.52|miautrix-mail-pro) || "$DB_NAME" =~ (10\.11\.1\.52|miautrix-mail-pro) ]]; then echo "Scratch initialization refuses the production host/database." >&2; exit 1; fi
 DROP_EXISTING="${6:-false}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -40,13 +42,16 @@ dotnet ef database update --project src/Miautrix.Mail.Persistence --startup-proj
 echo "[3/4] Running Miautrix Seeder for bootstrap entities..."
 dotnet run --project src/Miautrix.Mail.Seeder
 
+echo "Create the initial admin credential; the password is read through a secure prompt."
+DOTNET_ENVIRONMENT=Development dotnet run --project src/Miautrix.Mail.Cli -- users bootstrap-admin --email "$ADMIN_EMAIL"
+
 echo ""
 echo "[4/4] Greenfield Database Deployment Completed!"
 echo "=========================================================="
 echo "  Database:             ${DB_NAME} (${DB_HOST}:${DB_PORT})"
 echo "  Default Tenant:       default"
 echo "  Default Domain:       miautrix.org (Verified, Primary)"
-echo "  Initial Admin User:   admin@miautrix.org"
-echo "  Initial Password:     CH@nGEm3! (Must change on first login)"
-echo "  Standard Mailbox:     admin@miautrix.org"
+echo "  Initial Admin User:   ${ADMIN_EMAIL}"
+echo "  Initial Password:     entered securely at the CLI prompt; no default password is configured"
+echo "  Standard Mailbox:     ${ADMIN_EMAIL}"
 echo "=========================================================="

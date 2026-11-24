@@ -14,7 +14,7 @@ This guide provides step-by-step instructions for deploying the Miautrix Mail Se
 | **Backend Service** | .NET 10 Self-Contained Linux x64 executable (Port 5000) |
 | **Production Database** | Configure `MIAUTRIX_DB_CONNECTION` in the protected server environment; obtain credentials from the owner. |
 | **Default Admin Account** | `admin@miautrix.org` |
-| **Default Admin Password** | `CH@nGEm3!` *(Must be changed on 1st login)* |
+| **Initial Admin Password** | No default password exists; set it with the CLI secure prompt after seeding. |
 | **Service Manager** | systemd (`miautrix-mail.service`) |
 
 ---

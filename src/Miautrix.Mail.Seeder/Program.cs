@@ -239,33 +239,8 @@ public static class Program
             Console.WriteLine($"[Miautrix.Mail.Seeder] Default admin user exists: {adminEmail} ({existingUser.Id}).");
         }
 
-        // 7. Seed Admin User Credential (Argon2id Hash of "CH@nGEm3!", MustChangePassword = true)
-        var passwordHasher = new Argon2idPasswordHasher();
-        var defaultPassword = "CH@nGEm3!";
-        var defaultPasswordHash = passwordHasher.HashPassword(defaultPassword);
-
-        var credentialId = DeterministicGuid(tenant.Id, $"credential:{existingUser.Id}");
-        var existingCredential = await db.UserCredentials.FirstOrDefaultAsync(c => c.TenantId == tenant.Id && c.UserId == existingUser.Id);
-        if (existingCredential is null)
-        {
-            db.UserCredentials.Add(new UserCredential
-            {
-                Id = credentialId,
-                TenantId = tenant.Id,
-                UserId = existingUser.Id,
-                PasswordHash = defaultPasswordHash,
-                Algorithm = "argon2id",
-                MustChangePassword = true,
-                CreatedAt = DateTimeOffset.UtcNow,
-                UpdatedAt = DateTimeOffset.UtcNow
-            });
-            await db.SaveChangesAsync();
-            Console.WriteLine($"[Miautrix.Mail.Seeder] Seeded default admin credential (MustChangePassword=true).");
-        }
-        else
-        {
-            Console.WriteLine($"[Miautrix.Mail.Seeder] Default admin credential already exists.");
-        }
+        // Credentials are intentionally never seeded. Use `miautrix-mail users bootstrap-admin`
+        // to create one from an interactive secure prompt after the schema and roles are ready.
 
         // 8. Seed Owner Membership
         var membershipId = DeterministicGuid(tenant.Id, $"membership:{existingUser.Id}:{ownerRoleId}");

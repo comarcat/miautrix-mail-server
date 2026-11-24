@@ -8,6 +8,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Net.Sockets;
 using Miautrix.Mail.Application.Transport;
 using Miautrix.Mail.Domain;
 using Miautrix.Mail.Infrastructure.Backup;
@@ -29,7 +30,7 @@ public sealed class AdminService : IAdminService
 {
     private static readonly DateTimeOffset ProcessStartedAt = Process.GetCurrentProcess().StartTime.ToUniversalTime();
     private const string SpamSupectedReleasedTag = "[SPAM Supected-Released]";
-    private const string DefaultClamAvSocketPath = "/run/clamav/clamd.ctl";
+    private static string DefaultClamAvSocketPath => OperatingSystem.IsWindows() ? "tcp://127.0.0.1:3310" : "/run/clamav/clamd.ctl";
 
     private readonly AppDbContext _db;
     private readonly ISmtpQueueManager _smtpQueueManager;
@@ -1515,9 +1516,10 @@ public sealed class AdminService : IAdminService
             .Select(v => (DateTimeOffset?)v.CreatedAt)
             .FirstOrDefaultAsync(ct);
 
-        var socketPath = Environment.GetEnvironmentVariable("MIAUTRIX_CLAMAV_SOCKET") ?? DefaultClamAvSocketPath;
+        var socketPath = Environment.GetEnvironmentVariable("MIAUTRIX_CLAMAV_SOCKET");
+        if (string.IsNullOrWhiteSpace(socketPath)) socketPath = DefaultClamAvSocketPath;
         var scannerConfigured = !string.IsNullOrWhiteSpace(socketPath);
-        var scannerAvailable = File.Exists(socketPath);
+        var scannerAvailable = await IsClamAvAvailableAsync(socketPath, ct);
         var version = Environment.GetEnvironmentVariable("MIAUTRIX_CLAMAV_VERSION");
 
         return new AntiMalwareStatusDto(
@@ -1530,7 +1532,24 @@ public sealed class AdminService : IAdminService
             Threats24h: threats24h,
             Errors24h: 0,
             LastScanAt: lastScanAt,
-            LastError: scannerConfigured && !scannerAvailable ? "ClamAV socket is not available." : null);
+            LastError: scannerConfigured && !scannerAvailable ? "ClamAV endpoint is not available." : null);
+    }
+
+    private static async Task<bool> IsClamAvAvailableAsync(string endpoint, CancellationToken ct)
+    {
+        if (Uri.TryCreate(endpoint, UriKind.Absolute, out var uri) && uri.Scheme.Equals("tcp", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                timeout.CancelAfter(TimeSpan.FromSeconds(1));
+                using var client = new System.Net.Sockets.TcpClient();
+                await client.ConnectAsync(uri.Host, uri.Port, timeout.Token);
+                return true;
+            }
+            catch (Exception ex) when (ex is SocketException or OperationCanceledException) { return false; }
+        }
+        return File.Exists(endpoint);
     }
 
     private static AntiSpamSettingsDto ToAntiSpamSettingsDto(DomainEntity domain) => new(

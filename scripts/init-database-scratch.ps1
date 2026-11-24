@@ -6,14 +6,14 @@
     1. Validates connection parameters.
     2. (Optional) Drops and recreates the target database if -DropExisting is specified.
     3. Applies all Entity Framework Core schema migrations from scratch.
-    4. Executes the Seeder to provision default tenant, domain (miautrix.org), system roles,
-       granular permissions, and the initial Administrator account (admin@miautrix.org).
+    4. Seeds tenant, domain, roles, mailbox and folders, then securely prompts for the initial
+       administrator credential through the CLI.
 .PARAMETER DbHost
-    PostgreSQL server hostname or IP address. Default: 10.11.1.52
+    PostgreSQL server hostname or IP address. Default: 127.0.0.1 (scratch only).
 .PARAMETER DbPort
     PostgreSQL server port. Default: 5432
 .PARAMETER DbName
-    Database name to create/initialize. Default: miautrix-mail-pro
+    Database name to create/initialize. Default: miautrix-mail-scratch
 .PARAMETER DbUser
     PostgreSQL database user. Default: mmdb-user
 .PARAMETER DbPass
@@ -24,17 +24,19 @@
     Skips interactive confirmation when -DropExisting is specified.
 #>
 param (
-    [string]$DbHost = "10.11.1.52",
+    [string]$DbHost = "127.0.0.1",
     [int]$DbPort = 5432,
-    [string]$DbName = "miautrix-mail-pro",
-    [string]$DbUser = "mmdb-user",
+    [string]$DbName = "miautrix-mail-scratch",
+    [string]$DbUser = "miautrix_mail_scratch",
     [string]$DbPass = $env:MIAUTRIX_DB_PASSWORD,
+    [string]$AdminEmail = "admin@miautrix.org",
     [switch]$DropExisting,
     [switch]$Force
 )
 
 $ErrorActionPreference = "Stop"
 if ([string]::IsNullOrWhiteSpace($DbPass)) { throw "Set MIAUTRIX_DB_PASSWORD in the environment." }
+if ($DbHost -match '(?i)(10\.11\.1\.52|miautrix-mail-pro)' -or $DbName -match '(?i)(10\.11\.1\.52|miautrix-mail-pro)') { throw 'Scratch initialization refuses the production host/database.' }
 
 Write-Host "==========================================================" -ForegroundColor Cyan
 Write-Host "  Miautrix Mail Server - Greenfield Database Deployment" -ForegroundColor Cyan
@@ -89,13 +91,23 @@ if ($LASTEXITCODE -ne 0) {
 }
 Pop-Location
 
+# The seeder creates bootstrap entities and roles only; admin credentials are created through
+# the CLI's secure password prompt and are never supplied in command-line arguments.
+Push-Location $RepoRoot
+$savedCliEnvironment = $env:DOTNET_ENVIRONMENT
+$env:DOTNET_ENVIRONMENT = "Development"
+dotnet run --project src/Miautrix.Mail.Cli -- users bootstrap-admin --email $AdminEmail
+$env:DOTNET_ENVIRONMENT = $savedCliEnvironment
+if ($LASTEXITCODE -ne 0) { Pop-Location; throw "Secure admin bootstrap failed with exit code $LASTEXITCODE" }
+Pop-Location
+
 # 4. Summary and Credentials Notice
 Write-Host "[4/4] Greenfield Database Deployment Completed!" -ForegroundColor Green
 Write-Host "==========================================================" -ForegroundColor Cyan
 Write-Host "  Database:             $($DbName) ($($DbHost):$($DbPort))" -ForegroundColor Cyan
 Write-Host "  Default Tenant:       default" -ForegroundColor Cyan
 Write-Host "  Default Domain:       miautrix.org (Verified, Primary)" -ForegroundColor Cyan
-Write-Host "  Initial Admin User:   admin@miautrix.org" -ForegroundColor Cyan
-Write-Host "  Initial Password:     CH@nGEm3! (Must change on first login)" -ForegroundColor Cyan
-Write-Host "  Standard Mailbox:     admin@miautrix.org (INBOX, Sent, Drafts, Trash, Junk, Archive)" -ForegroundColor Cyan
+Write-Host "  Initial Admin User:   $AdminEmail" -ForegroundColor Cyan
+Write-Host "  Initial Password:     entered securely at the CLI prompt; no default password is configured" -ForegroundColor Cyan
+Write-Host "  Standard Mailbox:     $AdminEmail (INBOX, Sent, Drafts, Trash, Junk, Archive)" -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Cyan

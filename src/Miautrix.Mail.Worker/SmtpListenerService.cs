@@ -371,7 +371,7 @@ public class SmtpListenerService : BackgroundService
                         break;
                     }
                     // Un-dot-stuff
-                    body.AppendLine(dataLine.StartsWith("..") ? dataLine[1..] : dataLine);
+                    body.Append(dataLine.StartsWith("..") ? dataLine[1..] : dataLine).Append("\r\n");
                 }
 
                 var rawMessage = body.ToString();
