@@ -77,6 +77,15 @@ with imaplib.IMAP4_SSL(host, 993, ssl_context=context) as client:
         status, data = client.fetch(f"1:{last}", "(UID FLAGS)")
         check("IMAP-004 FETCH sequence range", status == "OK" and len([d for d in data if d]) >= 1,
               f"{len([d for d in data if d])} responses for 1:{last}")
+
+        uids = []
+        for item in data or []:
+            text = item.decode(errors="replace") if isinstance(item, bytes) else ""
+            if "UID " in text:
+                uids.append(int(text.split("UID ")[1].split()[0].strip(")")))
+        zero = sum(1 for u in uids if u == 0)
+        check("IMAP-006 UIDs non-zero and unique", bool(uids) and zero == 0 and len(set(uids)) == len(uids),
+              f"{len(uids)} uids, {zero} zero, {len(uids) - len(set(uids))} duplicates")
     else:
         print("SKIP  FETCH checks: INBOX is empty")
 

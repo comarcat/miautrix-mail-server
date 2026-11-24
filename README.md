@@ -9,6 +9,7 @@ Self-hosted, multi-tenant mail platform designed as a modular monolith in .NET 1
 - **Charter & Plan:** [`PMI_Project_Charter_and_Plan.md`](PMI_Project_Charter_and_Plan.md) — Version 1.0 complete (2026-10-03); Version 2.0 implemented, pending validation (M5)
 - **Session handoff (v2.0):** [`docs/HANDOFF-v2.0.md`](docs/HANDOFF-v2.0.md) — start here to catch up
 - **Deployment:** [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — versioned deploy, storage preflight, rollback and cleanup
+- **Troubleshooting:** [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) — deployment, service, mail and IMAP diagnostics
 - **Changelog:** [`CHANGELOG.md`](CHANGELOG.md)
 - **Calendar/Webmail final solution:** [`CALENDAR_WEBMAIL_FINAL_SOLUTION_2026-10-03.md`](CALENDAR_WEBMAIL_FINAL_SOLUTION_2026-10-03.md)
 - **Admin UI Specification:** [`DESIGN-Admin.md`](DESIGN-Admin.md) — Comprehensive technical design for the Admin Website
