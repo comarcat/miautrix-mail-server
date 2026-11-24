@@ -69,7 +69,7 @@ if ($Rollback -or $Status) {
     exit 0
 }
 if (-not $AllowDirty) {
-    $dirty = (& git -C $Repo status --porcelain)
+    $dirty = (& git -C $Repo status --porcelain -- . ':(exclude)graphify-out')
     if ($LASTEXITCODE -ne 0) { throw 'git status failed.' }
     if ($dirty) { throw 'Working tree must be clean; commit or pass -AllowDirty for a reviewed local snapshot.' }
 }
