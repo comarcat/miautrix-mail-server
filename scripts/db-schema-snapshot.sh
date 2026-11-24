@@ -36,40 +36,6 @@ connection_value() {
   return 1
 }
 pgpass_escape() { local v=$1; v=${v//\\/\\\\}; v=${v//:/\\:}; printf '%s' "$v"; }
-[[ -f "$ROOT/.env" ]] || die "missing $ROOT/.env"
-line=$(sed -nE 's/^MIAUTRIX_DB_CONNECTION=(.*)$/\1/p' "$ROOT/.env" | tail -n1)
-line=${line#\"}; line=${line%\"}; line=${line#\'}; line=${line%\'}
-[[ -n "$line" ]] || die 'MIAUTRIX_DB_CONNECTION is missing from .env'
-DB_HOST=$(connection_value "$line" host) || die 'Host missing'
-DB_PORT=$(connection_value "$line" port || printf '5432')
-DB_NAME=$(connection_value "$line" database) || die 'Database missing'
-DB_USER=$(connection_value "$line" username) || die 'Username missing'
-DB_PASSWORD=$(connection_value "$line" password) || die 'Password missing'
-unset line
-passfile=$(mktemp); trap 'rm -f "$passfile"' EXIT; chmod 600 "$passfile"
-printf '%s:%s:%s:%s:%s\n' "$(pgpass_escape "$DB_HOST")" "$DB_PORT" "$(pgpass_escape "$DB_NAME")" "$(pgpass_escape "$DB_USER")" "$(pgpass_escape "$DB_PASSWORD")" > "$passfile"
-unset DB_PASSWORD
-export PGPASSFILE=$passfile PGHOST=$DB_HOST PGPORT=$DB_PORT PGDATABASE=$DB_NAME PGUSER=$DB_USER PGOPTIONS='-c default_transaction_read_only=on'
-
-psql -X -q -v ON_ERROR_STOP=1 <<'SQL'
-\pset footer off
-\echo '== server / database =='
-SELECT current_database() AS database, split_part(version(), ' ', 2) AS server_version, current_setting('default_transaction_read_only') AS read_only;
-\echo '== last 8 applied EF migrations =='
-SELECT "MigrationId", "ProductVersion" FROM "__EFMigrationsHistory" ORDER BY "MigrationId" DESC LIMIT 8;
-\echo '== smtp_queue.direction column (AddQueueDirection) =='
-SELECT column_name, data_type, is_nullable, coalesce(column_default, '<none>') AS column_default FROM information_schema.columns
-WHERE table_schema = 'public' AND table_name = 'smtp_queue' AND column_name = 'direction';
-\echo '== ck_smtp_queue_direction constraint =='
-SELECT conname, pg_get_constraintdef(oid) AS definition FROM pg_constraint WHERE conname = 'ck_smtp_queue_direction';
-\echo '== smtp_queue.direction values =='
-SELECT coalesce(direction, '<NULL>') AS direction, count(*) FROM smtp_queue GROUP BY 1 ORDER BY 1;
-\echo '== IMAP-006 objects (expected absent before the UID migration) =='
-SELECT conname FROM pg_constraint WHERE conname = 'ck_messages_uid_positive'
-UNION ALL SELECT indexname FROM pg_indexes WHERE indexname = 'uq_messages_folder_id_uid';
-\echo '== message UID summary =='
-SELECT count(*) AS messages, count(*) FILTER (WHERE uid = 0) AS uid_zero, count(DISTINCT folder_id) AS folders FROM messages;
-SQL
 line=$(sed -nE 's/^MIAUTRIX_DB_CONNECTION=(.*)$/\1/p' "$ENV_FILE" | tail -n1 | tr -d '\r')
 line=${line#\"}; line=${line%\"}; line=${line#\'}; line=${line%\'}
 [[ -n "$line" ]] || die 'MIAUTRIX_DB_CONNECTION is missing'
