@@ -152,10 +152,10 @@ try {
         throw "Remote verify failed; rollback attempted. Database dump remains in /opt/miautrix-mail/backups; inspect server status."
     }
     if (-not $SkipCleanup) {
-        & ssh @($scpOpts + @("$TargetUser@$TargetIp", 'bash /tmp/miautrix-release-' + $ReleaseId + '/lxc-release.sh cleanup --keep 2'))
+        & ssh @($scpOpts + @("$TargetUser@$TargetIp", "bash /tmp/miautrix-release-$ReleaseId/lxc-release.sh cleanup --keep 2"))
         if ($LASTEXITCODE -ne 0) { throw 'Deploy verified but cleanup failed; release retained.' }
     }
-    & ssh @($scpOpts + @("$TargetUser@$TargetIp", 'bash /tmp/miautrix-release-' + $ReleaseId + '/lxc-release.sh status'))
+    & ssh @($scpOpts + @("$TargetUser@$TargetIp", "bash /tmp/miautrix-release-$ReleaseId/lxc-release.sh status"))
     if ($LASTEXITCODE -ne 0) { throw 'Final remote status failed.' }
 } finally {
     if ($remoteTmp) {
