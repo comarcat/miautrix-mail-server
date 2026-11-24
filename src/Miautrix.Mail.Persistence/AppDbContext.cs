@@ -32,6 +32,7 @@ public class AppDbContext : DbContext
     public DbSet<Mailbox> Mailboxes => Set<Mailbox>();
     public DbSet<MailboxDelegate> MailboxDelegates => Set<MailboxDelegate>();
     public DbSet<Folder> Folders => Set<Folder>();
+    public DbSet<ImapFolderSubscription> ImapFolderSubscriptions => Set<ImapFolderSubscription>();
     public DbSet<Message> Messages => Set<Message>();
     public DbSet<MessageRecipient> MessageRecipients => Set<MessageRecipient>();
     public DbSet<MessageFlag> MessageFlags => Set<MessageFlag>();
@@ -235,6 +236,17 @@ public class AppDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(f => f.ParentId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        ConfigureTenantScoped<ImapFolderSubscription>(modelBuilder, "imap_folder_subscriptions");
+        modelBuilder.Entity<ImapFolderSubscription>(entity =>
+        {
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.FolderId).HasColumnName("folder_id");
+            entity.Property(e => e.Subscribed).HasColumnName("subscribed").HasDefaultValue(true);
+            entity.HasIndex(e => new { e.TenantId, e.UserId, e.FolderId })
+                .IsUnique()
+                .HasDatabaseName("uq_imap_folder_subscriptions_user_folder");
         });
 
         ConfigureTenantScoped<Message>(modelBuilder, "messages");

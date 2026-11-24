@@ -737,6 +737,31 @@ namespace Miautrix.Mail.Persistence.Migrations
                     b.ToTable("identity_provider_groups", (string)null);
                 });
 
+            modelBuilder.Entity("Miautrix.Mail.Domain.ImapFolderSubscription", b =>
+                {
+                    b.HasBaseType("Miautrix.Mail.Domain.TenantScopedEntityBase");
+
+                    b.Property<Guid>("FolderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("folder_id");
+
+                    b.Property<bool>("Subscribed")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("subscribed");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasIndex("TenantId", "UserId", "FolderId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_imap_folder_subscriptions_user_folder");
+
+                    b.ToTable("imap_folder_subscriptions", (string)null);
+                });
+
             modelBuilder.Entity("Miautrix.Mail.Domain.Invitation", b =>
                 {
                     b.HasBaseType("Miautrix.Mail.Domain.TenantScopedEntityBase");

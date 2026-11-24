@@ -103,6 +103,8 @@ public sealed class ImapListenerRawSocketTests
                 new Folder { Id = Guid.NewGuid(), TenantId = tenantId, MailboxId = mailboxId, Name = "Sent", Role = "sent", UidNext = 1, UidValidity = 13, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow },
                 new Folder { Id = Guid.NewGuid(), TenantId = tenantId, MailboxId = mailboxId, Name = "Drafts", Role = "drafts", UidNext = 1, UidValidity = 14, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow },
                 new Folder { Id = Guid.NewGuid(), TenantId = tenantId, MailboxId = mailboxId, Name = "Trash", Role = "trash", UidNext = 1, UidValidity = 15, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow },
+                new Folder { Id = Guid.NewGuid(), TenantId = tenantId, MailboxId = mailboxId, Name = "Archive", Role = "archive", UidNext = 1, UidValidity = 17, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow },
+                new Folder { Id = Guid.NewGuid(), TenantId = tenantId, MailboxId = mailboxId, Name = "Junk", Role = "junk", UidNext = 1, UidValidity = 18, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow },
                 new Folder { Id = Guid.NewGuid(), TenantId = tenantId, MailboxId = mailboxId, Name = "Café", Role = "custom", UidNext = 1, UidValidity = 16, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow });
             var projectsId = Guid.NewGuid();
             seed.Folders.Add(new Folder { Id = projectsId, TenantId = tenantId, MailboxId = mailboxId, Name = "Projects", Role = "custom", UidNext = 1, UidValidity = 11, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow });
@@ -187,20 +189,74 @@ public sealed class ImapListenerRawSocketTests
             Assert.Contains("\\HasChildren", Encoding.UTF8.GetString(hierarchy));
             var hierarchyChild = await SendAndReadAsync(tls, reader, "A2bc LIST \"\" \"Projects/%\"", "A2bc", stopping.Token);
             Assert.Contains("Projects/2026", Encoding.UTF8.GetString(hierarchyChild));
+            var sharedParentList = Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A2bd LIST \"\" \"Shared\"", "A2bd", stopping.Token));
+            Assert.Contains("* LIST (\\Noselect \\HasChildren) \"/\" \"Shared\"", sharedParentList);
+            var sharedAddressList = Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A2be LIST \"\" \"Shared/%\"", "A2be", stopping.Token));
+            Assert.Contains($"* LIST (\\Noselect \\HasChildren) \"/\" \"Shared/{salesAddress}\"", sharedAddressList);
+            Assert.DoesNotContain("/INBOX", sharedAddressList);
+            var sharedReferenceList = Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A2bf LIST \"Shared/\" \"%/INBOX\"", "A2bf", stopping.Token));
+            Assert.Contains($"Shared/{salesAddress}/INBOX", sharedReferenceList);
+            var delimiterList = Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A2bg LIST \"\" \"\"", "A2bg", stopping.Token));
+            Assert.Contains("* LIST (\\Noselect) \"/\" \"\"", delimiterList);
             var lsub = await SendAndReadAsync(tls, reader, "A2c LSUB \"\" \"*\"", "A2c", stopping.Token);
-            Assert.Contains("* LSUB", Encoding.UTF8.GetString(lsub));
-            var status = await SendAndReadAsync(tls, reader, "A2d STATUS INBOX (MESSAGES RECENT UIDNEXT UIDVALIDITY UNSEEN)", "A2d", stopping.Token);
+            var defaultSubscriptions = Encoding.UTF8.GetString(lsub);
+            Assert.Contains("* LSUB", defaultSubscriptions);
+            Assert.Contains("INBOX", defaultSubscriptions);
+            Assert.Contains("Sent", defaultSubscriptions);
+            Assert.Contains("Drafts", defaultSubscriptions);
+            Assert.Contains("Trash", defaultSubscriptions);
+            Assert.Contains("Archive", defaultSubscriptions);
+            Assert.Contains("Junk", defaultSubscriptions);
+            Assert.Contains("* LSUB (\\Noselect \\HasChildren) \"/\" \"Shared\"", defaultSubscriptions);
+            Assert.Contains($"Shared/{salesAddress}/INBOX", defaultSubscriptions);
+            Assert.Contains($"Shared/{readAddress}/INBOX", defaultSubscriptions);
+            Assert.Contains("A2d OK UNSUBSCRIBE completed", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A2d UNSUBSCRIBE INBOX", "A2d", stopping.Token)));
+            var optedOut = Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A2e LSUB \"\" \"INBOX\"", "A2e", stopping.Token));
+            Assert.DoesNotContain("* LSUB", optedOut);
+            Assert.Contains("A2f OK SUBSCRIBE completed", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A2f SUBSCRIBE INBOX", "A2f", stopping.Token)));
+            Assert.Contains("* LSUB", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A2g LSUB \"\" \"INBOX\"", "A2g", stopping.Token)));
+            Assert.Contains("A2h OK CREATE completed", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A2h CREATE FreshFolder", "A2h", stopping.Token)));
+            Assert.Contains("FreshFolder", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A2i LSUB \"\" \"FreshFolder\"", "A2i", stopping.Token)));
+            await using (var delegateChange = new AppDbContext(dbOptions))
+            {
+                var grant = await delegateChange.MailboxDelegates.SingleAsync(item => item.TenantId == tenantId && item.UserId == userId && item.MailboxId == readMailboxId);
+                delegateChange.MailboxDelegates.Remove(grant);
+                await delegateChange.SaveChangesAsync();
+            }
+            var revokedLsub = Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A2j LSUB \"\" \"Shared/*\"", "A2j", stopping.Token));
+            Assert.DoesNotContain(readAddress, revokedLsub);
+            var revokedList = Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A2j1 LIST \"\" \"Shared/*\"", "A2j1", stopping.Token));
+            Assert.DoesNotContain(readAddress, revokedList);
+            await using (var delegateChange = new AppDbContext(dbOptions))
+            {
+                delegateChange.MailboxDelegates.Add(new MailboxDelegate { Id = Guid.NewGuid(), TenantId = tenantId, MailboxId = readMailboxId, UserId = userId, AccessLevel = "read" });
+                await delegateChange.SaveChangesAsync();
+            }
+            var newDelegationLsub = Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A2k LSUB \"\" \"Shared/*\"", "A2k", stopping.Token));
+            Assert.Contains($"Shared/{readAddress}/INBOX", newDelegationLsub);
+            var deniedSubscribe = Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, $"A2k1 SUBSCRIBE Shared/{sendOnlyAddress}/INBOX", "A2k1", stopping.Token));
+            var missingSubscribe = Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A2k2 SUBSCRIBE Shared/missing@test.invalid/INBOX", "A2k2", stopping.Token));
+            Assert.Equal("NO Mailbox does not exist", ResponseTail(deniedSubscribe));
+            Assert.Equal(ResponseTail(deniedSubscribe), ResponseTail(missingSubscribe));
+            var status = await SendAndReadAsync(tls, reader, "A2l STATUS INBOX (MESSAGES RECENT UIDNEXT UIDVALIDITY UNSEEN)", "A2l", stopping.Token);
             Assert.Contains("MESSAGES 2", Encoding.UTF8.GetString(status));
             Assert.Contains("RECENT 0", Encoding.UTF8.GetString(status));
             var examine = await SendAndReadAsync(tls, reader, "A3 EXAMINE INBOX", "A3", stopping.Token);
             Assert.Contains("[READ-ONLY]", Encoding.UTF8.GetString(examine));
             Assert.Contains("[UNSEEN 1]", Encoding.UTF8.GetString(examine));
             Assert.Contains("PERMANENTFLAGS ()", Encoding.UTF8.GetString(examine));
-            await SendAndReadAsync(tls, reader, "A3a CHECK", "A3a", stopping.Token);
-            Assert.Contains("Body π", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A3aa FETCH 1 (BODY[1])", "A3aa", stopping.Token)));
+            Assert.Contains("A3a OK CHECK completed", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A3a CHECK", "A3a", stopping.Token)));
+            Assert.Contains("Body π", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A3aa FETCH 1 (BODY[])", "A3aa", stopping.Token)));
             Assert.Contains("* SEARCH 1 2", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A3ab SEARCH UNSEEN", "A3ab", stopping.Token)));
             var readonlyStore = await SendAndReadAsync(tls, reader, "A3b STORE 1 +FLAGS (\\Seen)", "A3b", stopping.Token);
             Assert.Contains("[READ-ONLY]", Encoding.UTF8.GetString(readonlyStore));
+            var readonlyExpunge = Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A3b1 EXPUNGE", "A3b1", stopping.Token));
+            Assert.Contains("NO [READ-ONLY]", readonlyExpunge);
+            var refusedAppend = Encoding.UTF8.GetBytes($"From: sender@test.invalid\r\nTo: {address}\r\nSubject: readonly append\r\n\r\nbody");
+            await tls.WriteAsync(Encoding.UTF8.GetBytes($"A3b2 APPEND INBOX {{{refusedAppend.Length}+}}\r\n"), stopping.Token);
+            await tls.WriteAsync(refusedAppend, stopping.Token);
+            await tls.WriteAsync("\r\n"u8.ToArray(), stopping.Token);
+            Assert.Contains("NO [READ-ONLY]", Encoding.UTF8.GetString(await ReadResponseAsync(reader, "A3b2", stopping.Token)));
             await SendAndReadAsync(tls, reader, "A3c SELECT INBOX", "A3c", stopping.Token);
             var peekText = await SendAndReadAsync(tls, reader, "A3d FETCH 1 (BODY.PEEK[1])", "A3d", stopping.Token);
             Assert.Contains("Body π", Encoding.UTF8.GetString(peekText));
@@ -249,6 +305,41 @@ public sealed class ImapListenerRawSocketTests
             var fetchItems = await SendAndReadAsync(tls, reader, "A5c FETCH 1:* (UID FLAGS INTERNALDATE RFC822.SIZE ENVELOPE BODYSTRUCTURE)", "A5c", stopping.Token);
             Assert.Equal(2, Encoding.UTF8.GetString(fetchItems).Split(" FETCH (", StringSplitOptions.None).Length - 1);
             Assert.Contains(" BAD ", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A5d BOGUS", "A5d", stopping.Token)));
+            var bulkCopy = Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A5e UID COPY 1:2 Archive", "A5e", stopping.Token));
+            Assert.Contains("[COPYUID 17 1,2 1,2]", bulkCopy);
+            Assert.Contains("MESSAGES 2", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A5f STATUS Archive (MESSAGES)", "A5f", stopping.Token)));
+            var archiveSelect = Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A5g SELECT Archive", "A5g", stopping.Token));
+            Assert.Contains("PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft \\*)", archiveSelect);
+            var storeFlags = Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A5h STORE 1 FLAGS (\\Seen \\Answered \\Flagged \\Deleted \\Draft custom)", "A5h", stopping.Token));
+            Assert.Contains("* 1 FETCH (FLAGS", storeFlags);
+            Assert.Contains("custom", storeFlags);
+            var silentStore = Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A5i UID STORE 1 -FLAGS.SILENT (\\Deleted)", "A5i", stopping.Token));
+            Assert.DoesNotContain("* 1 FETCH", silentStore);
+            var storedFlags = Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A5j UID FETCH 1 (FLAGS)", "A5j", stopping.Token));
+            Assert.Contains("\\Seen", storedFlags);
+            Assert.Contains("\\Answered", storedFlags);
+            Assert.Contains("custom", storedFlags);
+            Assert.DoesNotContain("\\Deleted", storedFlags);
+            Assert.Contains("* SEARCH 1", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A5j1 SEARCH KEYWORD custom", "A5j1", stopping.Token)));
+            Assert.Contains("* SEARCH 2", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A5j2 SEARCH UNKEYWORD custom", "A5j2", stopping.Token)));
+            Assert.Contains("BAD Invalid STORE flag", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A5k STORE 1 +FLAGS (\\Recent)", "A5k", stopping.Token)));
+            await SendAndReadAsync(tls, reader, "A5l SELECT INBOX", "A5l", stopping.Token);
+            var fullBodyFetch = await SendAndReadAsync(tls, reader, "A5m FETCH 1 (RFC822.SIZE BODY.PEEK[])", "A5m", stopping.Token);
+            Assert.Contains($"RFC822.SIZE {raw.Length}", Encoding.UTF8.GetString(fullBodyFetch));
+            Assert.Contains($"BODY[] {{{raw.Length}}}", Encoding.UTF8.GetString(fullBodyFetch));
+            Assert.True(ContainsBytes(fullBodyFetch, raw));
+            var fieldsFetch = await SendAndReadAsync(tls, reader, "A5n FETCH 1 (BODY.PEEK[HEADER.FIELDS (SUBJECT X-Folded)])", "A5n", stopping.Token);
+            Assert.True(ContainsBytes(fieldsFetch, Encoding.UTF8.GetBytes("Subject: Café\r\nX-Folded: one\r\n two\r\n\r\n")));
+            var fieldsNotFetch = await SendAndReadAsync(tls, reader, "A5o FETCH 1 (BODY.PEEK[HEADER.FIELDS.NOT (SUBJECT)])", "A5o", stopping.Token);
+            Assert.True(ContainsBytes(fieldsNotFetch, Encoding.UTF8.GetBytes("From: sender@test.invalid")));
+            Assert.False(ContainsBytes(fieldsNotFetch, Encoding.UTF8.GetBytes("Subject: Café")));
+            var mimeFetch = Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A5p FETCH 1 (BODY.PEEK[1.MIME])", "A5p", stopping.Token));
+            Assert.Contains("Content-Type: multipart/alternative", mimeFetch);
+            var textFetch = await SendAndReadAsync(tls, reader, "A5q FETCH 1 (RFC822.TEXT BODY.PEEK[TEXT])", "A5q", stopping.Token);
+            Assert.True(ContainsBytes(textFetch, Encoding.UTF8.GetBytes("Body π\r\n")));
+            var partialFetch = await SendAndReadAsync(tls, reader, "A5r FETCH 1 (BODY.PEEK[]<0.20>)", "A5r", stopping.Token);
+            Assert.Contains("BODY[]<0> {20}", Encoding.UTF8.GetString(partialFetch));
+            Assert.True(ContainsBytes(partialFetch, raw[..20]));
             using var mailKit = new MailKit.Net.Imap.ImapClient();
             mailKit.ServerCertificateValidationCallback = (_, _, _, _) => true;
             await mailKit.ConnectAsync("127.0.0.1", service.BoundPort, MailKit.Security.SecureSocketOptions.SslOnConnect, stopping.Token);
@@ -259,6 +350,16 @@ public sealed class ImapListenerRawSocketTests
             Assert.Equal(2, (await mailKit.Inbox.SearchAsync(MailKit.Search.SearchQuery.SubjectContains("Café"), stopping.Token)).Count);
             var names = await mailKit.GetFoldersAsync(mailKit.PersonalNamespaces[0], MailKit.StatusItems.None, false, stopping.Token);
             Assert.Contains(names, folder => folder.FullName.Equals("INBOX", StringComparison.OrdinalIgnoreCase));
+            var subscribedNames = await mailKit.GetFoldersAsync(mailKit.PersonalNamespaces[0], MailKit.StatusItems.None, true, stopping.Token);
+            Assert.Contains(subscribedNames, folder => folder.FullName.Equals("INBOX", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(subscribedNames, folder => folder.FullName.Equals($"Shared/{salesAddress}/INBOX", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(subscribedNames, folder => folder.FullName.Equals($"Shared/{readAddress}/INBOX", StringComparison.OrdinalIgnoreCase));
+            var personalNamespaceRoot = mailKit.GetFolder(mailKit.PersonalNamespaces[0]);
+            var subscribedSubfolders = personalNamespaceRoot.GetSubfolders(subscribedOnly: true);
+            Assert.Contains(subscribedSubfolders, folder => folder.FullName.Equals("Projects", StringComparison.OrdinalIgnoreCase));
+            var sharedRoot = mailKit.GetFolder("Shared");
+            var subscribedSharedMailboxes = sharedRoot.GetSubfolders(subscribedOnly: true);
+            Assert.Contains(subscribedSharedMailboxes, folder => folder.FullName.Equals($"Shared/{salesAddress}", StringComparison.OrdinalIgnoreCase));
             var summaries = await mailKit.Inbox.FetchAsync(0, -1,
                 new MailKit.FetchRequest(MailKit.MessageSummaryItems.UniqueId | MailKit.MessageSummaryItems.Envelope |
                 MailKit.MessageSummaryItems.BodyStructure | MailKit.MessageSummaryItems.Flags |
@@ -317,11 +418,33 @@ public sealed class ImapListenerRawSocketTests
             Assert.Contains("* 1 EXPUNGE", uidExpunge);
 
             var appended = Encoding.UTF8.GetBytes($"From: sender@test.invalid\r\nTo: {address}\r\nSubject: plus literal\r\n\r\nbody");
-            await tls.WriteAsync(Encoding.UTF8.GetBytes($"A6h APPEND INBOX {{{appended.Length}+}}\r\n"), stopping.Token);
+            await tls.WriteAsync(Encoding.UTF8.GetBytes($"A6h APPEND INBOX (\\Seen \\Flagged) \"12-Feb-2024 09:30:00 +0000\" {{{appended.Length}+}}\r\n"), stopping.Token);
             await tls.WriteAsync(appended, stopping.Token);
             await tls.WriteAsync("\r\n"u8.ToArray(), stopping.Token);
             var literalPlus = Encoding.UTF8.GetString(await ReadResponseAsync(reader, "A6h", stopping.Token));
             Assert.Contains("[APPENDUID 9 3]", literalPlus);
+            var appendedMetadata = Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A6h0 FETCH 1 (UID FLAGS INTERNALDATE)", "A6h0", stopping.Token));
+            Assert.Contains("\\Seen", appendedMetadata);
+            Assert.Contains("\\Flagged", appendedMetadata);
+            Assert.Contains("12-Feb-2024", appendedMetadata);
+            var missingAppend = Encoding.UTF8.GetBytes($"A6h1 APPEND MissingFolder {{{appended.Length}+}}\r\n");
+            await tls.WriteAsync(missingAppend, stopping.Token);
+            await tls.WriteAsync(appended, stopping.Token);
+            await tls.WriteAsync("\r\n"u8.ToArray(), stopping.Token);
+            Assert.Contains("NO [TRYCREATE]", Encoding.UTF8.GetString(await ReadResponseAsync(reader, "A6h1", stopping.Token)));
+            Assert.Contains("NO [TRYCREATE]", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A6h2 COPY 1 MissingFolder", "A6h2", stopping.Token)));
+            await SendAndReadAsync(tls, reader, "A6i SELECT INBOX", "A6i", stopping.Token);
+            await SendAndReadAsync(tls, reader, "A6j STORE 1 +FLAGS (\\Deleted)", "A6j", stopping.Token);
+            await SendAndReadAsync(tls, reader, "A6k UNSELECT", "A6k", stopping.Token);
+            await SendAndReadAsync(tls, reader, "A6l EXAMINE INBOX", "A6l", stopping.Token);
+            var readOnlyClose = Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A6m CLOSE", "A6m", stopping.Token));
+            Assert.Equal("A6m OK CLOSE completed\r\n", readOnlyClose);
+            Assert.Contains("MESSAGES 1", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A6n STATUS INBOX (MESSAGES)", "A6n", stopping.Token)));
+            await SendAndReadAsync(tls, reader, "A6o SELECT INBOX", "A6o", stopping.Token);
+            var close = Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A6p CLOSE", "A6p", stopping.Token));
+            Assert.Equal("A6p OK CLOSE completed\r\n", close);
+            Assert.Contains("MESSAGES 0", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A6q STATUS INBOX (MESSAGES)", "A6q", stopping.Token)));
+            await SendAndReadAsync(tls, reader, "A6r SELECT INBOX", "A6r", stopping.Token);
 
             var sharedList = Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A7 LIST \"\" \"Shared/*\"", "A7", stopping.Token));
             Assert.Contains($"Shared/{salesAddress}/INBOX", sharedList);

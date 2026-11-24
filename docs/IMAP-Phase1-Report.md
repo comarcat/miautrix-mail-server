@@ -15,7 +15,7 @@
 
 Status describes this repository implementation at audit time. `Partial` means a handler exists but full RFC semantics or evidence is incomplete. An advertised extension requires command-level evidence before it can be treated as complete.
 
-Audit counts: **13 implemented, 17 partial, 5 missing/not advertised, 1 not applicable**. Every advertised capability has a raw protocol assertion; remaining partial items are RFC 3501 command semantics and are not optional capability claims.
+Audit counts: **24 implemented, 6 partial, 5 missing/not advertised, 1 not applicable**. Every advertised capability has a raw protocol assertion; remaining partial items are RFC 3501 command semantics and are not optional capability claims.
 
 | Feature | RFC | Level | Status | Coverage/evidence | Action |
 |---|---|---:|---|---|---|
@@ -26,22 +26,22 @@ Audit counts: **13 implemented, 17 partial, 5 missing/not advertised, 1 not appl
 | AUTHENTICATE | 3501 §6.2.2 | Conditional | Implemented, advertised | Raw socket SASL PLAIN initial response | Continue testing client authentication paths |
 | LOGIN | 3501 §6.2.3 | MUST absent AUTH | Implemented | Authenticator tests | Ensure secure transport policy |
 | SELECT | 3501 §6.3.1 | MUST | Partial | Session/MailKit | Selected target and state refresh |
-| EXAMINE | 3501 §6.3.2 | MUST | Partial | Session/MailKit | Verify read-only semantics |
+| EXAMINE | 3501 §6.3.2 | MUST | Implemented | Raw listener: [READ-ONLY] on STORE/EXPUNGE/APPEND into selected folder; BODY[] does not set `\\Seen` | Keep selected-folder writes blocked |
 | CREATE | 3501 §6.3.3 | MUST | Partial | Session | Parent/name semantics and authorization |
 | DELETE | 3501 §6.3.4 | MUST | Partial | Session | INBOX and non-empty handling |
 | RENAME | 3501 §6.3.5 | MUST | Partial | Session | INBOX restrictions and namespace collisions |
-| SUBSCRIBE/UNSUBSCRIBE | 3501 §6.3.6–7 | MUST | Partial | Handler acknowledged without persistent subscription | Persist semantics or remove false success |
-| LIST | 3501 §6.3.8 | MUST | Partial | Session/MailKit | Wildcards, reference, hierarchy, shared discovery |
-| LSUB | 3501 §6.3.9 | MUST | Partial | Shares LIST path; no subscription store | Implement subscription set or correct responses |
+| SUBSCRIBE/UNSUBSCRIBE | 3501 §6.3.6–7 | MUST | Implemented | Raw listener checks personal/shared opt-out and restore; EF stores per-user opt-out rows | Keep default subscribed; unknown/unauthorized names receive hidden NO |
+| LIST | 3501 §6.3.8 | MUST | Implemented | Raw tests cover `*`/`%`, reference, delimiter query, hierarchy attributes, Shared/address parent nodes and hidden unauthorized paths | Preserve accessible parent discovery |
+| LSUB | 3501 §6.3.9 | MUST | Implemented | Raw listener asserts default personal/shared folders, opt-out/restore, new folder and delegation visibility, revocation, and `\\Noselect` parents; MailKit `GetFolders` and `GetSubfolders(subscribedOnly: true)` | Preserve access filtering and user-specific opt-outs |
 | STATUS | 3501 §6.3.10 | MUST | Partial | Session tests | Target routing and accurate RECENT/UID values |
-| APPEND | 3501 §6.3.11 | MUST | Partial | Literal/session tests | Flags/date, synchronization and target auth |
-| CHECK | 3501 §6.4.1 | MUST | Partial | Session | Ensure selected writable mailbox semantics |
-| CLOSE | 3501 §6.4.2 | MUST | Partial | Session | Expunge deleted messages and clear selection |
+| APPEND | 3501 §6.3.11 | MUST | Implemented | Raw listener asserts APPENDUID, flags/date preservation, literal+, TRYCREATE for missing target and [READ-ONLY] selected-target rejection | Preserve write authorization and octet framing |
+| CHECK | 3501 §6.4.1 | MUST | Implemented | Raw listener asserts CHECK succeeds on a selected mailbox | Preserve selected-state legality |
+| CLOSE | 3501 §6.4.2 | MUST | Implemented | Raw listener asserts read-write CLOSE silently expunges `\\Deleted`, while read-only CLOSE preserves it; both clear selection | Keep CLOSE free of untagged EXPUNGE |
 | EXPUNGE | 3501 §6.4.3 | MUST | Implemented | Raw listener tests verify permanent deletion, sequence response, and notification to another selected session on NOOP | Preserve mailbox snapshot updates |
-| SEARCH | 3501 §6.4.4 | MUST | Partial | Session/MailKit | Full key grammar, charset and criteria |
-| FETCH | 3501 §6.4.5 | MUST | Partial | MailKit and raw framing | BODY sections, literals, size and seen rules |
-| STORE | 3501 §6.4.6 | MUST | Partial | Session | Permanent flags, validation, concurrent flags |
-| COPY | 3501 §6.4.7 | MUST | Partial | Session | Destination authorization and UID mapping |
+| SEARCH | 3501 §6.4.4 | MUST | Implemented | Raw tests cover sequence/UID sets, AND/OR/NOT, dates, HEADER, LARGER/SMALLER, KEYWORD/UNKEYWORD, UTF-8 and BADCHARSET | Keep criteria comparisons and charset responses covered |
+| FETCH | 3501 §6.4.5 | MUST | Implemented | Raw tests cover BODY sections, HEADER.FIELDS(.NOT), MIME, TEXT, partial ranges, PEEK/Seen, RFC822.HEADER/TEXT and exact RFC822.SIZE/BODY[] octets | Maintain literal octet lengths and read-only seen behavior |
+| STORE | 3501 §6.4.6 | MUST | Implemented | Raw listener covers FLAGS, UID STORE, all system flags, keywords, .SILENT, changed FETCH response, invalid \\Recent BAD, and PERMANENTFLAGS \\* | Keep validation consistent with advertised permanent flags |
+| COPY | 3501 §6.4.7 | MUST | Implemented | Raw listener checks multi-message UID COPYUID, TRYCREATE, shared destination authorization; server wraps all copies in one DB transaction | Preserve all-or-nothing transaction |
 | UID | 3501 §6.4.8 | MUST | Partial | Session | FETCH/STORE/COPY/SEARCH/EXPUNGE mapping |
 | UIDPLUS | 4315 | Optional, advertised | Implemented | Raw APPENDUID, COPYUID and UID EXPUNGE | Keep response codes and UID mapping covered |
 | UNSELECT | 3691 | Optional, advertised | Implemented | Raw UNSELECT leaves `\Deleted` message unexpunged | Preserve no-expunge behavior |
@@ -64,9 +64,9 @@ Response framing additionally depends on RFC 3501 §§7–9: tagged status, unta
 |---|---|---|
 | Critical | Mailbox resolution and all data queries assume the login mailbox | Route personal and shared folder names to a resolved mailbox; keep INBOX personal |
 | Critical | Access check originally used only the login mailbox | Resolve mailbox on each command and call `AssertMailboxAccess` for read/write; refresh on every operation |
-| Critical | Shared LIST/LSUB/STATUS absent | Expose authorized delegates only, with identical non-disclosure for unknown and unauthorized paths |
+| Critical | Shared mailbox discovery and status must remain authorization-aware | Recheck every LIST/LSUB/STATUS target and preserve identical non-disclosure for unknown and unauthorized paths |
 | High | Writes and cross-folder COPY can use the wrong mailbox or insufficient destination authorization | Check selected source and destination independently; preserve delegate `read` versus `write` |
-| High | RFC command semantics are uneven: subscriptions, SEARCH grammar, FETCH sections, CREATE edge cases and complete shared authorization matrix | Close the remaining command gaps and keep their behavior under protocol tests |
+| High | Remaining RFC semantics: SELECT/UID completeness, STATUS RECENT accuracy, and CREATE/DELETE/RENAME rules | Close remaining command gaps and keep behavior under protocol tests |
 | High | Server exceptions can escape or be misreported as malformed commands | Log safe exception type/context; return `NO`/`[SERVERBUG]`, preserve framing/state |
 | Medium | External client validation is only a manual deployed-server checklist | Extend env-only script for shared LIST/SELECT/FETCH/SEARCH and document manual clients |
 | Medium | Namespace address collision/rename behavior needs stable definition | Use exact shared mailbox address as identifier; document normalized matching and rename visibility |
@@ -85,9 +85,13 @@ The restored advertised capability line is:
 
 ## D. Implementation delivered in this work
 
-`ImapSession` now preserves the authenticated user's mailbox identity separately and derives the active mailbox from the selected folder. Shared paths resolve by full address, shared LIST output comes from the existing authorized mailbox service, and SELECT, STATUS, APPEND, COPY, folder mutations and selected-message operations authorize the resolved mailbox. Selected operations re-check read access; writes re-check write access, and COPY separately checks source read and destination write. A delegate row with `CanSendAs` but no `read`/`write` access no longer grants IMAP access. INBOX remains the authenticated user's own inbox. Runtime faults are logged by exception type only and produce `NO [SERVERBUG]` without command data. ENABLE implements UTF8=ACCEPT and returns ENABLED data; raw listener tests accept modified UTF-7 before ENABLE, reject raw UTF-8 before ENABLE, and accept UTF-8 mailbox names and quoted strings after ENABLE. EXPUNGE permanently deletes, while the web controller's default `permanent=false` continues to move non-Trash items into Trash. No migration was needed.
+`ImapSession` now preserves the authenticated user's mailbox identity separately and derives the active mailbox from the selected folder. Shared paths resolve by full address, shared LIST output comes from the existing authorized mailbox service, and SELECT, STATUS, APPEND, COPY, folder mutations and selected-message operations authorize the resolved mailbox. Selected operations re-check read access; writes re-check write access, and COPY separately checks source read and destination write. A delegate row with `CanSendAs` but no `read`/`write` access no longer grants IMAP access. INBOX remains the authenticated user's own inbox. Runtime faults are logged by exception type only and produce `NO [SERVERBUG]` without command data. ENABLE implements UTF8=ACCEPT and returns ENABLED data; raw listener tests accept modified UTF-7 before ENABLE, reject raw UTF-8 before ENABLE, and accept UTF-8 mailbox names and quoted strings after ENABLE. EXPUNGE permanently deletes, while the web controller's default `permanent=false` continues to move non-Trash items into Trash.
 
-Known implementation boundary: the raw listener test now exercises personal, write-delegated, read-delegated, Send As-only and cross-tenant targets; it checks shared LIST/SELECT/EXAMINE/STATUS/FETCH/UID FETCH/SEARCH/STORE/COPY/APPEND/EXPUNGE/CREATE/RENAME/DELETE outcomes and database ownership, tests forged/case-changed/traversal/trailing-slash names, revokes access mid-session, and runs two delegates concurrently through flag updates, expunge notifications and parallel APPEND UID allocation. The matrix is not exhaustive for every command against every mailbox class (notably no-selected-mailbox FETCH/STORE/EXPUNGE and every negative mutation combination); persistent SUBSCRIBE/LSUB semantics and remaining SEARCH/FETCH edge forms remain open gaps.
+SUBSCRIBE and UNSUBSCRIBE now persist explicit per-user/per-folder opt-outs. Accessible personal and shared folders are subscribed by default; newly created folders and newly delegated mailboxes therefore appear automatically. LSUB rechecks authorization, filters only the authenticated user's opt-outs and includes `\\Noselect` parent nodes. SUBSCRIBE/UNSUBSCRIBE return the same hidden NO for unknown and unauthorized names. Migration `20261124215210_ImapFolderSubscriptionOptOuts` adds the boolean with `ADD COLUMN IF NOT EXISTS` and defaults legacy rows to subscribed; the earlier table migration uses `CREATE TABLE/INDEX IF NOT EXISTS`. Both migrations were applied to the guarded `miautrix-mail-dev` database, and the UID allocator integration fixture applied the full migration chain successfully to throwaway databases (3/3 tests).
+
+EXAMINE selects read-only: STORE and EXPUNGE return NO [READ-ONLY], APPEND into that same selected folder returns NO [READ-ONLY], and body FETCH does not set `\\Seen`. CLOSE expunges `\\Deleted` messages without untagged EXPUNGE only for read-write selection; read-only CLOSE preserves them. CHECK is accepted only while a mailbox is selected.
+
+Known implementation boundary: the raw listener test now exercises personal, write-delegated, read-delegated, Send As-only and cross-tenant targets; it checks shared LIST/SELECT/EXAMINE/STATUS/FETCH/UID FETCH/SEARCH/STORE/COPY/APPEND/EXPUNGE/CREATE/RENAME/DELETE outcomes and database ownership, tests forged/case-changed/traversal/trailing-slash names, revokes access mid-session, and runs two delegates concurrently through flag updates, expunge notifications and parallel APPEND UID allocation. Subscription semantics are covered over the raw listener and MailKit, including default subscription, opt-outs, new folders/delegations and revocation. Groups 8–9 remain incomplete: full CREATE/DELETE/RENAME rules, complete SELECT state responses, comprehensive UID mapping and every shared negative-command combination remain to be verified; STATUS RECENT currently reports zero because the storage model has no per-session recent tracking.
 
 ## E. Automated evidence
 

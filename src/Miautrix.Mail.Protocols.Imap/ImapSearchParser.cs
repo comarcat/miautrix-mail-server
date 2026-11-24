@@ -13,7 +13,7 @@ public static class ImapSearchParser
     private static readonly HashSet<string> OneArgumentKeys = new(StringComparer.OrdinalIgnoreCase)
     {
         "FROM", "TO", "CC", "BCC", "SUBJECT", "BODY", "TEXT", "SINCE", "BEFORE", "ON",
-        "SENTSINCE", "SENTBEFORE", "SENTON", "LARGER", "SMALLER", "UID", "HEADER"
+        "SENTSINCE", "SENTBEFORE", "SENTON", "LARGER", "SMALLER", "UID", "HEADER", "KEYWORD", "UNKEYWORD"
     };
     private static readonly HashSet<string> ZeroArgumentKeys = new(StringComparer.OrdinalIgnoreCase)
     {

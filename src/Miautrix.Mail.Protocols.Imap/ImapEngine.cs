@@ -192,8 +192,9 @@ public sealed partial class ImapSession
                 return await HandleListAsync(tag, args, cancellationToken, subscribed: true);
 
             case "SUBSCRIBE":
+                return await HandleSubscriptionAsync(tag, args, subscribe: true, cancellationToken);
             case "UNSUBSCRIBE":
-                return new ImapCommandResult(tag, "OK", $"{commandName} completed", Array.Empty<string>());
+                return await HandleSubscriptionAsync(tag, args, subscribe: false, cancellationToken);
 
             case "STATUS":
                 return await HandleStatusAsync(tag, args, cancellationToken);
@@ -399,7 +400,12 @@ public sealed partial class ImapSession
         var silent = mode.EndsWith(".SILENT", StringComparison.Ordinal);
         var operation = mode.Replace(".SILENT", string.Empty, StringComparison.Ordinal);
         if (operation is not "FLAGS" and not "+FLAGS" and not "-FLAGS") return new ImapCommandResult(tag, "BAD", "Invalid STORE data item", Array.Empty<string>());
-        var incoming = args.Skip(2).Where(t => t.Kind == ImapTokenKind.Atom).Select(t => t.Text).ToArray();
+        if (args[2].Kind != ImapTokenKind.LeftParenthesis || args[^1].Kind != ImapTokenKind.RightParenthesis)
+            return new ImapCommandResult(tag, "BAD", "STORE flags must be parenthesized", Array.Empty<string>());
+        var incoming = args.Skip(3).Take(args.Count - 4).Where(t => t.Kind == ImapTokenKind.Atom).Select(t => t.Text).ToArray();
+        var permanentSystemFlags = new HashSet<string>(["\\Seen", "\\Answered", "\\Flagged", "\\Deleted", "\\Draft"], StringComparer.OrdinalIgnoreCase);
+        if (incoming.Any(flag => flag.StartsWith('\\') && !permanentSystemFlags.Contains(flag)))
+            return new ImapCommandResult(tag, "BAD", "Invalid STORE flag", Array.Empty<string>());
         var messages = await _dbContext.Messages.Where(m => m.TenantId == TenantId && m.MailboxId == SelectedFolder.MailboxId && m.FolderId == SelectedFolder.Id)
             .OrderBy(m => m.Uid).Select(m => new ImapSequenceMessage(m.Id, m.Uid, m.Flags, m.IsRead)).ToListAsync(ct);
         var max = uidMode ? messages.Select(m => m.Uid).DefaultIfEmpty(0u).Max() : (uint)messages.Count;
@@ -412,6 +418,7 @@ public sealed partial class ImapSession
             if (operation == "FLAGS") flags = incoming.ToHashSet(StringComparer.OrdinalIgnoreCase);
             else if (operation == "+FLAGS") flags.UnionWith(incoming);
             else flags.ExceptWith(incoming);
+            if (flags.SetEquals(ParseFlags(message.Flags)) && flags.Contains("\\Seen") == message.IsRead) continue;
             if (!await _messageService.SetImapFlagsAsync(TenantId.Value, _userId.Value, SelectedFolder.MailboxId, message.Id, flags.ToArray(), ct)) continue;
             if (!silent)
             {
@@ -457,7 +464,11 @@ public sealed partial class ImapSession
         if (args.Count < 2 || !SequenceSet.TryParse(args[0].Text, out var set) || set is null) return new ImapCommandResult(tag, "BAD", "Invalid COPY command", Array.Empty<string>());
         if (_messageService is null || TenantId is null || MailboxId is null || _userId is null) return new ImapCommandResult(tag, "NO", "COPY unavailable", Array.Empty<string>());
         var destination = await FindFolderByPathAsync(args[1].Text, ct);
-        if (destination is null) return new ImapCommandResult(tag, "NO", "Mailbox does not exist", Array.Empty<string>());
+        if (destination is null)
+        {
+            var canReadNamespace = await CanAccessMailboxNamespaceAsync(args[1].Text, write: false, ct);
+            return new ImapCommandResult(tag, "NO", canReadNamespace ? "[TRYCREATE] Mailbox does not exist" : "Mailbox does not exist", Array.Empty<string>());
+        }
         if (!await AuthorizeMailboxAsync(destination.MailboxId, write: true, ct)) return new ImapCommandResult(tag, "NO", "Mailbox does not exist", Array.Empty<string>());
         if (SelectedReadOnly && destination.Id == SelectedFolder.Id) return new ImapCommandResult(tag, "NO", "[READ-ONLY] Cannot COPY into selected mailbox", Array.Empty<string>());
         var messages = await _dbContext.Messages.Where(m => m.TenantId == TenantId && m.MailboxId == SelectedFolder.MailboxId && m.FolderId == SelectedFolder.Id)
@@ -465,10 +476,27 @@ public sealed partial class ImapSession
         var max = uidMode ? messages.Select(m => m.Uid).DefaultIfEmpty(0u).Max() : (uint)messages.Count;
         var selected = set.Resolve(max).Select(value => uidMode ? messages.FirstOrDefault(m => m.Uid == value) : value > 0 && value <= messages.Count ? messages[(int)value - 1] : null).Where(m => m is not null).Cast<ImapSequenceMessage>().ToArray();
         var newUids = new List<uint>();
-        foreach (var message in selected)
+        await using var transaction = _dbContext.Database.IsRelational()
+            ? await _dbContext.Database.BeginTransactionAsync(ct)
+            : null;
+        try
         {
-            var newUid = await _messageService.CopyMessageAsync(TenantId.Value, _userId.Value, SelectedFolder.MailboxId, message.Id, destination.Id, ct);
-            if (newUid is uint uid) newUids.Add(uid);
+            foreach (var message in selected)
+            {
+                var newUid = await _messageService.CopyMessageAsync(TenantId.Value, _userId.Value, SelectedFolder.MailboxId, message.Id, destination.Id, ct);
+                if (newUid is not uint uid)
+                {
+                    if (transaction is not null) await transaction.RollbackAsync(ct);
+                    return new ImapCommandResult(tag, "NO", "COPY failed", Array.Empty<string>());
+                }
+                newUids.Add(uid);
+            }
+            if (transaction is not null) await transaction.CommitAsync(ct);
+        }
+        catch
+        {
+            if (transaction is not null) await transaction.RollbackAsync(ct);
+            throw;
         }
         var sourceUids = string.Join(',', selected.Select(m => m.Uid));
         var destUids = string.Join(',', newUids);
@@ -636,7 +664,7 @@ public sealed partial class ImapSession
             "* 0 RECENT"
         };
         if (firstUnseen >= 0) untagged.Add($"* OK [UNSEEN {firstUnseen + 1}] First unseen");
-        untagged.Add(SelectedReadOnly ? "* OK [PERMANENTFLAGS ()] Flags are read-only" : "* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)] Permanent flags");
+        untagged.Add(SelectedReadOnly ? "* OK [PERMANENTFLAGS ()] Flags are read-only" : "* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft \\*)] Permanent flags");
 
         return new ImapCommandResult(tag, "OK", SelectedReadOnly ? "[READ-ONLY] " + (readOnly ? "EXAMINE" : "SELECT") + " completed" : "[READ-WRITE] SELECT completed", untagged);
     }
@@ -657,12 +685,19 @@ public sealed partial class ImapSession
         var mailboxPaths = new Dictionary<Guid, string>();
         foreach (var mailbox in accessibleMailboxes)
         {
+            if (!await AuthorizeMailboxAsync(mailbox.Id, write: false, cancellationToken)) continue;
             if (mailbox.Id == MailboxId.Value) mailboxPaths[mailbox.Id] = string.Empty;
             else if (mailbox.Kind.Equals("shared", StringComparison.OrdinalIgnoreCase)) mailboxPaths[mailbox.Id] = $"Shared/{mailbox.Address}";
         }
         if (_mailboxService is null && await AuthorizeMailboxAsync(MailboxId.Value, write: false, cancellationToken))
             mailboxPaths[MailboxId.Value] = string.Empty;
         var folders = await _dbContext.Folders.Where(f => f.TenantId == TenantId && mailboxPaths.Keys.Contains(f.MailboxId)).OrderBy(f => f.Name).ToListAsync(cancellationToken);
+        var subscriptions = subscribed
+            ? await _dbContext.ImapFolderSubscriptions.AsNoTracking()
+                .Where(s => s.TenantId == TenantId && s.UserId == _userId && !s.Subscribed)
+                .Select(s => s.FolderId).ToListAsync(cancellationToken)
+            : new List<Guid>();
+        var optedOutIds = subscriptions.ToHashSet();
         string FullName(Folder folder)
         {
             var names = new Stack<string>();
@@ -679,21 +714,97 @@ public sealed partial class ImapSession
         }
         var fullPattern = string.IsNullOrEmpty(reference) ? pattern : reference.TrimEnd('/') + "/" + pattern.TrimStart('/');
         var regex = "^" + Regex.Escape(fullPattern).Replace("\\*", ".*").Replace("%", "[^/]*") + "$";
-        var responses = folders.Select(f => (Folder: f, Name: FullName(f)))
+        var rows = new Dictionary<string, (Folder? Folder, bool IsSubscribed)>(StringComparer.OrdinalIgnoreCase);
+        if (!subscribed)
+        {
+            foreach (var folder in folders) rows[FullName(folder)] = (folder, true);
+            foreach (var prefix in mailboxPaths.Values.Where(value => value.StartsWith("Shared/", StringComparison.OrdinalIgnoreCase)).Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                rows.TryAdd("Shared", (null, false));
+                rows.TryAdd(prefix, (null, false));
+            }
+        }
+        else
+        {
+            foreach (var folder in folders.Where(f => !optedOutIds.Contains(f.Id)))
+            {
+                var current = folder;
+                var isSub = true;
+                while (true)
+                {
+                    var name = FullName(current);
+                    rows[name] = (current, isSub);
+                    isSub = false;
+                    if (current.ParentId is not Guid parentId) break;
+                    var parent = folders.FirstOrDefault(f => f.Id == parentId);
+                    if (parent is null) break;
+                    current = parent;
+                }
+
+                if (mailboxPaths.TryGetValue(folder.MailboxId, out var prefix) && prefix.Length > 0)
+                {
+                    var slash = prefix.IndexOf('/');
+                    var addressParent = slash >= 0 ? prefix : prefix;
+                    rows.TryAdd("Shared", (null, false));
+                    rows.TryAdd(addressParent, (null, false));
+                }
+            }
+        }
+        var responses = rows.Select(pair => (Folder: pair.Value.Folder, Name: pair.Key, IsSubscribed: pair.Value.IsSubscribed))
             .Where(pair => Regex.IsMatch(pair.Name, regex, RegexOptions.IgnoreCase))
             .Select(pair =>
             {
-                var hasChildren = folders.Any(f => f.ParentId == pair.Folder.Id);
-                var attributes = new List<string> { hasChildren ? "\\HasChildren" : "\\HasNoChildren" };
-                var special = pair.Folder.Role.ToLowerInvariant() switch
+                var hasChildren = pair.Folder is not null && folders.Any(f => f.ParentId == pair.Folder.Id);
+                var attributes = pair.Folder is null
+                    ? new List<string> { "\\Noselect", "\\HasChildren" }
+                    : subscribed && !pair.IsSubscribed
+                        ? new List<string> { "\\Noselect", hasChildren ? "\\HasChildren" : "\\HasNoChildren" }
+                        : new List<string> { hasChildren ? "\\HasChildren" : "\\HasNoChildren" };
+                var special = pair.Folder?.Role.ToLowerInvariant() switch
                 {
                     "sent" => "\\Sent", "drafts" => "\\Drafts", "trash" => "\\Trash", "junk" => "\\Junk", "archive" => "\\Archive", _ => null
                 };
-                if (special is not null) attributes.Add(special);
+                if (special is not null && !(subscribed && !pair.IsSubscribed)) attributes.Add(special);
                 var escapedName = EncodeMailboxPath(pair.Name).Replace("\\", "\\\\").Replace("\"", "\\\"");
                 return $"* {(subscribed ? "LSUB" : "LIST")} ({string.Join(' ', attributes)}) \"/\" \"{escapedName}\"";
             }).ToArray();
         return new ImapCommandResult(tag, "OK", $"{(subscribed ? "LSUB" : "LIST")} completed", responses);
+    }
+
+    private async Task<ImapCommandResult> HandleSubscriptionAsync(string tag, IReadOnlyList<ImapToken> arguments, bool subscribe, CancellationToken cancellationToken)
+    {
+        var command = subscribe ? "SUBSCRIBE" : "UNSUBSCRIBE";
+        if (TenantId is null || _userId is null || MailboxId is null || arguments.Count == 0)
+            return new ImapCommandResult(tag, "BAD", $"{command} requires a mailbox", Array.Empty<string>());
+        var path = DecodeMailboxPath(arguments[0].Text);
+        var folder = await FindFolderByPathAsync(path, cancellationToken);
+        if (folder is null || !await AuthorizeMailboxAsync(folder.MailboxId, write: false, cancellationToken))
+            return new ImapCommandResult(tag, "NO", "Mailbox does not exist", Array.Empty<string>());
+        var existing = await _dbContext.ImapFolderSubscriptions.FirstOrDefaultAsync(
+            s => s.TenantId == TenantId && s.UserId == _userId && s.FolderId == folder.Id,
+            cancellationToken);
+        if (subscribe && existing is not null && !existing.Subscribed)
+        {
+            _dbContext.ImapFolderSubscriptions.Remove(existing);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        else if (!subscribe && existing is null)
+        {
+            _dbContext.ImapFolderSubscriptions.Add(new ImapFolderSubscription
+            {
+                TenantId = TenantId.Value,
+                UserId = _userId.Value,
+                FolderId = folder.Id,
+                Subscribed = false
+            });
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        else if (!subscribe && existing is { Subscribed: true })
+        {
+            existing.Subscribed = false;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        return new ImapCommandResult(tag, "OK", $"{command} completed", Array.Empty<string>());
     }
 
     private async Task<Folder?> FindFolderByPathAsync(string path, CancellationToken cancellationToken)
@@ -726,6 +837,22 @@ public sealed partial class ImapSession
         // sessions and the worker, so refresh the tracked folder before reporting UIDNEXT/UIDVALIDITY.
         if (match is not null) await _dbContext.Entry(match).ReloadAsync(cancellationToken);
         return match;
+    }
+
+    private async Task<bool> CanAccessMailboxNamespaceAsync(string path, bool write, CancellationToken cancellationToken)
+    {
+        if (TenantId is not Guid tenantId || _userId is null || MailboxId is null) return false;
+        path = DecodeMailboxPath(path);
+        if (!path.StartsWith("Shared/", StringComparison.OrdinalIgnoreCase))
+            return await AuthorizeMailboxAsync(MailboxId.Value, write, cancellationToken);
+        var remainder = path[7..];
+        var separator = remainder.IndexOf('/');
+        if (separator <= 0) return false;
+        var address = remainder[..separator];
+        var mailbox = await _dbContext.Mailboxes.AsNoTracking().FirstOrDefaultAsync(
+            candidate => candidate.TenantId == tenantId && candidate.Kind == "shared" && candidate.Address.ToLower() == address.ToLower(),
+            cancellationToken);
+        return mailbox is not null && await AuthorizeMailboxAsync(mailbox.Id, write, cancellationToken);
     }
 
     private async Task<ImapCommandResult> HandleSearchAsync(string tag, IReadOnlyList<ImapToken> arguments, bool uidMode, CancellationToken cancellationToken)
@@ -801,6 +928,7 @@ public sealed partial class ImapSession
             "SUBJECT" => contains(message.Subject, arg), "BODY" => contains(message.BodyText ?? string.Empty, arg) || contains(message.BodyHtml ?? string.Empty, arg),
             "TEXT" => contains(message.RawHeaders + message.Subject + message.BodyText + message.BodyHtml, arg),
             "HEADER" => key.Values.Count == 2 && message.RawHeaders.Split("\r\n", StringSplitOptions.None).Any(line => line.StartsWith(key.Values[0] + ":", StringComparison.OrdinalIgnoreCase) && contains(line, key.Values[1])),
+            "KEYWORD" => flags.Contains(arg), "UNKEYWORD" => !flags.Contains(arg),
             "LARGER" => long.TryParse(arg, out var larger) && message.SizeBytes > larger,
             "SMALLER" => long.TryParse(arg, out var smaller) && message.SizeBytes < smaller,
             "SINCE" => date() is DateTime since && message.Date.Date >= since,
@@ -844,11 +972,15 @@ public sealed partial class ImapSession
                 folder = await FindFolderByPathAsync("INBOX", cancellationToken);
             }
         }
-        if (folder is null) return new ImapCommandResult(tag, "NO", "Mailbox does not exist", Array.Empty<string>());
+        if (folder is null)
+        {
+            var canWriteNamespace = await CanAccessMailboxNamespaceAsync(folderName, write: true, cancellationToken);
+            return new ImapCommandResult(tag, "NO", canWriteNamespace ? "[TRYCREATE] Mailbox does not exist" : "Mailbox does not exist", Array.Empty<string>());
+        }
         if (!await AuthorizeMailboxAsync(folder.MailboxId, write: true, cancellationToken)) return new ImapCommandResult(tag, "NO", "Mailbox does not exist", Array.Empty<string>());
 
         if (SelectedReadOnly && SelectedFolder?.Id == folder.Id)
-            return new ImapCommandResult(tag, "NO", "Selected mailbox is read-only", Array.Empty<string>());
+            return new ImapCommandResult(tag, "NO", "[READ-ONLY] Selected mailbox is read-only", Array.Empty<string>());
 
         var flags = string.Empty;
         var openFlags = FindTokenIndex(arguments, 0, ImapTokenKind.LeftParenthesis);

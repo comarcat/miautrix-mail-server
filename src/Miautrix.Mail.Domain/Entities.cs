@@ -161,6 +161,14 @@ public class Folder : TenantScopedEntityBase
     public uint UidValidity { get; set; } = 1;
 }
 
+/// <summary>An explicit IMAP folder subscription owned by one user, including to delegated folders.</summary>
+public class ImapFolderSubscription : TenantScopedEntityBase
+{
+    public Guid UserId { get; set; }
+    public Guid FolderId { get; set; }
+    public bool Subscribed { get; set; } = true;
+}
+
 public class Message : TenantScopedEntityBase
 {
     public Guid MailboxId { get; set; }

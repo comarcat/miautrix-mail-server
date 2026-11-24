@@ -31,7 +31,11 @@ Delegated folders appear below `Shared/<full-mailbox-address>/<folder>`, for exa
 
 LIST, LSUB and STATUS expose only mailboxes authorized for the authenticated user. SELECT/EXAMINE, SEARCH, FETCH, STORE, EXPUNGE, APPEND, CREATE, DELETE, RENAME and COPY re-check access against the resolved mailbox. Unknown, cross-tenant and unauthorized names return the same `NO Mailbox does not exist` response. Permissions are refreshed for each operation on an already-open connection: if a delegate is revoked while a shared folder is selected, the next FETCH/STORE/SELECT fails with that same NO response and returns no message data; reconnect or select the authenticated user's own INBOX to continue. Read delegation permits reading; write delegation permits changes. Send As and Send on Behalf alone do not grant IMAP read or write access, and those sending features are not implemented by IMAP.
 
+Accessible personal and shared folders are subscribed by default, including folders and delegations created later. UNSUBSCRIBE records a per-user opt-out; SUBSCRIBE removes it. LSUB returns all accessible folders except explicit opt-outs and includes `\Noselect` parents needed to navigate to a subscribed child. A revoked shared folder disappears from both LIST and LSUB; a future delegation appears automatically. For SUBSCRIBE/UNSUBSCRIBE, an unknown or unauthorized name returns the same `NO Mailbox does not exist` response as other mailbox commands, concealing whether the name exists.
+
 When a message is marked `\\Deleted`, IMAP EXPUNGE permanently removes it from that mailbox and reports the expunged sequence number. This differs from the web message delete action: its default is still `permanent=false`, which moves a message to Trash; only an explicit permanent delete or deleting a message already in Trash removes it. The IMAP EXPUNGE handler passes the explicit permanent flag, so it does not route expunged messages through Trash.
+
+EXAMINE opens a folder read-only. STORE and EXPUNGE are rejected, APPEND to that same selected folder returns `NO [READ-ONLY]`, and FETCH BODY[] does not set `\\Seen`. CLOSE silently expunges deleted messages when selected read-write; on a read-only selection it leaves them in place. CHECK is valid only after SELECT or EXAMINE.
 
 The explicit namespace does not provide RFC 2342 NAMESPACE discovery. Clients should use LIST and select the returned shared paths. Do not configure a shared mailbox address as the login identity to access a delegate mailbox.
 
@@ -51,4 +55,4 @@ For test failures requiring PostgreSQL, follow [Troubleshooting §9 and §14](TR
 
 ## Known limitations
 
-The server does not claim IMAP4rev2 or advertise IDLE/MOVE/ACL/NAMESPACE. Subscription commands, some RFC 3501 edge cases, full external-client validation and portions of the shared-mailbox command matrix require further compatibility verification. See [IMAP Phase 1 report](IMAP-Phase1-Report.md) for the command-by-command audit and evidence status.
+The server does not claim IMAP4rev2 or advertise IDLE/MOVE/ACL/NAMESPACE. Some RFC 3501 edge cases, full external-client validation and portions of the shared-mailbox command matrix require further compatibility verification. See [IMAP Phase 1 report](IMAP-Phase1-Report.md) for the command-by-command audit and evidence status.
