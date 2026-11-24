@@ -586,6 +586,9 @@ public sealed partial class ImapSession
             if (match is null) return null;
             parentId = match.Id;
         }
+        // The session DbContext lives as long as the IMAP connection; UIDs are allocated in SQL by other
+        // sessions and the worker, so refresh the tracked folder before reporting UIDNEXT/UIDVALIDITY.
+        if (match is not null) await _dbContext.Entry(match).ReloadAsync(cancellationToken);
         return match;
     }
 

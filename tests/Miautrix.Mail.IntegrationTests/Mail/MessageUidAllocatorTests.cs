@@ -73,10 +73,10 @@ public sealed class MessageUidAllocatorTests : IClassFixture<UidPostgresFixture>
         var second = await db.Messages.AsNoTracking().Where(m => m.FolderId == secondFolder.Id).OrderBy(m => m.Date).ToListAsync();
         Assert.Equal(new uint[] { 1, 2 }, first.Select(m => m.Uid));
         Assert.Equal(new uint[] { 1, 2 }, second.Select(m => m.Uid));
-        Assert.Equal(3u, (await db.Folders.SingleAsync(f => f.Id == firstFolder.Id)).UidNext);
-        Assert.Equal(3u, (await db.Folders.SingleAsync(f => f.Id == secondFolder.Id)).UidNext);
-        Assert.NotEqual(firstValidity, (await db.Folders.SingleAsync(f => f.Id == firstFolder.Id)).UidValidity);
-        Assert.NotEqual(secondValidity, (await db.Folders.SingleAsync(f => f.Id == secondFolder.Id)).UidValidity);
+        Assert.Equal(3u, (await db.Folders.AsNoTracking().SingleAsync(f => f.Id == firstFolder.Id)).UidNext);
+        Assert.Equal(3u, (await db.Folders.AsNoTracking().SingleAsync(f => f.Id == secondFolder.Id)).UidNext);
+        Assert.NotEqual(firstValidity, (await db.Folders.AsNoTracking().SingleAsync(f => f.Id == firstFolder.Id)).UidValidity);
+        Assert.NotEqual(secondValidity, (await db.Folders.AsNoTracking().SingleAsync(f => f.Id == secondFolder.Id)).UidValidity);
 
         var zeroUid = NewMessage(tenant.Id, mailbox.Id, firstFolder.Id, 0, time.AddDays(1));
         db.Messages.Add(zeroUid);
