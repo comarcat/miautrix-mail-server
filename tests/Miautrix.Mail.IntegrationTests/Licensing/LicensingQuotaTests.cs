@@ -40,7 +40,7 @@ public class LicensingQuotaTests
 
         db.Mailboxes.AddRange(mailbox1, mailbox2, mailbox3, mailbox4, mailbox5);
 
-        var folder1 = new Folder { Id = Guid.NewGuid(), TenantId = tenantId, MailboxId = mailbox1.Id, Name = "INBOX" };
+        var folder1 = new Folder { Id = Guid.NewGuid(), TenantId = tenantId, MailboxId = mailbox1.Id, Name = "INBOX", UidNext = 2 };
         db.Folders.Add(folder1);
 
         var message1 = new Message
@@ -49,6 +49,7 @@ public class LicensingQuotaTests
             TenantId = tenantId,
             MailboxId = mailbox1.Id,
             FolderId = folder1.Id,
+            Uid = 1,
             Subject = "Existing Important Mail",
             Sender = "ceo@partner.com",
             Recipient = mailbox1.Address
@@ -93,6 +94,7 @@ public class LicensingQuotaTests
 
         var deliveredMsg = await db.Messages.FindAsync(incomingMessage.Id);
         Assert.NotNull(deliveredMsg);
+        Assert.True(deliveredMsg.Uid > 0);
         Assert.Equal("Urgent Client Order", deliveredMsg.Subject);
     }
 }

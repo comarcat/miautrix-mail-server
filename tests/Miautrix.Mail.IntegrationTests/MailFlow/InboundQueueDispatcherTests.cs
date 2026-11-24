@@ -54,6 +54,7 @@ public sealed class InboundQueueDispatcherTests
 
             var message = await context.Messages.AsNoTracking()
                 .FirstAsync(m => m.TenantId == tenantId && m.MailboxId == mailboxId);
+            Assert.True(message.Uid > 0);
 
             // -0700 on 2026-10-05 17:00 is 2026-10-06 00:00 UTC. Postgres' timestamptz column only
             // accepts Kind=Utc / offset-zero values; this assertion fails with the old unconverted
@@ -101,6 +102,7 @@ public sealed class InboundQueueDispatcherTests
 
             var message = await context.Messages.AsNoTracking()
                 .FirstAsync(m => m.TenantId == tenantId && m.MailboxId == mailboxId);
+            Assert.True(message.Uid > 0);
             Assert.Equal("<html><body><strong>Rich HTML</strong></body></html>", message.BodyHtml);
             Assert.Equal("Plain fallback", message.BodyText);
         }

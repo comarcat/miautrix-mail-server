@@ -1,4 +1,5 @@
 using Miautrix.Mail.Domain;
+using Miautrix.Mail.Application.Mail;
 using Miautrix.Mail.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -62,6 +63,8 @@ public class LicenseQuotaEnforcer : ILicenseQuotaEnforcer
     public async Task DeliverMessageAsync(Message message, CancellationToken cancellationToken = default)
     {
         // Even if tenant is over mailbox allowance, message delivery for existing mailboxes MUST proceed!
+        if (message.Uid == 0)
+            message.Uid = await new MessageUidAllocator(_db).AllocateAsync(message.TenantId, message.FolderId, cancellationToken: cancellationToken);
         _db.Messages.Add(message);
         await _db.SaveChangesAsync(cancellationToken);
     }

@@ -92,6 +92,7 @@ public sealed class SearchTests : IDisposable
         // Act: Deliver / Index message
         var stopwatch = Stopwatch.StartNew();
         await _searchProvider.IndexMessageAsync(tenantId, message);
+        Assert.True((await _dbContext.Messages.SingleAsync(m => m.Id == message.Id)).Uid > 0);
 
         // Query by full-text token
         var searchResults = await _searchProvider.SearchAsync(tenantId, mailboxId, uniqueKeyword);

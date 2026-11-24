@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Text.Json;
 using Miautrix.Mail.Domain;
+using Miautrix.Mail.Application.Mail;
 using Miautrix.Mail.Persistence;
 using Microsoft.EntityFrameworkCore;
 using DomainEntity = Miautrix.Mail.Domain.Domain;
@@ -148,10 +149,14 @@ public sealed class BackupService : IBackupService
             }
             await targetDb.SaveChangesAsync(cancellationToken);
 
+            var uidAllocator = new MessageUidAllocator(targetDb);
             foreach (var msg in messages)
             {
                 if (!await targetDb.Messages.AnyAsync(x => x.Id == msg.Id, cancellationToken))
+                {
+                    msg.Uid = await uidAllocator.AllocateAsync(msg.TenantId, msg.FolderId, cancellationToken: cancellationToken);
                     targetDb.Messages.Add(msg);
+                }
             }
             await targetDb.SaveChangesAsync(cancellationToken);
 

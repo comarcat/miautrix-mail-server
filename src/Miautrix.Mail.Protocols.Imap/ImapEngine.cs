@@ -43,6 +43,7 @@ public sealed partial class ImapSession
     private readonly IMailboxService? _mailboxService;
     private readonly IMessageService? _messageService;
     private readonly IImapMimeFormatter? _mimeFormatter;
+    private readonly IMessageUidAllocator? _uidAllocator;
     private Guid? _userId;
 
     public Guid? TenantId { get; private set; }
@@ -56,7 +57,7 @@ public sealed partial class ImapSession
     private string? _saslTag;
 
     public ImapSession(AppDbContext dbContext, IMailStorage storage, IImapAuthenticator authenticator,
-        ITenantAuthorizationHelper authorization, IMailboxService? mailboxService = null, IMessageService? messageService = null, IImapMimeFormatter? mimeFormatter = null)
+        ITenantAuthorizationHelper authorization, IMailboxService? mailboxService = null, IMessageService? messageService = null, IImapMimeFormatter? mimeFormatter = null, IMessageUidAllocator? uidAllocator = null)
     {
         _dbContext = dbContext;
         _storage = storage;
@@ -65,6 +66,7 @@ public sealed partial class ImapSession
         _mailboxService = mailboxService;
         _messageService = messageService;
         _mimeFormatter = mimeFormatter;
+        _uidAllocator = uidAllocator;
     }
 
     public async Task<ImapCommandResult> ExecuteCommandAsync(
@@ -756,8 +758,8 @@ public sealed partial class ImapSession
             }
         }
 
-        uint assignedUid = folder.UidNext;
-        folder.UidNext += 1;
+        if (_uidAllocator is null) return new ImapCommandResult(tag, "NO", "UID allocation unavailable", Array.Empty<string>());
+        uint assignedUid = await _uidAllocator.AllocateAsync(TenantId!.Value, folder.Id, cancellationToken: cancellationToken);
         folder.UpdatedAt = DateTimeOffset.UtcNow;
 
         var message = new Message

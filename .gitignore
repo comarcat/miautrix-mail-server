@@ -44,3 +44,6 @@ certificates/
 # deploy-release.ps1 build output
 /publish/
 __pycache__/
+
+# generated build/review artifacts (migration bundles, SQL scripts, worker reports)
+/artifacts/

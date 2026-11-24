@@ -238,6 +238,7 @@ public class AppDbContext : DbContext
         ConfigureTenantScoped<Message>(modelBuilder, "messages");
         modelBuilder.Entity<Message>(entity =>
         {
+            entity.ToTable("messages", table => table.HasCheckConstraint("ck_messages_uid_positive", "uid > 0"));
             entity.Property(e => e.MailboxId).HasColumnName("mailbox_id");
             entity.Property(e => e.FolderId).HasColumnName("folder_id");
             entity.Property(e => e.Sender).HasColumnName("sender").IsRequired();
@@ -253,6 +254,7 @@ public class AppDbContext : DbContext
             entity.Property(e => e.BodyText).HasColumnName("body_text");
             entity.Property(e => e.BodyHtml).HasColumnName("body_html");
             entity.Property(e => e.RawHeaders).HasColumnName("raw_headers");
+            entity.HasIndex(e => new { e.FolderId, e.Uid }).IsUnique().HasDatabaseName("uq_messages_folder_id_uid");
         });
 
         ConfigureTenantScoped<MessageRecipient>(modelBuilder, "message_recipients");

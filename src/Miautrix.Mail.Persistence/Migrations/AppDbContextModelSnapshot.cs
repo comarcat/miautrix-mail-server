@@ -17,7 +17,7 @@ namespace Miautrix.Mail.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.4")
+                .HasAnnotation("ProductVersion", "10.0.15")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -1046,7 +1046,14 @@ namespace Miautrix.Mail.Persistence.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("uid");
 
-                    b.ToTable("messages", (string)null);
+                    b.HasIndex("FolderId", "Uid")
+                        .IsUnique()
+                        .HasDatabaseName("uq_messages_folder_id_uid");
+
+                    b.ToTable("messages", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_messages_uid_positive", "uid > 0");
+                        });
                 });
 
             modelBuilder.Entity("Miautrix.Mail.Domain.MessageFlag", b =>
@@ -1290,6 +1297,12 @@ namespace Miautrix.Mail.Persistence.Migrations
                     b.Property<int>("Attempts")
                         .HasColumnType("integer")
                         .HasColumnName("attempts");
+
+                    b.Property<string>("Direction")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)")
+                        .HasColumnName("direction");
 
                     b.Property<DateTimeOffset?>("LastAttemptAt")
                         .HasColumnType("timestamp with time zone")

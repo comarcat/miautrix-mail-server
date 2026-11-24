@@ -1,4 +1,5 @@
 using Miautrix.Mail.Domain;
+using Miautrix.Mail.Application.Mail;
 using Miautrix.Mail.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -41,6 +42,8 @@ public sealed class PostgreSqlSearchProvider : ISearchProvider
         }
         else
         {
+            if (message.Uid == 0)
+                message.Uid = await new MessageUidAllocator(_dbContext).AllocateAsync(tenantId, message.FolderId, cancellationToken: cancellationToken);
             _dbContext.Messages.Add(message);
         }
         await _dbContext.SaveChangesAsync(cancellationToken);

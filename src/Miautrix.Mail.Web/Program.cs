@@ -34,6 +34,7 @@ public class Program
     public static void Main(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
+        builder.Host.UseWindowsService();
 
         var connectionString = Environment.GetEnvironmentVariable("MIAUTRIX_DB_CONNECTION");
         if (string.IsNullOrWhiteSpace(connectionString))
@@ -46,7 +47,9 @@ public class Program
         var backupDirectory = Environment.GetEnvironmentVariable("MIAUTRIX_BACKUP_DIR");
         if (string.IsNullOrWhiteSpace(backupDirectory))
         {
-            backupDirectory = "/opt/miautrix-mail/backups";
+            backupDirectory = OperatingSystem.IsWindows()
+                ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Miautrix", "mail", "backups")
+                : "/opt/miautrix-mail/backups";
         }
 
         // Content-addressed blob store. Must resolve to the same directory the IMAP/SMTP
@@ -83,6 +86,7 @@ public class Program
         builder.Services.AddScoped<IMailQueueService, MailQueueService>();
         builder.Services.AddScoped<IMailboxService, MailboxService>();
         builder.Services.AddScoped<IMessageService, MessageService>();
+        builder.Services.AddScoped<IMessageUidAllocator, MessageUidAllocator>();
         builder.Services.AddScoped<IContactService, ContactService>();
         builder.Services.AddSingleton(sp =>
         {
@@ -160,6 +164,17 @@ public class Program
         builder.Services.AddEndpointsApiExplorer();
 
         var app = builder.Build();
+
+        // Windows packages expose the application directly over HTTPS. Keep HSTS scoped to
+        // Windows so the existing Linux nginx deployment retains its current header policy.
+        if (OperatingSystem.IsWindows() && !app.Environment.IsDevelopment())
+        {
+            app.UseHsts();
+        }
+
+        var adminDirectory = StaticFrontendHosting.ValidateOptionalDirectory("MIAUTRIX_ADMIN_DIR");
+        var webmailDirectory = StaticFrontendHosting.ValidateOptionalDirectory("MIAUTRIX_WEBMAIL_DIR");
+        StaticFrontendHosting.Configure(app, adminDirectory, webmailDirectory);
 
         app.UseMiddleware<ApiExceptionMiddleware>();
         app.UseMiddleware<RequestIdMiddleware>();

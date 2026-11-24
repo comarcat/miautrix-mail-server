@@ -67,6 +67,7 @@ public class BackupRestoreTests
             MailboxId = mailboxId,
             Name = "INBOX",
             Role = "inbox",
+            UidNext = 2,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow
         };
@@ -79,6 +80,7 @@ public class BackupRestoreTests
             TenantId = tenantId,
             MailboxId = mailboxId,
             FolderId = folderId,
+            Uid = 1,
             StoragePath = "blobs/msg1.eml",
             SizeBytes = 1024,
             Subject = "Welcome Alice",
@@ -165,6 +167,7 @@ public class BackupRestoreTests
             var restoredMailbox = await targetDb.Mailboxes.FirstOrDefaultAsync(m => m.Id == mailboxId);
             Assert.NotNull(restoredMailbox);
             Assert.Equal("alice@acme.corp", restoredMailbox.Address);
+            Assert.True((await targetDb.Messages.SingleAsync(m => m.Id == messageId)).Uid > 0);
         }
         finally
         {

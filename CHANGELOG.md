@@ -18,6 +18,7 @@ All notable changes to this project are documented here.
 
 ### Fixed
 
+- Allocated stable non-zero IMAP UIDs atomically per folder and added the UID backfill and uniqueness migration.
 - Deploy verification no longer fails on the authenticated health endpoint (any local Kestrel status below 500 counts as alive) and prints per-check diagnostics on failure.
 - Corrected single-part MIME transfer decoding, charset handling and encoded subject decoding through MimeKit.
 - Corrected FETCH literal marker placement and byte framing, including the post-literal separator and partial-section source matching; rejected invalid sectionless BODY.PEEK requests. Expanded LIST, SELECT/EXAMINE, SEARCH and FETCH behavior, added mailbox-level tenant authorization checks, and map authorization denials to NO. Oversized synchronising literals receive tagged TOOBIG without continuation; oversized LITERAL+ closes with BYE. FETCH now loads raw content lazily and sequence operations project only required columns.

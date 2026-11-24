@@ -8,6 +8,7 @@
   <ItemGroup>
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.4" />
     <ProjectReference Include="..\Miautrix.Mail.Domain\Miautrix.Mail.Domain.csproj" />
+    <ProjectReference Include="..\Miautrix.Mail.Application\Miautrix.Mail.Application.csproj" />
     <ProjectReference Include="..\Miautrix.Mail.Persistence\Miautrix.Mail.Persistence.csproj" />
   </ItemGroup>
 

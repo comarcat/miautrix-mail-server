@@ -1,0 +1,133 @@
+using Miautrix.Mail.Application.Mail;
+using Miautrix.Mail.Domain;
+using Miautrix.Mail.Persistence;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Npgsql;
+using Testcontainers.PostgreSql;
+using DomainEntity = Miautrix.Mail.Domain.Domain;
+
+namespace Miautrix.Mail.IntegrationTests.Mail;
+
+public sealed class MessageUidAllocatorTests : IClassFixture<UidPostgresFixture>
+{
+    private readonly UidPostgresFixture _fixture;
+
+    public MessageUidAllocatorTests(UidPostgresFixture fixture) => _fixture = fixture;
+
+    [Fact]
+    public async Task Allocator_returns_contiguous_blocks_and_is_atomic_and_tenant_scoped()
+    {
+        var connectionString = await _fixture.CreateDatabaseAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(connectionString).Options;
+        await using var db = new AppDbContext(options);
+        await db.Database.MigrateAsync();
+        var (tenant, _, _, folder) = await SeedFolderAsync(db);
+        var otherTenant = new Tenant { Id = Guid.NewGuid(), Slug = "other-" + Guid.NewGuid().ToString("N") };
+        db.Tenants.Add(otherTenant);
+        await db.SaveChangesAsync();
+
+        var allocator = new MessageUidAllocator(db);
+        Assert.Equal(1u, await allocator.AllocateAsync(tenant.Id, folder.Id));
+        Assert.Equal(2u, await allocator.AllocateAsync(tenant.Id, folder.Id, 3));
+        Assert.Equal(5u, await allocator.AllocateAsync(tenant.Id, folder.Id));
+        await Assert.ThrowsAsync<Miautrix.Mail.Security.ResourceNotFoundException>(
+            () => allocator.AllocateAsync(otherTenant.Id, folder.Id));
+
+        var concurrent = await Task.WhenAll(Enumerable.Range(0, 20)
+            .Select(async _ =>
+            {
+                await using var concurrentDb = new AppDbContext(options);
+                return await new MessageUidAllocator(concurrentDb).AllocateAsync(tenant.Id, folder.Id);
+            }));
+        Assert.Equal(20, concurrent.Distinct().Count());
+        Assert.Equal(Enumerable.Range(6, 20).Select(x => (uint)x).ToArray(), concurrent.Order().ToArray());
+        await db.Entry(folder).ReloadAsync();
+        Assert.Equal(26u, folder.UidNext);
+    }
+
+    [Fact]
+    public async Task Migration_renumbers_existing_uids_and_enforces_positive_unique_values()
+    {
+        var connectionString = await _fixture.CreateDatabaseAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(connectionString).Options;
+        await using var db = new AppDbContext(options);
+        await db.Database.MigrateAsync();
+        var (tenant, mailbox, firstFolder, secondFolder) = await SeedFolderAsync(db);
+        var firstValidity = firstFolder.UidValidity;
+        var secondValidity = secondFolder.UidValidity;
+        var time = DateTimeOffset.UtcNow;
+        db.Messages.AddRange(
+            NewMessage(tenant.Id, mailbox.Id, firstFolder.Id, 51, time.AddMinutes(2)),
+            NewMessage(tenant.Id, mailbox.Id, firstFolder.Id, 52, time.AddMinutes(1)),
+            NewMessage(tenant.Id, mailbox.Id, secondFolder.Id, 72, time.AddMinutes(1)),
+            NewMessage(tenant.Id, mailbox.Id, secondFolder.Id, 73, time.AddMinutes(2)));
+        await db.SaveChangesAsync();
+
+        await db.Database.ExecuteSqlRawAsync("ALTER TABLE messages DROP CONSTRAINT ck_messages_uid_positive; DROP INDEX uq_messages_folder_id_uid; UPDATE messages SET uid = 0; UPDATE folders SET uid_next = 90;");
+        await db.Database.ExecuteSqlRawAsync("DELETE FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '20261124173531_Imap006StableFolderUids';");
+        await db.GetService<IMigrator>().MigrateAsync();
+
+        var first = await db.Messages.AsNoTracking().Where(m => m.FolderId == firstFolder.Id).OrderBy(m => m.Date).ToListAsync();
+        var second = await db.Messages.AsNoTracking().Where(m => m.FolderId == secondFolder.Id).OrderBy(m => m.Date).ToListAsync();
+        Assert.Equal(new uint[] { 1, 2 }, first.Select(m => m.Uid));
+        Assert.Equal(new uint[] { 1, 2 }, second.Select(m => m.Uid));
+        Assert.Equal(3u, (await db.Folders.SingleAsync(f => f.Id == firstFolder.Id)).UidNext);
+        Assert.Equal(3u, (await db.Folders.SingleAsync(f => f.Id == secondFolder.Id)).UidNext);
+        Assert.NotEqual(firstValidity, (await db.Folders.SingleAsync(f => f.Id == firstFolder.Id)).UidValidity);
+        Assert.NotEqual(secondValidity, (await db.Folders.SingleAsync(f => f.Id == secondFolder.Id)).UidValidity);
+
+        var zeroUid = NewMessage(tenant.Id, mailbox.Id, firstFolder.Id, 0, time.AddDays(1));
+        db.Messages.Add(zeroUid);
+        await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+        db.Entry(zeroUid).State = EntityState.Detached;
+        var duplicateUid = NewMessage(tenant.Id, mailbox.Id, firstFolder.Id, 1, time.AddDays(2));
+        db.Messages.Add(duplicateUid);
+        await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+    }
+
+    private static async Task<(Tenant Tenant, Mailbox Mailbox, Folder FirstFolder, Folder SecondFolder)> SeedFolderAsync(AppDbContext db)
+    {
+        var tenant = new Tenant { Id = Guid.NewGuid(), Slug = "uid-" + Guid.NewGuid().ToString("N") };
+        var domain = new DomainEntity { Id = Guid.NewGuid(), TenantId = tenant.Id, Name = "example.test" };
+        var mailbox = new Mailbox { Id = Guid.NewGuid(), TenantId = tenant.Id, DomainId = domain.Id, Address = "uid@example.test" };
+        var first = new Folder { Id = Guid.NewGuid(), TenantId = tenant.Id, MailboxId = mailbox.Id, Name = "INBOX", Role = "inbox", UidNext = 1, UidValidity = 7 };
+        var second = new Folder { Id = Guid.NewGuid(), TenantId = tenant.Id, MailboxId = mailbox.Id, Name = "Archive", Role = "archive", UidNext = 1, UidValidity = 8 };
+        db.AddRange(tenant, domain, mailbox, first, second);
+        await db.SaveChangesAsync();
+        return (tenant, mailbox, first, second);
+    }
+
+    private static Message NewMessage(Guid tenantId, Guid mailboxId, Guid folderId, uint uid, DateTimeOffset date) => new()
+    {
+        Id = Guid.NewGuid(), TenantId = tenantId, MailboxId = mailboxId, FolderId = folderId, Uid = uid,
+        Sender = "sender@example.test", Recipient = "recipient@example.test", Subject = "UID migration test",
+        Date = date, ContentHash = Guid.NewGuid().ToString("N"), StoragePath = "/test/message.eml", CreatedAt = date, UpdatedAt = date
+    };
+}
+
+public sealed class UidPostgresFixture : IAsyncLifetime
+{
+    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder()
+        .WithImage("postgres:16-alpine")
+        .WithDatabase("postgres")
+        .WithUsername("postgres")
+        .WithPassword("postgres")
+        .Build();
+
+    public Task InitializeAsync() => _container.StartAsync();
+    public Task DisposeAsync() => _container.DisposeAsync().AsTask();
+
+    public async Task<string> CreateDatabaseAsync()
+    {
+        var database = "uidtest_" + Guid.NewGuid().ToString("N");
+        await using var connection = new NpgsqlConnection(_container.GetConnectionString());
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"CREATE DATABASE \"{database}\"";
+        await command.ExecuteNonQueryAsync();
+        var builder = new NpgsqlConnectionStringBuilder(_container.GetConnectionString()) { Database = database };
+        return builder.ConnectionString;
+    }
+}

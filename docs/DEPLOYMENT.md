@@ -1,5 +1,7 @@
 # Versioned production deployment
 
+Troubleshooting guide: [docs/TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+
 This document describes the owner-operated deployment workflow. The deployment agent must not connect to production unless the owner explicitly runs the scripts from their machine. The workflow is designed for `/opt/miautrix-mail`; it leaves systemd and nginx stable paths in place by switching those paths to symlinks into immutable releases.
 
 ## Layout
@@ -40,3 +42,7 @@ Cleanup runs only after a successful verification marker. `cleanup --keep 2` ret
 ## Security notes
 
 The old root `deploy.ps1` is retired. `scripts/deploy-compile-upload.ps1` is deprecated and refuses its destructive wipe unless `-IUnderstandNoBackup` is supplied; use it only for a separately reviewed recovery case. A production database credential was present in tracked files and remains in repository history; the owner must rotate it. History rewriting is optional and requires owner review. No deploy or database command has been run by the authoring session.
+
+## IMAP UID migration (IMAP-006)
+
+When deploying the release that introduces stable per-folder IMAP UIDs, run `scripts/deploy-release.ps1 -RunMigrations` only after reviewing the UID backfill migration and backup. The migration renumbers existing messages by folder and changes UIDVALIDITY for folders whose UIDs changed. During the brief interval between migration completion and the release switch, the old process may still attempt to insert UID 0; the new database check constraint rejects that write. Inbound mail remains in `smtp_queue` and is retried by the worker after the new release starts.

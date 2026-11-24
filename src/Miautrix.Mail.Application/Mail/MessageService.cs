@@ -23,6 +23,7 @@ public sealed class MessageService : IMessageService
     private readonly AppDbContext _db;
     private readonly ITenantAuthorizationHelper _auth;
     private readonly IMailboxService _mailboxes;
+    private readonly IMessageUidAllocator _uidAllocator;
 
     private readonly IMailStorage _storage;
     private readonly ILogger<MessageService> _logger;
@@ -31,12 +32,14 @@ public sealed class MessageService : IMessageService
         AppDbContext db,
         ITenantAuthorizationHelper auth,
         IMailboxService mailboxes,
+        IMessageUidAllocator uidAllocator,
         IMailStorage storage,
         ILogger<MessageService> logger)
     {
         _db = db;
         _auth = auth;
         _mailboxes = mailboxes;
+        _uidAllocator = uidAllocator;
         _storage = storage;
         _logger = logger;
     }
@@ -237,13 +240,14 @@ public sealed class MessageService : IMessageService
         var source = await _db.Messages.FirstOrDefaultAsync(m => m.TenantId == tenantId && m.MailboxId == mailboxId && m.Id == messageId, cancellationToken);
         var folder = await _db.Folders.FirstOrDefaultAsync(f => f.TenantId == tenantId && f.MailboxId == mailboxId && f.Id == targetFolderId, cancellationToken);
         if (source is null || folder is null) return null;
+        var uid = await _uidAllocator.AllocateAsync(tenantId, folder.Id, cancellationToken: cancellationToken);
         var copy = new Message
         {
             Id = Guid.NewGuid(), TenantId = tenantId, MailboxId = mailboxId, FolderId = targetFolderId,
             Sender = source.Sender, Recipient = source.Recipient, Subject = source.Subject, Date = source.Date,
             ContentHash = source.ContentHash, StoragePath = source.StoragePath, SizeBytes = source.SizeBytes,
             Flags = source.Flags, IsRead = source.IsRead, BodyText = source.BodyText, BodyHtml = source.BodyHtml,
-            RawHeaders = source.RawHeaders, Uid = folder.UidNext++, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow
+            RawHeaders = source.RawHeaders, Uid = uid, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow
         };
         _db.Messages.Add(copy);
         foreach (var recipient in await _db.MessageRecipients.Where(r => r.TenantId == tenantId && r.MessageId == source.Id).ToListAsync(cancellationToken))
@@ -281,6 +285,9 @@ public sealed class MessageService : IMessageService
         {
             return false;
         }
+
+        if (message.FolderId != targetFolderId)
+            message.Uid = await _uidAllocator.AllocateAsync(tenantId, folder.Id, cancellationToken: cancellationToken);
 
         message.FolderId = targetFolderId;
         message.UpdatedAt = DateTimeOffset.UtcNow;
@@ -325,6 +332,7 @@ public sealed class MessageService : IMessageService
             return true;
         }
 
+        message.Uid = await _uidAllocator.AllocateAsync(tenantId, trashFolder.Id, cancellationToken: cancellationToken);
         message.FolderId = trashFolder.Id;
         message.UpdatedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(cancellationToken);
@@ -557,6 +565,7 @@ public sealed class MessageService : IMessageService
         _auth.AssertMailboxAccess(tenantId, userId, mailbox, requireWrite: true);
 
         var sentFolder = await GetOrCreateSentFolderAsync(tenantId, mailboxId, cancellationToken);
+        var sentUid = await _uidAllocator.AllocateAsync(tenantId, sentFolder.Id, cancellationToken: cancellationToken);
 
         var now = DateTimeOffset.UtcNow;
         var generatedAttachments = request.Attachments ?? Array.Empty<MimeAttachment>();
@@ -581,6 +590,7 @@ public sealed class MessageService : IMessageService
             TenantId = tenantId,
             MailboxId = mailboxId,
             FolderId = sentFolder.Id,
+            Uid = sentUid,
             Sender = request.From,
             Recipient = string.Join(", ", request.To),
             Subject = request.Subject,
@@ -629,6 +639,7 @@ public sealed class MessageService : IMessageService
             if (localRecipients.TryGetValue(normalizedRecipient, out var recipientMailbox))
             {
                 var inboxFolder = await GetOrCreateInboxFolderAsync(tenantId, recipientMailbox.Id, cancellationToken);
+                var inboxUid = await _uidAllocator.AllocateAsync(tenantId, inboxFolder.Id, cancellationToken: cancellationToken);
                 var deliveredMessageId = Guid.NewGuid();
                 _db.Messages.Add(new Message
                 {
@@ -636,6 +647,7 @@ public sealed class MessageService : IMessageService
                     TenantId = tenantId,
                     MailboxId = recipientMailbox.Id,
                     FolderId = inboxFolder.Id,
+                    Uid = inboxUid,
                     Sender = request.From,
                     Recipient = recipient,
                     Subject = request.Subject,
@@ -695,7 +707,10 @@ public sealed class MessageService : IMessageService
                 {
                     var personalSentFolder = await GetOrCreateSentFolderAsync(tenantId, personalMailbox.Id, cancellationToken);
                     var personalMessageId = Guid.NewGuid();
-                    _db.Messages.Add(CloneSentMessage(message, personalMessageId, personalMailbox.Id, personalSentFolder.Id));
+                    var personalUid = await _uidAllocator.AllocateAsync(tenantId, personalSentFolder.Id, cancellationToken: cancellationToken);
+                    var personalCopy = CloneSentMessage(message, personalMessageId, personalMailbox.Id, personalSentFolder.Id);
+                    personalCopy.Uid = personalUid;
+                    _db.Messages.Add(personalCopy);
                     AddAttachmentCopies(tenantId, sourceAttachments, personalMessageId);
                     await AddGeneratedAttachmentCopiesAsync(tenantId, generatedAttachments, personalMessageId, cancellationToken);
                     personalMailbox.UsedBytes += sizeBytes;
@@ -1080,12 +1095,14 @@ public sealed class MessageService : IMessageService
 
         if (draft is null)
         {
+            var draftUid = await _uidAllocator.AllocateAsync(tenantId, draftsFolder.Id, cancellationToken: cancellationToken);
             draft = new Message
             {
                 Id = request.DraftId ?? Guid.NewGuid(),
                 TenantId = tenantId,
                 MailboxId = mailboxId,
                 FolderId = draftsFolder.Id,
+                Uid = draftUid,
                 CreatedAt = now
             };
             _db.Messages.Add(draft);

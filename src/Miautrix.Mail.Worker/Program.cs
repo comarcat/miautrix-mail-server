@@ -83,10 +83,15 @@ else
 // ── Host ──────────────────────────────────────────────────────────────────────
 
 var host = Host.CreateDefaultBuilder(args)
+    .UseWindowsService()
     .ConfigureLogging(logging =>
     {
         logging.ClearProviders();
         logging.AddConsole();
+        if (OperatingSystem.IsWindows())
+        {
+            logging.AddEventLog();
+        }
         if (isDevelopment)
         {
             logging.SetMinimumLevel(LogLevel.Debug);
@@ -144,6 +149,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddScoped<ITenantAuthorizationHelper, TenantAuthorizationHelper>();
         services.AddScoped<IMailboxService, MailboxService>();
         services.AddScoped<IMessageService, MessageService>();
+        services.AddScoped<IMessageUidAllocator, MessageUidAllocator>();
 
         // Identity
         services.AddSingleton<IPasswordHasher, Argon2idPasswordHasher>();

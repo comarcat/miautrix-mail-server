@@ -16,6 +16,7 @@ using Miautrix.Mail.Domain;
 using Miautrix.Mail.Persistence;
 using Miautrix.Mail.Storage;
 using Miautrix.Mail.Application.Mail.Mime;
+using Miautrix.Mail.Application.Mail;
 
 namespace Miautrix.Mail.Worker;
 
@@ -87,13 +88,14 @@ public sealed class InboundQueueDispatcher : BackgroundService
             var antiMalwareScanner = itemScope.ServiceProvider.GetRequiredService<IAntiMalwareScanner>();
             var storage = itemScope.ServiceProvider.GetRequiredService<IMailStorage>();
             var mimeParser = itemScope.ServiceProvider.GetRequiredService<IMimeMessageParser>();
+            var uidAllocator = itemScope.ServiceProvider.GetRequiredService<IMessageUidAllocator>();
 
             var item = await db.SmtpQueue.FirstOrDefaultAsync(q => q.Id == itemId, ct);
             if (item == null) continue;
 
             try
             {
-                await ProcessItemAsync(db, quarantineService, antiMalwareScanner, storage, mimeParser, item, ct);
+                await ProcessItemAsync(db, quarantineService, antiMalwareScanner, storage, mimeParser, uidAllocator, item, ct);
                 await db.SaveChangesAsync(ct);
             }
             catch (Exception ex)
@@ -125,7 +127,7 @@ public sealed class InboundQueueDispatcher : BackgroundService
         }
     }
 
-    private async Task ProcessItemAsync(AppDbContext db, IQuarantineService quarantineService, IAntiMalwareScanner antiMalwareScanner, IMailStorage storage, IMimeMessageParser mimeParser, SmtpQueueItem item, CancellationToken ct)
+    private async Task ProcessItemAsync(AppDbContext db, IQuarantineService quarantineService, IAntiMalwareScanner antiMalwareScanner, IMailStorage storage, IMimeMessageParser mimeParser, IMessageUidAllocator uidAllocator, SmtpQueueItem item, CancellationToken ct)
     {
         var parsed = mimeParser.Parse(item.RawMessage);
         var subject = item.Subject ?? parsed.Subject ?? "No Subject";
@@ -331,6 +333,7 @@ public sealed class InboundQueueDispatcher : BackgroundService
             TenantId = item.TenantId,
             MailboxId = mailbox.Id,
             FolderId = folder.Id,
+            Uid = await uidAllocator.AllocateAsync(item.TenantId, folder.Id, cancellationToken: ct),
             Sender = item.Sender,
             Recipient = item.Recipient,
             Subject = subject,
