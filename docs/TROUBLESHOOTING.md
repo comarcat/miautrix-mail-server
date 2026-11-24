@@ -333,7 +333,7 @@ find /opt/miautrix-mail/backups -maxdepth 1 -type f -printf '%f %s bytes\n' 2>/d
 
 ### `scripts/deploy-release.ps1`
 
-SHA-256: `f171cc8e5d5aadbdbc43ba29bdb43e835eb4a15af07742a7270e6043e2b2c674`
+SHA-256: `06bc20112385bc5e06b07386e141cfeb0281048c6712c52939955ccabdd110e9`
 
 ``powershell
 [CmdletBinding()]
@@ -465,7 +465,14 @@ try {
     & ssh @($scpOpts + @("$TargetUser@$TargetIp", "$remote; bash lxc-release.sh backup --release-id '$ReleaseId'"))
     if ($LASTEXITCODE -ne 0) { throw 'Remote preflight or backup failed.' }
     if ($RunMigrations) {
-        Invoke-Checked 'Build migration bundle' { dotnet ef migrations bundle --project (Join-Path $Repo 'src/Miautrix.Mail.Persistence') --startup-project (Join-Path $Repo 'src/Miautrix.Mail.Web') -r linux-x64 --self-contained --output (Join-Path $PublishRoot 'migration-bundle') }
+        # The design-time factory only needs a non-empty value; no connection is opened while bundling.
+        $previousDbConnection = $env:MIAUTRIX_DB_CONNECTION
+        $env:MIAUTRIX_DB_CONNECTION = 'Host=bundle-build.invalid;Database=unused;Username=unused'
+        try {
+            Invoke-Checked 'Build migration bundle' { dotnet ef migrations bundle --project (Join-Path $Repo 'src/Miautrix.Mail.Persistence') --startup-project (Join-Path $Repo 'src/Miautrix.Mail.Web') -r linux-x64 --self-contained --output (Join-Path $PublishRoot 'migration-bundle') }
+        } finally {
+            $env:MIAUTRIX_DB_CONNECTION = $previousDbConnection
+        }
         & scp @($scpOpts + @((Join-Path $PublishRoot 'migration-bundle'), "$TargetUser@$TargetIp`:$remoteTmp/migration-bundle"))
         if ($LASTEXITCODE -ne 0) { throw 'Migration bundle upload failed.' }
         $migration = "cd '$remoteTmp'; bash lxc-release.sh migrate --bundle '$remoteTmp/migration-bundle'"

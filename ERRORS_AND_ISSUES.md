@@ -888,3 +888,14 @@ The root `deploy.ps1` previously included a hardcoded production database passwo
 - **Root cause (confirmed in code):** only IMAP `COPY` (`MessageService.CopyMessageAsync`) and IMAP `APPEND` (`ImapEngine`) assign `folder.UidNext++`. The three main creation paths leave `Message.Uid` at its default of 0: inbound delivery (`InboundQueueDispatcher.cs`, `new Message` around line 328), sending with the Sent copy (`MessageService.cs` around line 578), and local delivery (`MessageService.cs` around line 633). There is no unique constraint on `(folder_id, uid)`, so the database accepted it.
 - **Resolution:** Added the atomic tenant-scoped Application `IMessageUidAllocator`, assigned UIDs during inbound delivery, sent/local delivery, draft creation, IMAP APPEND/COPY, webmail move and Trash move, and added a forward-only data migration that reassigns per-folder UIDs, resets UIDNEXT, changes UIDVALIDITY where values changed, and enforces positive unique UIDs. Existing rows retain their UIDs across sessions; moves receive a destination-folder UID.
 - **Deployment note:** While `deploy-release.ps1 -RunMigrations` runs before switching releases, the old process can briefly attempt UID 0 writes and receive a constraint failure. Inbound messages remain queued for retry.
+
+### 13.8 Fixed: Seeder created the admin with a hardcoded default password (2026-11-24, Critical)
+
+- **Finding:** `src/Miautrix.Mail.Seeder/Program.cs` created `admin@miautrix.org` with a fixed default password written in source (public on GitHub), flagged MustChangePassword. Any environment where it was never changed is exposed.
+- **Fix:** the seeder no longer creates credentials. The new CLI command `users bootstrap-admin --email <addr> [--reset]` reads the password twice from a secure prompt, hashes it with Argon2id, refuses to overwrite without `--reset`, and writes an audit entry. `init-database-scratch.*`, SETUP.md and the Windows installer use it.
+- **Owner action:** confirm the production admin password was changed from the old default; if not, reset it with `users bootstrap-admin --reset` on the server.
+
+### 13.9 Fixed: EF migrations bundle could not be built (2026-11-24)
+
+- **Symptom:** `Unable to create a 'DbContext' ... MIAUTRIX_DB_CONNECTION environment variable is required.` from `dotnet ef migrations bundle`. This would have broken `deploy-release.ps1 -RunMigrations`, which the IMAP-006 deploy needs.
+- **Fix:** both `deploy-release.ps1` and `build-windows-package.ps1` set a placeholder, password-less connection string only while bundling, then restore the previous value. No connection is opened; the server supplies the real value at run time.
