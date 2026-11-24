@@ -893,7 +893,7 @@ The root `deploy.ps1` previously included a hardcoded production database passwo
 
 - **Finding:** `src/Miautrix.Mail.Seeder/Program.cs` created `admin@miautrix.org` with a fixed default password written in source (public on GitHub), flagged MustChangePassword. Any environment where it was never changed is exposed.
 - **Fix:** the seeder no longer creates credentials. The new CLI command `users bootstrap-admin --email <addr> [--reset]` reads the password twice from a secure prompt, hashes it with Argon2id, refuses to overwrite without `--reset`, and writes an audit entry. `init-database-scratch.*`, SETUP.md and the Windows installer use it.
-- **Owner action:** confirm the production admin password was changed from the old default; if not, reset it with `users bootstrap-admin --reset` on the server.
+- **Owner confirmation (2026-11-24):** the production admin password was changed long ago; the default in the repository history is not valid in production. New environments can no longer be created with it.
 
 ### 13.9 Fixed: EF migrations bundle could not be built (2026-11-24)
 

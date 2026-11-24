@@ -41,7 +41,7 @@ Architecture change to know about: `IMailStorage` / `StorageWriteResult`, the ba
 
 ## 3. Next session, in order
 
-0. **Rotate the production PostgreSQL password** (owner action, RSK-11). It was committed in `deploy.ps1` and other scripts and is still in git history and on GitHub. Update `MIAUTRIX_DB_CONNECTION` in `/opt/miautrix-mail/.env` (and any Web unit drop-in), then restart both services. Also rotate the LXC root password, which was exposed in a terminal paste on 2026-11-24, and switch deploys to SSH keys (`-SshKey`).
+0. ✅ **Credentials in repository history are not valid in production** (owner confirmed 2026-11-24; RSK-11 mitigated). Still recommended: switch deploys to SSH keys (`-SshKey`), and rotate the LXC root password, which was typed into a terminal paste during the 2026-11-24 deploy.
 1. **Run the read-only server inspection** (storage pinning, `pg_dump` presence, disk, nginx paths) before the first deploy. `deploy-release.ps1 -DryRun` runs the same preflight.
 2. **Review and commit** the branch. Start with `git diff --stat`. Suggested split: (a) .NET 10 and guards, (b) MIME, reparse and webmail, (c) IMAP, (d) docs. Then open a PR to `main`.
 3. **Run the DB-backed tests against a NON-production database.** Never use `10.11.1.52/miautrix-mail-pro`. Install Docker or provision a throwaway PostgreSQL, set `MIAUTRIX_DB_CONNECTION`, then run `dotnet test`. Fix any failures in `ImapMailKitProtocolTests`, `ImapListenerRawSocketTests` and the integration tests.
