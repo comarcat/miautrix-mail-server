@@ -43,8 +43,15 @@ try {
     Invoke-Checked 'Build webmail frontend' { pnpm --filter webmail build }
     Copy-Item (Join-Path $repo 'admin/dist') (Join-Path $publishRoot 'admin') -Recurse
     Copy-Item (Join-Path $repo 'webmail/dist') (Join-Path $publishRoot 'webmail') -Recurse
-    Invoke-Checked 'Build self-contained EF migrations bundle' {
-        dotnet ef migrations bundle --project (Join-Path $repo 'src/Miautrix.Mail.Persistence') --startup-project (Join-Path $repo 'src/Miautrix.Mail.Web') --self-contained -r win-x64 --output (Join-Path $publishRoot 'efbundle.exe')
+    # The design-time factory only needs a non-empty value; no connection is opened while bundling.
+    $previousDbConnection = $env:MIAUTRIX_DB_CONNECTION
+    $env:MIAUTRIX_DB_CONNECTION = 'Host=bundle-build.invalid;Database=unused;Username=unused'
+    try {
+        Invoke-Checked 'Build self-contained EF migrations bundle' {
+            dotnet ef migrations bundle --project (Join-Path $repo 'src/Miautrix.Mail.Persistence') --startup-project (Join-Path $repo 'src/Miautrix.Mail.Web') --self-contained -r win-x64 --output (Join-Path $publishRoot 'efbundle.exe')
+        }
+    } finally {
+        $env:MIAUTRIX_DB_CONNECTION = $previousDbConnection
     }
     Copy-Item (Join-Path $PSScriptRoot 'windows/install.ps1') $publishRoot
     Copy-Item (Join-Path $PSScriptRoot 'windows/uninstall.ps1') $publishRoot
