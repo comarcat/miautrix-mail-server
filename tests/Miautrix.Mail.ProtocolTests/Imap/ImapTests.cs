@@ -108,7 +108,8 @@ public sealed class ImapTests : IDisposable
         });
         await _dbContext.SaveChangesAsync();
 
-        var session = new ImapSession(_dbContext, _storage, new StubImapAuthenticator(tenantId, mailboxId), new AllowTestAuthorization());
+        var session = new ImapSession(_dbContext, _storage, new StubImapAuthenticator(tenantId, mailboxId), new AllowTestAuthorization(),
+            uidAllocator: new Miautrix.Mail.Application.Mail.MessageUidAllocator(_dbContext));
 
         // Act 1: Login
         var loginResult = await session.ExecuteCommandAsync($"a001 LOGIN \"{address}\" \"secret\"");

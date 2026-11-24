@@ -145,8 +145,9 @@ public sealed class ImapListenerService : BackgroundService
         var mailboxService = scope.ServiceProvider.GetRequiredService<IMailboxService>();
         var messageService = scope.ServiceProvider.GetRequiredService<IMessageService>();
         var mimeFormatter = scope.ServiceProvider.GetRequiredService<IImapMimeFormatter>();
+        var uidAllocator = scope.ServiceProvider.GetRequiredService<IMessageUidAllocator>();
 
-        var session = new ImapSession(db, _storage, authenticator, authorization, mailboxService, messageService, mimeFormatter);
+        var session = new ImapSession(db, _storage, authenticator, authorization, mailboxService, messageService, mimeFormatter, uidAllocator);
 
         var maxLiteral = int.TryParse(Environment.GetEnvironmentVariable("MIAUTRIX_IMAP_MAX_LITERAL_BYTES"), out var configured) ? Math.Clamp(configured, 1024, 50 * 1024 * 1024) : 50 * 1024 * 1024;
         var connectionReader = new ImapConnectionReader(ssl, maxLineBytes: 64 * 1024, maxLiteralBytes: maxLiteral);

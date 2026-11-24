@@ -934,3 +934,22 @@ The root `deploy.ps1` previously included a hardcoded production database passwo
 - **Bug 1, `MessageUidAllocator`:** it composed `SingleOrDefault` over the non-composable `UPDATE … RETURNING` query, which throws at run time on PostgreSQL. Every delivery would have failed after the IMAP-006 deploy. It now materialises the result.
 - **Bug 2, `ImapSession`:** the session keeps one DbContext per connection, so folders came from the change tracker and UIDNEXT/UIDVALIDITY went stale for long-lived clients. The selected folder is now reloaded.
 - **Process note:** the IntegrationTests module initializer migrates `MIAUTRIX_DB_CONNECTION` at start-up, so the test run applied the pending migrations to `miautrix-mail-dev` (and renumbered its UIDs). That database must therefore be a test database.
+
+### 13.12 Fixed (not yet deployed): IMAP-007 — `FETCH n (ENVELOPE)` returns `BAD Internal server error`; IMAP APPEND always `NO` (2026-11-24, High)
+
+- **Report:** `FETCH 4 (ENVELOPE)` in INBOX returned `BAD Internal server error`. UID, FLAGS, RFC822.SIZE and `BODY.PEEK[HEADER]` succeeded for the same message.
+- **Root cause (reproduced in unit tests):** `MimeMessage.Load` throws `FormatException` when a stored message does not start with a header line: a blank first line (headerless), a leading continuation line, or a non-header line. `BuildEnvelope` did not catch the exception, so the listener's catch-all turned it into `BAD` for the whole FETCH. `BODY.PEEK[HEADER]` slices bytes without parsing, so it was unaffected. The stored message was not modified.
+- **Fix in `MimeKitImapMimeFormatter`:**
+  - **Tolerant load:** leading non-header lines are skipped; a headerless message gets an all-NIL envelope; `BuildEnvelope` never throws.
+  - **RFC 3501 §7.4.2 compliance**, wrong before this fix:
+    - Sender and Reply-To default to From;
+    - Date, Subject, In-Reply-To and Message-ID are the raw header values (angle brackets kept, RFC 2047 not decoded);
+    - group syntax is `(NIL NIL "group" NIL)` … `(NIL NIL NIL NIL)`;
+    - non-ASCII display names are RFC 2047 encoded and IDN domains are converted to ASCII;
+    - any remaining non-ASCII, CR, LF or NUL is sent as a literal, never inside a quoted string. Strict parsers such as Himalaya reject 8-bit quoted strings.
+- **Second defect found while testing:** `ImapListenerService` never passed `IMessageUidAllocator` to `ImapSession`, so every IMAP `APPEND` in production returned `NO UID allocation unavailable` (Sent, Drafts and Archive saves from clients). The listener now resolves and passes the allocator; the test fixtures register it.
+- **Tests:**
+  - `ImapEnvelopeTests` (20 cases): malformed, unusual, Unicode, folded, group and empty headers, with an RFC 3501 structural validator.
+  - UnitTests 101/101, SecurityTests 6/6.
+  - ProtocolTests `ImapTests` and `ImapAuthenticatorTests` 8/8 against the dev test database.
+- **Not run:** the MailKit and raw-socket listener protocol tests are refused by a guard that blocks the whole host 10.11.1.52, which also serves the dev test database. Owner decision pending.

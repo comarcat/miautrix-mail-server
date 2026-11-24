@@ -68,6 +68,7 @@ public sealed class ImapMailKitListenerFixture : IAsyncLifetime
         services.AddScoped<IPermissionRepository, EfPermissionRepository>();
         services.AddScoped<IMailboxService, MailboxService>();
         services.AddScoped<IMessageService, MessageService>();
+        services.AddScoped<Miautrix.Mail.Application.Mail.IMessageUidAllocator, Miautrix.Mail.Application.Mail.MessageUidAllocator>();
         services.AddSingleton<IMailStorage>(_storage);
         services.AddSingleton<Miautrix.Mail.Application.Mail.Mime.IImapMimeFormatter, MimeKitImapMimeFormatter>();
         _provider = services.BuildServiceProvider();

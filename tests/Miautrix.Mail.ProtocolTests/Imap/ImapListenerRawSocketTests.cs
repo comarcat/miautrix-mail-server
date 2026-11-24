@@ -83,6 +83,7 @@ public sealed class ImapListenerRawSocketTests
         services.AddScoped<IPermissionRepository, EfPermissionRepository>();
         services.AddScoped<IMailboxService, MailboxService>();
         services.AddScoped<IMessageService, MessageService>();
+        services.AddScoped<Miautrix.Mail.Application.Mail.IMessageUidAllocator, Miautrix.Mail.Application.Mail.MessageUidAllocator>();
         services.AddSingleton<IMailStorage>(storage);
         services.AddSingleton<Miautrix.Mail.Application.Mail.Mime.IImapMimeFormatter, MimeKitImapMimeFormatter>();
         using var provider = services.BuildServiceProvider();

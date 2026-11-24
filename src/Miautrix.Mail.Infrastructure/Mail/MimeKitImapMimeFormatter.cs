@@ -6,15 +6,33 @@ namespace Miautrix.Mail.Infrastructure.Mail;
 
 public sealed class MimeKitImapMimeFormatter : IImapMimeFormatter
 {
+    private const string EmptyEnvelope = "(NIL NIL NIL NIL NIL NIL NIL NIL NIL NIL)";
+
+    /// <summary>
+    /// RFC 3501 §7.4.2 ENVELOPE. Never throws: a message whose headers cannot be parsed yields an all-NIL
+    /// envelope instead of failing the whole FETCH (IMAP-007).
+    /// </summary>
     public string BuildEnvelope(byte[] rawMessage)
     {
-        return Envelope(Load(rawMessage));
+        try { return Envelope(Load(rawMessage)); }
+        catch (Exception) { return EmptyEnvelope; }
     }
 
     private static string Envelope(MimeMessage message)
     {
-        var date = message.Date == DateTimeOffset.MinValue ? "NIL" : Quote(message.Date.ToString("ddd, dd MMM yyyy HH:mm:ss zzz", System.Globalization.CultureInfo.InvariantCulture));
-        return $"({date} {NString(message.Subject)} {AddressList(message.From)} {AddressList(message.Sender)} {AddressList(message.ReplyTo)} {AddressList(message.To)} {AddressList(message.Cc)} {AddressList(message.Bcc)} {NString(message.InReplyTo)} {NString(message.MessageId)})";
+        // Date, Subject, In-Reply-To and Message-ID are the raw (unfolded, still RFC 2047 encoded) header values.
+        var from = AddressList(message.From);
+        var sender = message.Headers.Contains(HeaderId.Sender) && message.Sender is not null ? AddressList(message.Sender) : from;
+        var replyTo = message.ReplyTo.Count > 0 ? AddressList(message.ReplyTo) : from;
+        return $"({NString(RawHeader(message, HeaderId.Date))} {NString(RawHeader(message, HeaderId.Subject))} {from} {sender} {replyTo} {AddressList(message.To)} {AddressList(message.Cc)} {AddressList(message.Bcc)} {NString(RawHeader(message, HeaderId.InReplyTo))} {NString(RawHeader(message, HeaderId.MessageId))})";
+    }
+
+    private static string? RawHeader(MimeMessage message, HeaderId id)
+    {
+        var header = message.Headers.FirstOrDefault(h => h.Id == id);
+        if (header is null) return null;
+        var value = Encoding.UTF8.GetString(header.RawValue).Replace("\r", string.Empty).Replace("\n", string.Empty).Trim();
+        return value.Length == 0 ? null : value;
     }
 
     public string BuildBodyStructure(byte[] rawMessage, bool extended = true)
@@ -59,8 +77,32 @@ public sealed class MimeKitImapMimeFormatter : IImapMimeFormatter
 
     private static MimeMessage Load(byte[] raw)
     {
-        using var stream = new MemoryStream(raw, writable: false);
-        return MimeMessage.Load(stream, persistent: false);
+        try
+        {
+            using var stream = new MemoryStream(raw, writable: false);
+            return MimeMessage.Load(stream, persistent: false);
+        }
+        catch (FormatException)
+        {
+            // Tolerate stored messages that do not start with a header line (blank first line, leading
+            // continuation or junk line): skip lines until the first "name:" header, else treat as headerless.
+            var text = Encoding.Latin1.GetString(raw);
+            var offset = 0;
+            while (offset < text.Length)
+            {
+                var end = text.IndexOf('\n', offset);
+                var line = (end < 0 ? text[offset..] : text[offset..end]).TrimEnd('\r');
+                if (line.Length == 0) break;
+                if (System.Text.RegularExpressions.Regex.IsMatch(line, "^[!-9;-~]+:"))
+                {
+                    using var retry = new MemoryStream(raw, offset, raw.Length - offset, writable: false);
+                    return MimeMessage.Load(retry, persistent: false);
+                }
+                if (end < 0) break;
+                offset = end + 1;
+            }
+            return new MimeMessage(new ParserOptions(), Array.Empty<Header>(), new TextPart("plain"));
+        }
     }
 
     private static MimeEntity? GetPart(MimeEntity? root, string section)
@@ -143,7 +185,8 @@ public sealed class MimeKitImapMimeFormatter : IImapMimeFormatter
             if (address is MailboxAddress mailbox) addresses.Add(FormatMailbox(mailbox));
             else if (address is GroupAddress group)
             {
-                addresses.Add($"({NString(group.Name)} NIL NIL NIL)");
+                // RFC 3501 group syntax: start (NIL NIL "group-name" NIL), members, end (NIL NIL NIL NIL).
+                addresses.Add($"(NIL NIL {NString(EncodePhrase(group.Name) ?? string.Empty)} NIL)");
                 addresses.AddRange(group.Members.OfType<MailboxAddress>().Select(FormatMailbox));
                 addresses.Add("(NIL NIL NIL NIL)");
             }
@@ -154,10 +197,22 @@ public sealed class MimeKitImapMimeFormatter : IImapMimeFormatter
 
     private static string FormatMailbox(MailboxAddress mailbox)
     {
-        var at = mailbox.Address.LastIndexOf('@');
-        var local = at < 0 ? mailbox.Address : mailbox.Address[..at];
-        var host = at < 0 ? string.Empty : mailbox.Address[(at + 1)..];
-        return $"({NString(mailbox.Name)} NIL {NString(local)} {NString(host)})";
+        var local = mailbox.LocalPart ?? string.Empty;
+        var host = mailbox.Domain ?? string.Empty;
+        if (host.Any(c => c > 127))
+        {
+            try { host = new System.Globalization.IdnMapping().GetAscii(host); } catch (ArgumentException) { }
+        }
+        // An empty host would read as group syntax; send "" rather than NIL for a mailbox.
+        var hostValue = host.Length == 0 ? "\"\"" : NString(host);
+        return $"({NString(EncodePhrase(mailbox.Name))} NIL {(local.Length == 0 ? "\"\"" : NString(local))} {hostValue})";
+    }
+
+    /// <summary>Display names go back to RFC 2047 form when they contain non-ASCII (ENVELOPE carries raw header text).</summary>
+    private static string? EncodePhrase(string? name)
+    {
+        if (string.IsNullOrEmpty(name)) return null;
+        return name.All(c => c < 128) ? name : Encoding.ASCII.GetString(MimeKit.Utils.Rfc2047.EncodePhrase(Encoding.UTF8, name));
     }
 
     private static string Parameters(ParameterList parameters)
@@ -181,7 +236,19 @@ public sealed class MimeKitImapMimeFormatter : IImapMimeFormatter
     }
 
     private static string NString(string? value) => string.IsNullOrEmpty(value) ? "NIL" : Quote(value);
-    private static string Quote(string value) => "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\r", string.Empty).Replace("\n", string.Empty) + "\"";
+
+    /// <summary>
+    /// IMAP4rev1 quoted strings are 7-bit without CR, LF or NUL. Anything else is sent as a literal, whose
+    /// length is the UTF-8 byte count (the response is written as UTF-8).
+    /// </summary>
+    private static string Quote(string value)
+    {
+        value = value.Replace("\r", string.Empty).Replace("\n", string.Empty);
+        if (value.All(c => c is > (char)0 and < (char)128))
+            return "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+        value = value.Replace("\0", string.Empty);
+        return "{" + Encoding.UTF8.GetByteCount(value) + "}\r\n" + value;
+    }
     private static byte[] SerializeHeaders(HeaderList headers) => Encoding.UTF8.GetBytes(string.Join("\r\n", headers.Select(h => $"{h.Field}: {h.Value}")) + "\r\n\r\n");
     private static int LineCount(byte[] bytes) => Encoding.UTF8.GetString(bytes).Count(c => c == '\n');
 }
