@@ -15,6 +15,7 @@ using Miautrix.Mail.AntiSpam;
 using Miautrix.Mail.Domain;
 using Miautrix.Mail.Persistence;
 using Miautrix.Mail.Storage;
+using Miautrix.Mail.Application.Mail.Mime;
 
 namespace Miautrix.Mail.Worker;
 
@@ -85,13 +86,14 @@ public sealed class InboundQueueDispatcher : BackgroundService
             var quarantineService = itemScope.ServiceProvider.GetRequiredService<IQuarantineService>();
             var antiMalwareScanner = itemScope.ServiceProvider.GetRequiredService<IAntiMalwareScanner>();
             var storage = itemScope.ServiceProvider.GetRequiredService<IMailStorage>();
+            var mimeParser = itemScope.ServiceProvider.GetRequiredService<IMimeMessageParser>();
 
             var item = await db.SmtpQueue.FirstOrDefaultAsync(q => q.Id == itemId, ct);
             if (item == null) continue;
 
             try
             {
-                await ProcessItemAsync(db, quarantineService, antiMalwareScanner, storage, item, ct);
+                await ProcessItemAsync(db, quarantineService, antiMalwareScanner, storage, mimeParser, item, ct);
                 await db.SaveChangesAsync(ct);
             }
             catch (Exception ex)
@@ -123,9 +125,9 @@ public sealed class InboundQueueDispatcher : BackgroundService
         }
     }
 
-    private async Task ProcessItemAsync(AppDbContext db, IQuarantineService quarantineService, IAntiMalwareScanner antiMalwareScanner, IMailStorage storage, SmtpQueueItem item, CancellationToken ct)
+    private async Task ProcessItemAsync(AppDbContext db, IQuarantineService quarantineService, IAntiMalwareScanner antiMalwareScanner, IMailStorage storage, IMimeMessageParser mimeParser, SmtpQueueItem item, CancellationToken ct)
     {
-        var parsed = ParsedInboundMessage.Parse(item.RawMessage);
+        var parsed = mimeParser.Parse(item.RawMessage);
         var subject = item.Subject ?? parsed.Subject ?? "No Subject";
 
         var recipientDomain = item.Recipient.Split('@').LastOrDefault()?.Trim().ToLowerInvariant();
@@ -138,7 +140,7 @@ public sealed class InboundQueueDispatcher : BackgroundService
             foreach (var attachment in parsed.Attachments)
             {
                 var policyReason = AttachmentPolicy.GetPolicyBlockReason(
-                    attachment.FileName,
+                    attachment.FileName ?? "attachment",
                     attachment.Content.LongLength,
                     domain.MalwareBlockExecutables,
                     domain.MalwareBlockMacros,
@@ -355,7 +357,7 @@ public sealed class InboundQueueDispatcher : BackgroundService
                 Id = Guid.NewGuid(),
                 TenantId = item.TenantId,
                 MessageId = message.Id,
-                FileName = parsedAttachment.FileName,
+                FileName = parsedAttachment.FileName ?? "attachment",
                 ContentType = parsedAttachment.ContentType,
                 SizeBytes = attachmentStorage.SizeBytes,
                 ContentHash = attachmentStorage.ContentHash,
@@ -371,342 +373,4 @@ public sealed class InboundQueueDispatcher : BackgroundService
         item.UpdatedAt = DateTimeOffset.UtcNow;
     }
 
-    private sealed record ParsedAttachment(string FileName, string ContentType, byte[] Content);
-
-    private sealed class ParsedInboundMessage
-    {
-        public string RawHeaders { get; private init; } = string.Empty;
-        public string? Subject { get; private init; }
-        public DateTimeOffset? Date { get; private init; }
-        public string? BodyText { get; private init; }
-        public string? BodyHtml { get; private init; }
-        public IReadOnlyList<ParsedAttachment> Attachments { get; private init; } = [];
-
-        public static ParsedInboundMessage Parse(string rawMessage)
-        {
-            var normalized = rawMessage.Replace("\r\n", "\n").Replace('\r', '\n');
-            var split = normalized.IndexOf("\n\n", StringComparison.Ordinal);
-            var rawHeaders = split >= 0 ? normalized[..split] : normalized;
-            var body = split >= 0 ? normalized[(split + 2)..] : string.Empty;
-            var headers = ParseHeaders(rawHeaders);
-
-            var attachments = ParseAttachments(headers, body);
-
-            // Extract first text/plain body and first text/html body for multipart emails.
-            // Fallback: ExtractTextBody for messages we can't parse as multipart.
-            var bodyText = ExtractTextBody(body);
-            var bodyHtml = ExtractHtmlBody(body);
-
-            return new ParsedInboundMessage
-            {
-                RawHeaders = rawHeaders.Replace("\n", "\r\n"),
-                Subject = headers.TryGetValue("subject", out var subject) ? subject : null,
-                // Postgres timestamptz columns require UTC; a sender's own offset (e.g. -07:00)
-                // must never reach the entity as-is or SaveChangesAsync throws.
-                Date = headers.TryGetValue("date", out var date) && DateTimeOffset.TryParse(date, out var parsedDate)
-                    ? parsedDate.ToUniversalTime()
-                    : null,
-                BodyText = bodyText,
-                BodyHtml = bodyHtml,
-                Attachments = attachments
-            };
-        }
-
-        private static Dictionary<string, string> ParseHeaders(string rawHeaders)
-        {
-            var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            string? currentName = null;
-
-            foreach (var line in rawHeaders.Split('\n'))
-            {
-                if ((line.StartsWith(' ') || line.StartsWith('\t')) && currentName is not null)
-                {
-                    headers[currentName] += " " + line.Trim();
-                    continue;
-                }
-
-                var colon = line.IndexOf(':');
-                if (colon <= 0) continue;
-
-                currentName = line[..colon].Trim().ToLowerInvariant();
-                headers[currentName] = line[(colon + 1)..].Trim();
-            }
-
-            return headers;
-        }
-
-        private static List<ParsedAttachment> ParseAttachments(Dictionary<string, string> headers, string body)
-        {
-            var attachments = new List<ParsedAttachment>();
-            if (!headers.TryGetValue("content-type", out var contentTypeHeader)) return attachments;
-
-            var boundary = GetParameter(contentTypeHeader, "boundary");
-            if (string.IsNullOrWhiteSpace(boundary)) return attachments;
-
-            var delimiter = "--" + boundary;
-            foreach (var rawPart in body.Split(delimiter, StringSplitOptions.None))
-            {
-                var part = rawPart.Trim('\n');
-                if (part.Length == 0 || part.StartsWith("--", StringComparison.Ordinal)) continue;
-
-                var split = part.IndexOf("\n\n", StringComparison.Ordinal);
-                if (split < 0) continue;
-
-                var partHeaders = ParseHeaders(part[..split]);
-                var partBody = part[(split + 2)..].Trim('\n');
-
-                if (!partHeaders.TryGetValue("content-disposition", out var disposition) ||
-                    !disposition.Contains("attachment", StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                var fileName = GetParameter(disposition, "filename")
-                    ?? (partHeaders.TryGetValue("content-type", out var ct) ? GetParameter(ct, "name") : null)
-                    ?? "attachment";
-                var contentType = partHeaders.TryGetValue("content-type", out var partContentType)
-                    ? partContentType.Split(';', 2)[0].Trim()
-                    : "application/octet-stream";
-
-                var transferEncoding = partHeaders.TryGetValue("content-transfer-encoding", out var cte) ? cte : string.Empty;
-                var bytes = transferEncoding.Equals("base64", StringComparison.OrdinalIgnoreCase)
-                    ? DecodeBase64(partBody)
-                    : Encoding.UTF8.GetBytes(partBody.Replace("\n", "\r\n"));
-
-                attachments.Add(new ParsedAttachment(fileName, contentType, bytes));
-            }
-
-            return attachments;
-        }
-
-        // NOTE: same parsing assumptions as ExtractHtmlBody below.
-        private static string? ExtractTextBody(string body) => ExtractTextBody(body, 0);
-
-        private static string? ExtractHtmlBody(string body, int depth)
-        {
-            if (string.IsNullOrWhiteSpace(body)) return null;
-            if (depth > 5) return null;
-
-            var startsWithBoundary = body.StartsWith("--", StringComparison.Ordinal);
-
-            var split = startsWithBoundary
-                ? 0
-                : body.IndexOf("\n--", StringComparison.Ordinal);
-
-            if (!startsWithBoundary && split >= 0)
-            {
-                // IndexOf("\n--") points at the leading newline; shift to the boundary marker.
-                split += 1;
-            }
-
-            if (split < 0)
-            {
-                var candidate = body.Trim();
-                if (candidate.StartsWith("<", StringComparison.OrdinalIgnoreCase) && candidate.Contains("</", StringComparison.OrdinalIgnoreCase))
-                    return candidate;
-                return null;
-            }
-
-            var firstDelim = body[split..];
-            var delimLineEnd = firstDelim.IndexOf('\n');
-            if (delimLineEnd < 0) return null;
-
-            var delimLine = firstDelim[..delimLineEnd].Trim(); // "--boundary" or "--boundary--"
-            if (!delimLine.StartsWith("--")) return null;
-
-            var boundary = delimLine.Substring(2);
-            if (string.IsNullOrWhiteSpace(boundary)) return null;
-
-            var delimiter = "--" + boundary;
-            foreach (var rawPart in body.Split(delimiter, StringSplitOptions.None))
-            {
-                var part = rawPart.Trim('\n');
-                if (part.Length == 0 || part.StartsWith("--", StringComparison.Ordinal)) continue;
-
-                var partSplit = part.IndexOf("\n\n", StringComparison.Ordinal);
-                if (partSplit < 0) continue;
-
-                var partHeaders = ParseHeaders(part[..partSplit]);
-                var partBody = part[(partSplit + 2)..].Trim('\n');
-
-                if (!partHeaders.TryGetValue("content-type", out var contentType)) continue;
-
-                // Direct text/html.
-                if (contentType.Contains("text/html", StringComparison.OrdinalIgnoreCase))
-                {
-                    var transferEncoding = partHeaders.TryGetValue("content-transfer-encoding", out var cte) ? cte : string.Empty;
-                    var html = DecodeTextPart(partBody, transferEncoding);
-
-                    var trimmed = html.Trim();
-                    return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
-                }
-
-                // Nested multipart.
-                if (contentType.Contains("multipart/", StringComparison.OrdinalIgnoreCase))
-                {
-                    var transferEncoding = partHeaders.TryGetValue("content-transfer-encoding", out var cte) ? cte : string.Empty;
-                    var nested = transferEncoding.Equals("base64", StringComparison.OrdinalIgnoreCase)
-                        ? Encoding.UTF8.GetString(DecodeBase64(partBody))
-                        : partBody;
-
-                    var extracted = ExtractHtmlBody(nested, depth + 1);
-                    if (extracted is not null) return extracted;
-                }
-            }
-
-            return null;
-        }
-
-        private static string? ExtractHtmlBody(string body)
-        {
-            if (string.IsNullOrWhiteSpace(body)) return null;
-            return ExtractHtmlBody(body, 0);
-        }
-
-        private static string? ExtractTextBody(string body, int depth)
-        {
-            if (string.IsNullOrWhiteSpace(body)) return null;
-            if (depth > 5) return null;
-
-            // Best-effort extraction:
-            // - multipart/*: find the first direct text/plain part and decode it (recursing into nested multiparts).
-            // - non-multipart: treat everything after headers as text.
-            // Some emails may start multipart boundaries immediately after the initial headers,
-            // so handle both "--boundary" at position 0 and the more common "\n--boundary" case.
-            var startsWithBoundary = body.StartsWith("--", StringComparison.Ordinal);
-
-            var split = startsWithBoundary
-                ? 0
-                : body.IndexOf("\n--", StringComparison.Ordinal);
-
-            if (!startsWithBoundary && split >= 0)
-            {
-                split += 1;
-            }
-
-            // Non-multipart fallback.
-            if (split < 0)
-            {
-                var candidate = body.Trim();
-                return string.IsNullOrWhiteSpace(candidate) ? null : candidate;
-            }
-
-            // multipart: infer boundary from the first delimiter.
-            var firstDelim = body[split..];
-            var delimLineEnd = firstDelim.IndexOf('\n');
-            if (delimLineEnd < 0) return null;
-
-            var delimLine = firstDelim[..delimLineEnd].Trim(); // "--boundary" or "--boundary--"
-            if (!delimLine.StartsWith("--")) return null;
-
-            var boundary = delimLine.Substring(2);
-            if (string.IsNullOrWhiteSpace(boundary)) return null;
-
-            var delimiter = "--" + boundary;
-            foreach (var rawPart in body.Split(delimiter, StringSplitOptions.None))
-            {
-                var part = rawPart.Trim('\n');
-                if (part.Length == 0 || part.StartsWith("--", StringComparison.Ordinal)) continue;
-
-                var partSplit = part.IndexOf("\n\n", StringComparison.Ordinal);
-                if (partSplit < 0) continue;
-
-                var partHeaders = ParseHeaders(part[..partSplit]);
-                var partBody = part[(partSplit + 2)..].Trim('\n');
-
-                if (!partHeaders.TryGetValue("content-type", out var contentType)) continue;
-
-                // Direct text/plain.
-                if (contentType.Contains("text/plain", StringComparison.OrdinalIgnoreCase))
-                {
-                    var transferEncoding = partHeaders.TryGetValue("content-transfer-encoding", out var cte) ? cte : string.Empty;
-
-                    var text = DecodeTextPart(partBody, transferEncoding);
-
-                    var trimmed = text.Trim();
-                    return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
-                }
-
-                // Nested multipart (e.g. multipart/mixed -> multipart/alternative -> text/plain).
-                if (contentType.Contains("multipart/", StringComparison.OrdinalIgnoreCase))
-                {
-                    var transferEncoding = partHeaders.TryGetValue("content-transfer-encoding", out var cte) ? cte : string.Empty;
-                    var nested = transferEncoding.Equals("base64", StringComparison.OrdinalIgnoreCase)
-                        ? Encoding.UTF8.GetString(DecodeBase64(partBody))
-                        : partBody;
-
-                    var extracted = ExtractTextBody(nested, depth + 1);
-                    if (extracted is not null) return extracted;
-                }
-            }
-
-            return null;
-        }
-
-        private static string? GetParameter(string headerValue, string name)
-        {
-            // Very small header parameter parser.
-            // Works for: boundary="..." and boundary=...
-            var escapedName = Regex.Escape(name);
-            var pattern = "(?:^|;)\\s*" + escapedName + "\\s*=\\s*\\\"?([^\\\";]+)\\\"?";
-            var match = Regex.Match(headerValue, pattern, RegexOptions.IgnoreCase);
-
-            if (!match.Success) return null;
-            return match.Groups[1].Value.Trim();
-        }
-
-        private static string DecodeTextPart(string value, string transferEncoding)
-        {
-            if (transferEncoding.Equals("base64", StringComparison.OrdinalIgnoreCase))
-                return Encoding.UTF8.GetString(DecodeBase64(value));
-
-            if (transferEncoding.Equals("quoted-printable", StringComparison.OrdinalIgnoreCase))
-                return DecodeQuotedPrintable(value);
-
-            return value;
-        }
-
-        private static string DecodeQuotedPrintable(string value)
-        {
-            var builder = new StringBuilder(value.Length);
-            for (var i = 0; i < value.Length; i++)
-            {
-                if (value[i] != '=')
-                {
-                    builder.Append(value[i]);
-                    continue;
-                }
-
-                if (i + 2 < value.Length && value[i + 1] == '\r' && value[i + 2] == '\n')
-                {
-                    i += 2;
-                    continue;
-                }
-
-                if (i + 2 < value.Length && value[i + 1] == '\n')
-                {
-                    i += 1;
-                    continue;
-                }
-
-                if (i + 2 < value.Length &&
-                    byte.TryParse(value.AsSpan(i + 1, 2), System.Globalization.NumberStyles.HexNumber, null, out var decoded))
-                {
-                    builder.Append((char)decoded);
-                    i += 2;
-                    continue;
-                }
-
-                builder.Append('=');
-            }
-
-            return builder.ToString();
-        }
-
-        private static byte[] DecodeBase64(string value)
-        {
-            var compact = Regex.Replace(value, "\\s+", string.Empty);
-            return compact.Length == 0 ? [] : Convert.FromBase64String(compact);
-        }
-    }
 }

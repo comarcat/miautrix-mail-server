@@ -217,6 +217,43 @@ public sealed class MessageService : IMessageService
         return true;
     }
 
+    public async Task<bool> SetImapFlagsAsync(Guid tenantId, Guid userId, Guid mailboxId, Guid messageId, IReadOnlyList<string> flags, CancellationToken cancellationToken = default)
+    {
+        var mailbox = await _db.Mailboxes.FirstOrDefaultAsync(m => m.TenantId == tenantId && m.Id == mailboxId, cancellationToken);
+        _auth.AssertMailboxAccess(tenantId, userId, mailbox, requireWrite: true);
+        var message = await _db.Messages.FirstOrDefaultAsync(m => m.TenantId == tenantId && m.MailboxId == mailboxId && m.Id == messageId, cancellationToken);
+        if (message is null) return false;
+        message.Flags = string.Join(' ', flags.Distinct(StringComparer.OrdinalIgnoreCase));
+        message.IsRead = flags.Any(f => f.Equals("\\Seen", StringComparison.OrdinalIgnoreCase));
+        message.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    public async Task<uint?> CopyMessageAsync(Guid tenantId, Guid userId, Guid mailboxId, Guid messageId, Guid targetFolderId, CancellationToken cancellationToken = default)
+    {
+        var mailbox = await _db.Mailboxes.FirstOrDefaultAsync(m => m.TenantId == tenantId && m.Id == mailboxId, cancellationToken);
+        _auth.AssertMailboxAccess(tenantId, userId, mailbox, requireWrite: true);
+        var source = await _db.Messages.FirstOrDefaultAsync(m => m.TenantId == tenantId && m.MailboxId == mailboxId && m.Id == messageId, cancellationToken);
+        var folder = await _db.Folders.FirstOrDefaultAsync(f => f.TenantId == tenantId && f.MailboxId == mailboxId && f.Id == targetFolderId, cancellationToken);
+        if (source is null || folder is null) return null;
+        var copy = new Message
+        {
+            Id = Guid.NewGuid(), TenantId = tenantId, MailboxId = mailboxId, FolderId = targetFolderId,
+            Sender = source.Sender, Recipient = source.Recipient, Subject = source.Subject, Date = source.Date,
+            ContentHash = source.ContentHash, StoragePath = source.StoragePath, SizeBytes = source.SizeBytes,
+            Flags = source.Flags, IsRead = source.IsRead, BodyText = source.BodyText, BodyHtml = source.BodyHtml,
+            RawHeaders = source.RawHeaders, Uid = folder.UidNext++, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow
+        };
+        _db.Messages.Add(copy);
+        foreach (var recipient in await _db.MessageRecipients.Where(r => r.TenantId == tenantId && r.MessageId == source.Id).ToListAsync(cancellationToken))
+            _db.MessageRecipients.Add(new MessageRecipient { Id = Guid.NewGuid(), TenantId = tenantId, MessageId = copy.Id, Type = recipient.Type, Address = recipient.Address, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow });
+        foreach (var attachment in await _db.Attachments.Where(a => a.TenantId == tenantId && a.MessageId == source.Id).ToListAsync(cancellationToken))
+            _db.Attachments.Add(new Attachment { Id = Guid.NewGuid(), TenantId = tenantId, MessageId = copy.Id, FileName = attachment.FileName, ContentType = attachment.ContentType, SizeBytes = attachment.SizeBytes, ContentHash = attachment.ContentHash, StoragePath = attachment.StoragePath, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow });
+        await _db.SaveChangesAsync(cancellationToken);
+        return copy.Uid;
+    }
+
     public async Task<bool> MoveMessageAsync(
         Guid tenantId,
         Guid userId,

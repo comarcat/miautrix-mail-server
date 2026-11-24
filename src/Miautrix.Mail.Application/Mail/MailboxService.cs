@@ -338,12 +338,18 @@ public sealed class MailboxService : IMailboxService
             }
         }
 
+        var normalizedName = request.Name.Trim();
+        if (await _db.Folders.AnyAsync(f => f.TenantId == tenantId && f.MailboxId == mailboxId && f.ParentId == parentId && f.Name.ToLower() == normalizedName.ToLower(), cancellationToken))
+        {
+            throw new InvalidOperationException("A folder with that name already exists.");
+        }
+
         var folder = new Folder
         {
             Id = Guid.NewGuid(),
             TenantId = tenantId,
             MailboxId = mailboxId,
-            Name = request.Name.Trim(),
+            Name = normalizedName,
             Role = "custom",
             ParentId = parentId,
             CreatedAt = DateTimeOffset.UtcNow,
@@ -353,6 +359,48 @@ public sealed class MailboxService : IMailboxService
         _db.Folders.Add(folder);
         await _db.SaveChangesAsync(cancellationToken);
 
+        return new FolderDto(folder.Id, folder.MailboxId, folder.Name, folder.Role, folder.ParentId, 0, 0);
+    }
+
+    public async Task<FolderDto> RenameFolderAsync(
+        Guid tenantId,
+        Guid userId,
+        Guid mailboxId,
+        Guid folderId,
+        string newName,
+        CancellationToken cancellationToken = default)
+    {
+        var mailbox = await _db.Mailboxes.FirstOrDefaultAsync(m => m.TenantId == tenantId && m.Id == mailboxId, cancellationToken);
+        _auth.AssertMailboxAccess(tenantId, userId, mailbox, requireWrite: true);
+        var folder = await _db.Folders.FirstOrDefaultAsync(
+            f => f.TenantId == tenantId && f.MailboxId == mailboxId && f.Id == folderId, cancellationToken)
+            ?? throw new ResourceNotFoundException("Folder not found.");
+        if (string.Equals(folder.Role, "inbox", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("INBOX cannot be renamed by this service.");
+        if (!string.Equals(folder.Role, "custom", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Only personal folders can be renamed.");
+
+        var path = newName.Split('/', StringSplitOptions.TrimEntries);
+        if (path.Length == 0 || path.Any(string.IsNullOrWhiteSpace))
+            throw new ArgumentException("Folder name is required.");
+        var leaf = path[^1];
+        Guid? parentId = null;
+        foreach (var segment in path[..^1])
+        {
+            var parent = await _db.Folders.FirstOrDefaultAsync(f => f.TenantId == tenantId && f.MailboxId == mailboxId && f.ParentId == parentId && f.Name.ToLower() == segment.ToLower(), cancellationToken);
+            if (parent is null) throw new ResourceNotFoundException("Parent folder not found.");
+            parentId = parent.Id;
+        }
+        if (parentId == folderId) throw new ArgumentException("A folder cannot be its own parent.");
+        var collision = await _db.Folders.AnyAsync(f => f.TenantId == tenantId && f.MailboxId == mailboxId && f.ParentId == parentId && f.Id != folderId && f.Name.ToLower() == leaf.ToLower(), cancellationToken);
+        if (collision) throw new InvalidOperationException("A folder with that name already exists.");
+
+        // Apply the same authorization and parent validation/cycle checks as REST re-parenting.
+        if (folder.ParentId != parentId)
+            await UpdateFolderParentAsync(tenantId, userId, mailboxId, folderId, new UpdateFolderParentRequest(parentId), cancellationToken);
+        folder.Name = leaf.Trim();
+        folder.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(cancellationToken);
         return new FolderDto(folder.Id, folder.MailboxId, folder.Name, folder.Role, folder.ParentId, 0, 0);
     }
 

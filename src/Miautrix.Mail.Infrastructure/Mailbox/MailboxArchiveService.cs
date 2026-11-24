@@ -11,44 +11,6 @@ using DomainMessage = Miautrix.Mail.Domain.Message;
 // the `Miautrix.Mail.Domain.Mailbox` entity for every file under `Miautrix.Mail.Infrastructure`.
 namespace Miautrix.Mail.Infrastructure.MailboxArchiving;
 
-public sealed record MailboxArchiveAttachment(
-    string FileName,
-    string ContentType,
-    long SizeBytes,
-    bool Stored,
-    string? ArchivePath);
-
-public sealed record MailboxArchiveMessage(
-    uint Uid,
-    string Folder,
-    string Subject,
-    string Sender,
-    string Recipient,
-    DateTimeOffset Date,
-    long SizeBytes,
-    string EmlPath,
-    IReadOnlyList<MailboxArchiveAttachment> Attachments);
-
-public sealed record MailboxArchiveManifest(
-    string Version,
-    DateTimeOffset CreatedAt,
-    Guid MailboxId,
-    string Address,
-    int FolderCount,
-    int MessageCount,
-    int AttachmentCount,
-    IReadOnlyList<string> MissingBlobs,
-    IReadOnlyList<MailboxArchiveMessage> Messages);
-
-public interface IMailboxArchiveService
-{
-    /// <summary>Builds a ZIP of the mailbox contents into a temp file and returns its path.</summary>
-    Task<string> CreateArchiveAsync(AppDbContext db, Guid tenantId, Guid mailboxId, string mailboxAddress, CancellationToken ct = default);
-
-    /// <summary>Deletes content-addressed blobs that no remaining message or attachment references.</summary>
-    Task<int> DeleteBlobsIfUnreferencedAsync(AppDbContext db, IReadOnlyCollection<string> contentHashes, CancellationToken ct = default);
-}
-
 public sealed class MailboxArchiveService : IMailboxArchiveService
 {
     private const string UnfiledFolder = "_unfiled";

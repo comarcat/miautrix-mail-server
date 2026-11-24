@@ -2,16 +2,6 @@ using System.Security.Cryptography;
 
 namespace Miautrix.Mail.Storage;
 
-public record StorageWriteResult(string ContentHash, long SizeBytes, string StoragePath);
-
-public interface IMailStorage
-{
-    Task<StorageWriteResult> StoreAsync(Stream contentStream, CancellationToken cancellationToken = default);
-    Task<Stream?> OpenReadAsync(string contentHash, CancellationToken cancellationToken = default);
-    Task<bool> ExistsAsync(string contentHash, CancellationToken cancellationToken = default);
-    Task DeleteAsync(string contentHash, CancellationToken cancellationToken = default);
-}
-
 public sealed class FileSystemMailStorage : IMailStorage
 {
     private const int BufferSize = 81920; // 80 KB bounded streaming buffer

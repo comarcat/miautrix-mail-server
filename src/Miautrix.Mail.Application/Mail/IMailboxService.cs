@@ -42,6 +42,14 @@ public interface IMailboxService
         CreateFolderRequest request,
         CancellationToken cancellationToken = default);
 
+    Task<FolderDto> RenameFolderAsync(
+        Guid tenantId,
+        Guid userId,
+        Guid mailboxId,
+        Guid folderId,
+        string newName,
+        CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Creates any missing default system folders (Inbox, Sent, Drafts, Trash, Junk, Archive)
     /// for the mailbox. Idempotent. Performs no authorization check: callers are responsible

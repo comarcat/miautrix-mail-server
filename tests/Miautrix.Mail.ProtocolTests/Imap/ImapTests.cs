@@ -3,6 +3,7 @@ using Miautrix.Mail.Domain;
 using Miautrix.Mail.Persistence;
 using Miautrix.Mail.Protocols.Imap;
 using Miautrix.Mail.Storage;
+using Miautrix.Mail.Security;
 using Microsoft.EntityFrameworkCore;
 using DomainEntity = Miautrix.Mail.Domain.Domain;
 
@@ -100,9 +101,14 @@ public sealed class ImapTests : IDisposable
         _dbContext.Tenants.Add(tenant);
         _dbContext.Domains.Add(domain);
         _dbContext.Mailboxes.Add(mailbox);
+        _dbContext.Folders.Add(new Folder
+        {
+            Id = Guid.NewGuid(), TenantId = tenantId, MailboxId = mailboxId, Name = "INBOX", Role = "inbox",
+            UidNext = 1, UidValidity = 1, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow
+        });
         await _dbContext.SaveChangesAsync();
 
-        var session = new ImapSession(_dbContext, _storage, new StubImapAuthenticator(tenantId, mailboxId));
+        var session = new ImapSession(_dbContext, _storage, new StubImapAuthenticator(tenantId, mailboxId), new AllowTestAuthorization());
 
         // Act 1: Login
         var loginResult = await session.ExecuteCommandAsync($"a001 LOGIN \"{address}\" \"secret\"");
@@ -128,13 +134,12 @@ public sealed class ImapTests : IDisposable
         // Act 4: UID FETCH 1 (FLAGS RFC822)
         var fetchResult = await session.ExecuteCommandAsync("a004 UID FETCH 1 (FLAGS RFC822)");
         Assert.Equal("OK", fetchResult.Status);
-        Assert.NotNull(fetchResult.BinaryPayload);
-
-        var retrievedBody = Encoding.UTF8.GetString(fetchResult.BinaryPayload);
+        var literalSegment = Assert.Single(fetchResult.ResponseSegments, s => s.Bytes.SequenceEqual(rawMimeBytes));
+        var retrievedBody = Encoding.UTF8.GetString(literalSegment.Bytes);
         Assert.Equal(rawMime, retrievedBody);
 
         // Verify untagged responses contain preserved flags
-        var fetchUntagged = string.Join("\n", fetchResult.UntaggedResponses);
+        var fetchUntagged = Encoding.UTF8.GetString(fetchResult.ResponseSegments[0].Bytes);
         Assert.Contains("\\Seen", fetchUntagged);
         Assert.Contains("\\Flagged", fetchUntagged);
     }
@@ -157,6 +162,14 @@ public sealed class ImapTests : IDisposable
 
         public Task<ImapAuthenticationResult> AuthenticateAsync(
             string username, string password, CancellationToken cancellationToken = default)
-            => Task.FromResult(new ImapAuthenticationResult(true, _tenantId, _mailboxId));
+            => Task.FromResult(new ImapAuthenticationResult(true, _tenantId, _mailboxId, Guid.NewGuid()));
+    }
+
+    private sealed class AllowTestAuthorization : ITenantAuthorizationHelper
+    {
+        public TResource AuthorizeAccess<TResource>(Guid currentTenantId, Guid currentUserId, TResource? resource, string requiredPermissionCode) where TResource : TenantScopedEntityBase => resource!;
+        public void AssertPermission(Guid tenantId, Guid userId, string permissionCode) { }
+        public void AssertMailboxAccess(Guid tenantId, Guid userId, Mailbox? mailbox, bool requireWrite) { if (mailbox is null) throw new ResourceNotFoundException(); }
+        public void ValidateOwnerDemotion(Guid tenantId, Guid targetUserId) { }
     }
 }

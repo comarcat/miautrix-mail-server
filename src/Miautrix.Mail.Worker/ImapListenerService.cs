@@ -10,6 +10,9 @@ using Microsoft.Extensions.Logging;
 using Miautrix.Mail.Persistence;
 using Miautrix.Mail.Protocols.Imap;
 using Miautrix.Mail.Storage;
+using Miautrix.Mail.Security;
+using Miautrix.Mail.Application.Mail;
+using Miautrix.Mail.Application.Mail.Mime;
 
 namespace Miautrix.Mail.Worker;
 
@@ -22,22 +25,26 @@ namespace Miautrix.Mail.Worker;
 public sealed class ImapListenerService : BackgroundService
 {
     private const int ImapsPort = 993;
+    private readonly int _port;
 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IMailStorage _storage;
     private readonly ILogger<ImapListenerService> _logger;
     private readonly X509Certificate2? _tlsCert;
+    public int BoundPort { get; private set; }
 
     public ImapListenerService(
         IServiceScopeFactory scopeFactory,
         IMailStorage storage,
         ILogger<ImapListenerService> logger,
-        TlsCertificateProvider tlsCertificateProvider)
+        TlsCertificateProvider tlsCertificateProvider,
+        int port = ImapsPort)
     {
         _scopeFactory = scopeFactory;
         _storage = storage;
         _logger = logger;
         _tlsCert = tlsCertificateProvider.Certificate;
+        _port = port;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -50,10 +57,11 @@ public sealed class ImapListenerService : BackgroundService
             return;
         }
 
-        var listener = new TcpListener(IPAddress.Any, ImapsPort);
+        var listener = new TcpListener(IPAddress.Any, _port);
         try
         {
             listener.Start();
+            BoundPort = ((IPEndPoint)listener.LocalEndpoint).Port;
         }
         catch (SocketException ex)
         {
@@ -64,11 +72,11 @@ public sealed class ImapListenerService : BackgroundService
                 "Cannot bind IMAP port {Port}: {Reason}. " +
                 "For EACCES, the unit needs AmbientCapabilities=CAP_NET_BIND_SERVICE. " +
                 "For EADDRINUSE, another process holds the port (check: ss -lntup | grep :{Port}).",
-                ImapsPort, ex.SocketErrorCode, ImapsPort);
+                _port, ex.SocketErrorCode, _port);
             return;
         }
 
-        _logger.LogInformation("IMAP listener started on port {Port} (IMAPS)", ImapsPort);
+        _logger.LogInformation("IMAP listener started on port {Port} (IMAPS)", BoundPort);
 
         try
         {
@@ -95,7 +103,7 @@ public sealed class ImapListenerService : BackgroundService
         finally
         {
             listener.Stop();
-            _logger.LogInformation("IMAP listener on port {Port} stopped", ImapsPort);
+            _logger.LogInformation("IMAP listener on port {Port} stopped", BoundPort);
         }
     }
 
@@ -126,82 +134,65 @@ public sealed class ImapListenerService : BackgroundService
             ClientCertificateRequired = false,
         }, ct);
 
-        using var reader = new StreamReader(ssl, Encoding.ASCII, detectEncodingFromByteOrderMarks: false, leaveOpen: true);
-        await using var writer = new StreamWriter(ssl, Encoding.ASCII, leaveOpen: true) { AutoFlush = true, NewLine = "\r\n" };
-
         // Greeting
-        await writer.WriteLineAsync("* OK [CAPABILITY IMAP4rev1 AUTH=PLAIN LITERAL+] Miautrix IMAP ready");
+        await WriteAsciiAsync(ssl, $"* OK [CAPABILITY {ImapSession.CapabilityLine[13..]}] Miautrix IMAP ready\r\n", ct);
 
         // Create a scoped DbContext for this connection's lifetime.
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var authenticator = scope.ServiceProvider.GetRequiredService<IImapAuthenticator>();
+        var authorization = scope.ServiceProvider.GetRequiredService<ITenantAuthorizationHelper>();
+        var mailboxService = scope.ServiceProvider.GetRequiredService<IMailboxService>();
+        var messageService = scope.ServiceProvider.GetRequiredService<IMessageService>();
+        var mimeFormatter = scope.ServiceProvider.GetRequiredService<IImapMimeFormatter>();
 
-        var session = new ImapSession(db, _storage, authenticator);
+        var session = new ImapSession(db, _storage, authenticator, authorization, mailboxService, messageService, mimeFormatter);
 
-        string? line;
-        while (!ct.IsCancellationRequested && (line = await reader.ReadLineAsync(ct)) != null)
+        var maxLiteral = int.TryParse(Environment.GetEnvironmentVariable("MIAUTRIX_IMAP_MAX_LITERAL_BYTES"), out var configured) ? Math.Clamp(configured, 1024, 50 * 1024 * 1024) : 50 * 1024 * 1024;
+        var connectionReader = new ImapConnectionReader(ssl, maxLineBytes: 64 * 1024, maxLiteralBytes: maxLiteral);
+        while (!ct.IsCancellationRequested)
         {
-            Stream? literalPayload = null;
-
-            // Check for a literal size at end of command line: {nnn}
-            var trimmed = line.TrimEnd();
-            if (trimmed.EndsWith('}'))
-            {
-                var openBrace = trimmed.LastIndexOf('{');
-                if (openBrace >= 0 && int.TryParse(trimmed[(openBrace + 1)..^1], out var literalSize))
-                {
-                    await writer.WriteLineAsync("+ Ready for literal data");
-
-                    var buffer = new byte[literalSize];
-                    var totalRead = 0;
-                    while (totalRead < literalSize)
-                    {
-                        var read = await ssl.ReadAsync(buffer.AsMemory(totalRead, literalSize - totalRead), ct);
-                        if (read == 0)
-                        {
-                            break;
-                        }
-
-                        totalRead += read;
-                    }
-
-                    literalPayload = new MemoryStream(buffer, 0, totalRead, writable: false);
-                    line = trimmed[..openBrace]; // strip the {nnn} from the command line
-                }
-            }
-
+            CollectedImapCommand? collected = null;
+            ImapCommand? parsed = null;
             ImapCommandResult result;
             try
             {
-                result = await session.ExecuteCommandAsync(line, literalPayload, ct);
+                if (session.AwaitingSaslContinuation)
+                {
+                    var saslLine = await connectionReader.ReadLineAsync(ct);
+                    if (saslLine is null) break;
+                    result = await session.CompleteSaslAsync(Encoding.ASCII.GetString(saslLine), ct);
+                    await ImapResponseWriter.WriteAsync(ssl, result, ct);
+                    continue;
+                }
+                collected = await ImapCommandCollector.ReadAsync(connectionReader,
+                    async (_, token) => await WriteAsciiAsync(ssl, "+ Ready for literal data\r\n", token),
+                    maxLiteral, ct);
+                parsed = ImapCommandTokenizer.Parse(collected.Text, collected.Literals);
+                result = await session.ExecuteCommandAsync(parsed, ct);
+            }
+            catch (ImapLiteralTooLargeException ex)
+            {
+                _logger.LogDebug("IMAP command {CommandName} failed for tag {Tag} ({ExceptionType})", ex.CommandName, ex.Tag, ex.GetType().Name);
+                if (ex.NonSynchronizing)
+                {
+                    await WriteAsciiAsync(ssl, "* BYE Literal too large\r\n", ct);
+                    return;
+                }
+                await WriteAsciiAsync(ssl, $"{ex.Tag} NO [TOOBIG] Literal too large\r\n", ct);
+                continue;
             }
             catch (Exception ex)
             {
-                _logger.LogDebug(ex, "IMAP command error for line: {Line}", line);
-                await writer.WriteLineAsync("* BAD Internal server error");
+                var safeTag = collected?.Text.Split(' ', 2)[0] ?? (ex as ImapCommandCollectionException)?.Tag ?? "A0";
+                var safeCommand = "UNKNOWN";
+                try { if (collected is not null) safeCommand = ImapCommandTokenizer.Parse(collected.Text, collected.Literals).Name; } catch (Exception) { }
+                _logger.LogDebug("IMAP command {CommandName} failed for tag {Tag} ({ExceptionType})", safeCommand, safeTag, ex.GetType().Name);
+                await WriteAsciiAsync(ssl, $"{safeTag} BAD Internal server error\r\n", ct);
                 continue;
             }
-            finally
-            {
-                literalPayload?.Dispose();
-            }
 
-            // Write untagged responses
-            foreach (var untagged in result.UntaggedResponses)
-            {
-                await writer.WriteLineAsync(untagged);
-            }
-
-            // Write binary payload inline (e.g. FETCH BODY[])
-            if (result.BinaryPayload is { Length: > 0 })
-            {
-                await ssl.WriteAsync(result.BinaryPayload, ct);
-                await writer.WriteLineAsync();
-            }
-
-            // Write tagged result
-            await writer.WriteLineAsync($"{result.Tag} {result.Status} {result.Message}");
+            await ImapResponseWriter.WriteAsync(ssl, result, ct);
 
             if (result.Status == "BYE" || session.State == ImapState.LoggedOut)
             {
@@ -209,4 +200,8 @@ public sealed class ImapListenerService : BackgroundService
             }
         }
     }
+
+    private static Task WriteAsciiAsync(Stream stream, string value, CancellationToken cancellationToken) =>
+        stream.WriteAsync(Encoding.ASCII.GetBytes(value), cancellationToken).AsTask();
+
 }

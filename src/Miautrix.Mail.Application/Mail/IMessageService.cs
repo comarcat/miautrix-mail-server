@@ -30,6 +30,10 @@ public interface IMessageService
         bool isRead,
         CancellationToken cancellationToken = default);
 
+    Task<bool> SetImapFlagsAsync(Guid tenantId, Guid userId, Guid mailboxId, Guid messageId, IReadOnlyList<string> flags, CancellationToken cancellationToken = default);
+
+    Task<uint?> CopyMessageAsync(Guid tenantId, Guid userId, Guid mailboxId, Guid messageId, Guid targetFolderId, CancellationToken cancellationToken = default);
+
     Task<bool> MoveMessageAsync(
         Guid tenantId,
         Guid userId,

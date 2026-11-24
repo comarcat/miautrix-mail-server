@@ -30,7 +30,7 @@ public sealed class ImapAuthenticatorTests : IDisposable
             .Options;
 
         _dbContext = new AppDbContext(options);
-        _authenticator = new ImapAuthenticator(_dbContext, new Argon2idPasswordHasher());
+        _authenticator = new ImapAuthenticator(_dbContext, new Argon2idPasswordHasher(), new InMemorySecurityEventSink());
     }
 
     public void Dispose()

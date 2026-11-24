@@ -6,7 +6,7 @@ namespace Miautrix.Mail.Protocols.Imap;
 /// <param name="IsSuccess">True if the credentials were accepted and the mailbox resolved.</param>
 /// <param name="TenantId">Tenant scope for the authenticated session.</param>
 /// <param name="MailboxId">Mailbox the session operates on.</param>
-public sealed record ImapAuthenticationResult(bool IsSuccess, Guid TenantId, Guid MailboxId);
+public sealed record ImapAuthenticationResult(bool IsSuccess, Guid TenantId, Guid MailboxId, Guid UserId = default);
 
 /// <summary>
 /// Verifies IMAP credentials and resolves them to a tenant + mailbox.

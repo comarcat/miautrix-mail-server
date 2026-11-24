@@ -6,7 +6,10 @@ using Miautrix.Mail.Application.Queue;
 using Miautrix.Mail.Application.Transport;
 using Miautrix.Mail.Identity;
 using Miautrix.Mail.Infrastructure.Backup;
+using Miautrix.Mail.Infrastructure.Mail;
+using Miautrix.Mail.Application.Mail.Mime;
 using Miautrix.Mail.Infrastructure.MailboxArchiving;
+using Miautrix.Mail.Infrastructure.Storage;
 using Miautrix.Mail.Persistence;
 using Miautrix.Mail.Protocols.Sieve;
 using Miautrix.Mail.Protocols.Smtp;
@@ -48,16 +51,14 @@ public class Program
 
         // Content-addressed blob store. Must resolve to the same directory the IMAP/SMTP
         // pipeline writes to, or exports and blob cleanup operate on the wrong files.
-        var storageDirectory = Environment.GetEnvironmentVariable("MIAUTRIX_STORAGE_DIR");
-        if (string.IsNullOrWhiteSpace(storageDirectory))
-        {
-            storageDirectory = Path.Combine(AppContext.BaseDirectory, "mail_data");
-        }
+        var storageDirectory = StorageDirectoryResolver.Resolve(
+            Environment.GetEnvironmentVariable("MIAUTRIX_STORAGE_DIR"), builder.Environment.IsDevelopment(), AppContext.BaseDirectory);
 
         builder.Services.AddSingleton<ISecurityEventSink, InMemorySecurityEventSink>();
         builder.Services.AddSingleton<IBackupService, BackupService>();
         builder.Services.AddSingleton(new BackupOptions(backupDirectory));
         builder.Services.AddSingleton<IMailStorage>(new FileSystemMailStorage(storageDirectory));
+        builder.Services.AddSingleton<IMimeMessageParser, MimeKitMimeMessageParser>();
         builder.Services.AddSingleton<IMailboxArchiveService, MailboxArchiveService>();
 
         // Inbound webhook shared secret. Deliberately not fatal when absent: the controller fails

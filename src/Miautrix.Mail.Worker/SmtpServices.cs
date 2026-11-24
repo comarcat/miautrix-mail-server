@@ -15,11 +15,13 @@ public sealed class ImapAuthenticator : IImapAuthenticator
 {
     private readonly AppDbContext _db;
     private readonly IPasswordHasher _passwordHasher;
+    private readonly ISecurityEventSink _securityEvents;
 
-    public ImapAuthenticator(AppDbContext db, IPasswordHasher passwordHasher)
+    public ImapAuthenticator(AppDbContext db, IPasswordHasher passwordHasher, ISecurityEventSink securityEvents)
     {
         _db = db;
         _passwordHasher = passwordHasher;
+        _securityEvents = securityEvents;
     }
 
     public async Task<ImapAuthenticationResult> AuthenticateAsync(
@@ -45,6 +47,7 @@ public sealed class ImapAuthenticator : IImapAuthenticator
             .FirstOrDefaultAsync(c => c.TenantId == user.TenantId && c.UserId == user.Id, cancellationToken);
         if (credential is null || !_passwordHasher.VerifyPassword(password, credential.PasswordHash))
         {
+            _securityEvents.RecordEvent(user.TenantId, user.Id, SecurityEventCodes.AuthLoginFailed, "IMAP authentication failed");
             return denied;
         }
 
@@ -55,10 +58,11 @@ public sealed class ImapAuthenticator : IImapAuthenticator
                 cancellationToken);
         if (mailbox is null)
         {
+            _securityEvents.RecordEvent(user.TenantId, user.Id, SecurityEventCodes.AuthLoginFailed, "IMAP authentication failed");
             return denied;
         }
 
-        return new ImapAuthenticationResult(true, user.TenantId, mailbox.Id);
+        return new ImapAuthenticationResult(true, user.TenantId, mailbox.Id, user.Id);
     }
 }
 

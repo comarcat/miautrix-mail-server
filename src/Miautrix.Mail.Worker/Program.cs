@@ -8,10 +8,15 @@ using Miautrix.Mail.AntiSpam;
 using Miautrix.Mail.Application.Transport;
 using Miautrix.Mail.Identity;
 using Miautrix.Mail.Persistence;
+using Miautrix.Mail.Security;
+using Miautrix.Mail.Application.Mail;
 using Miautrix.Mail.Protocols.Smtp;
 using Miautrix.Mail.Protocols.Imap;
 using Miautrix.Mail.Queue;
 using Miautrix.Mail.Storage;
+using Miautrix.Mail.Application.Mail.Mime;
+using Miautrix.Mail.Infrastructure.Mail;
+using Miautrix.Mail.Infrastructure.Storage;
 using Miautrix.Mail.Worker;
 
 // ── Environment ────────────────────────────────────────────────────────────────
@@ -32,12 +37,8 @@ if (string.IsNullOrWhiteSpace(connectionString))
     return 1;
 }
 
-var storageDirectory = Environment.GetEnvironmentVariable("MIAUTRIX_STORAGE_DIR");
-if (string.IsNullOrWhiteSpace(storageDirectory))
-{
-    storageDirectory = Path.Combine(AppContext.BaseDirectory, "mail_data");
-    Console.WriteLine($"[Worker] MIAUTRIX_STORAGE_DIR not set — defaulting to {storageDirectory}");
-}
+var storageDirectory = StorageDirectoryResolver.Resolve(
+    Environment.GetEnvironmentVariable("MIAUTRIX_STORAGE_DIR"), isDevelopment, AppContext.BaseDirectory);
 
 var hostname = Environment.GetEnvironmentVariable("MIAUTRIX_HOSTNAME");
 if (string.IsNullOrWhiteSpace(hostname))
@@ -100,9 +101,12 @@ var host = Host.CreateDefaultBuilder(args)
         // Database
         services.AddDbContext<AppDbContext>(options =>
             options.UseNpgsql(connectionString), ServiceLifetime.Scoped);
+        services.AddSingleton<ISecurityEventSink, InMemorySecurityEventSink>();
 
         // Storage
         services.AddSingleton<IMailStorage>(new FileSystemMailStorage(storageDirectory));
+        services.AddSingleton<IMimeMessageParser, MimeKitMimeMessageParser>();
+        services.AddSingleton<IImapMimeFormatter, MimeKitImapMimeFormatter>();
 
         // Queue + retry policy
         services.AddSingleton<IRetryPolicy, ExponentialBackoffWithJitterRetryPolicy>();
@@ -136,6 +140,10 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddScoped<ISmtpSubmissionHandler, SmtpSubmissionHandler>();
         services.AddScoped<ISmtpInboundHandler, SmtpInboundHandler>();
         services.AddScoped<IImapAuthenticator, ImapAuthenticator>();
+        services.AddScoped<IPermissionRepository, EfPermissionRepository>();
+        services.AddScoped<ITenantAuthorizationHelper, TenantAuthorizationHelper>();
+        services.AddScoped<IMailboxService, MailboxService>();
+        services.AddScoped<IMessageService, MessageService>();
 
         // Identity
         services.AddSingleton<IPasswordHasher, Argon2idPasswordHasher>();

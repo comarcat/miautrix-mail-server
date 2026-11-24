@@ -1,9 +1,14 @@
 using Miautrix.Mail.Cli.Commands;
 using Miautrix.Mail.Cli.Infrastructure;
 using Miautrix.Mail.Identity;
+using Miautrix.Mail.Application.Mail;
+using Miautrix.Mail.Application.Mail.Mime;
 using Miautrix.Mail.Infrastructure.Backup;
+using Miautrix.Mail.Infrastructure.Mail;
+using Miautrix.Mail.Infrastructure.Storage;
 using Miautrix.Mail.Persistence;
 using Miautrix.Mail.Security;
+using Miautrix.Mail.Storage;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Spectre.Console.Cli;
@@ -27,11 +32,19 @@ public class Program
         {
             options.UseNpgsql(connectionString);
         });
+        var environment = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
+            ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
+        var isDevelopment = environment.Equals("Development", StringComparison.OrdinalIgnoreCase);
+        var storageDirectory = StorageDirectoryResolver.Resolve(
+            Environment.GetEnvironmentVariable("MIAUTRIX_STORAGE_DIR"), isDevelopment, AppContext.BaseDirectory);
+        services.AddSingleton<IMailStorage>(new FileSystemMailStorage(storageDirectory));
 
         services.AddSingleton<ISecurityEventSink, InMemorySecurityEventSink>();
         services.AddScoped<IPermissionRepository, EfPermissionRepository>();
         services.AddScoped<ITenantAuthorizationHelper, TenantAuthorizationHelper>();
         services.AddScoped<IBackupService, BackupService>();
+        services.AddScoped<MessageReparseService>();
+        services.AddSingleton<IMimeMessageParser, MimeKitMimeMessageParser>();
 
         var registrar = new TypeRegistrar(services);
         var app = new CommandApp(registrar);
@@ -55,6 +68,13 @@ public class Program
                     .WithDescription("Create a new mailbox for a tenant");
                 mailbox.AddCommand<MailboxDeleteCommand>("delete")
                     .WithDescription("Delete a mailbox for a tenant");
+            });
+
+            config.AddBranch("messages", messages =>
+            {
+                messages.SetDescription("Manage stored mail messages");
+                messages.AddCommand<MessageReparseCommand>("reparse")
+                    .WithDescription("Reparse stored raw mail content (without --user, trusts the local shell operator)");
             });
 
             config.AddBranch("domain", domain =>
