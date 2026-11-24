@@ -40,3 +40,6 @@ certificates/
 *.p12
 /graphify-out
 /graphify-out/cache
+
+# deploy-release.ps1 build output
+/publish/
