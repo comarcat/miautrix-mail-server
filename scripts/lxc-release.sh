@@ -278,13 +278,17 @@ cmd_switch() {
   summary "switched active release to $release; previous=${old:-$(previous_id)}"
 }
 
+# Kestrel is serving if it answers any HTTP status below 500. The health URL
+# requires authentication, so 401/403 are expected and still prove liveness.
+http_alive() { local code; code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "$1" 2>/dev/null || true); [[ "$code" =~ ^[1-4][0-9][0-9]$ ]]; }
+
 cmd_verify() {
   need_root; local release expected_tfm current=0 appinfo greeting urls health attempts=60
   [[ "$TEST_MODE" == 1 ]] && attempts=${MIAUTRIX_VERIFY_ATTEMPTS:-2}
   release=$(current_id)
   expected_tfm=$(release_tfm "$release") || die "cannot determine active release TFM for $release"
   appinfo=$(systemctl show -p Environment -p ExecStart miautrix-mail)
-  urls=$(printf '%s' "$appinfo" | grep -oE 'ASPNETCORE_URLS=[^[:space:]]+' | tail -n1 | cut -d= -f2- || true)
+  urls=$(printf '%s' "$appinfo" | grep -oE 'ASPNETCORE_URLS=[^[:space:]"]+' | tail -n1 | cut -d= -f2- || true)
   if [[ -z "$urls" ]]; then urls=$(printf '%s' "$appinfo" | grep -oE -- '--urls[= ][^[:space:]]+' | tail -n1 | sed -E 's/^--urls[= ]+//' || true); fi
   if [[ -z "$urls" && -f "$ROOT/.env" ]]; then urls=$(sed -nE 's/^ASPNETCORE_URLS=(.*)$/\1/p' "$ROOT/.env" | tail -n1 | tr -d '"'); fi
   [[ -n "$urls" ]] || die 'cannot determine Kestrel URL from systemd unit/environment'
@@ -294,11 +298,22 @@ cmd_verify() {
     if systemctl is-active --quiet miautrix-mail && systemctl is-active --quiet miautrix-mail-worker && \
        runtimeconfig_check "$APP" "$expected_tfm" && \
        { ss -ltn 2>/dev/null | awk '{print $4}' | grep -Eq ':25$' && ss -ltn 2>/dev/null | awk '{print $4}' | grep -Eq ':465$' && ss -ltn 2>/dev/null | awk '{print $4}' | grep -Eq ':587$' && ss -ltn 2>/dev/null | awk '{print $4}' | grep -Eq ':993$'; } && \
-       curl -fsS "$health" >/dev/null 2>&1 && \
-       greeting=$(timeout 1 openssl s_client -connect 127.0.0.1:993 -quiet < /dev/null 2>/dev/null | head -n1 || true) && [[ "$greeting" == '* OK [CAPABILITY IMAP4rev1'* ]]; then current=1; break; fi
+       http_alive "$health" && \
+       greeting=$(timeout 5 openssl s_client -connect 127.0.0.1:993 -quiet < /dev/null 2>/dev/null | head -n1 || true) && [[ "$greeting" == '* OK [CAPABILITY IMAP4rev1'* ]]; then current=1; break; fi
     sleep 1
   done
-  (( current == 1 )) || die "services, listener ports, health endpoint, $expected_tfm runtimeconfig, or IMAPS greeting failed within 60 seconds"
+  if (( current != 1 )); then
+    local p listening
+    listening=$(ss -ltn 2>/dev/null | awk '{print $4}' || true)
+    printf 'verify diagnostics for %s:\n' "$release" >&2
+    printf '  unit miautrix-mail: %s\n' "$(systemctl is-active miautrix-mail 2>/dev/null || true)" >&2
+    printf '  unit miautrix-mail-worker: %s\n' "$(systemctl is-active miautrix-mail-worker 2>/dev/null || true)" >&2
+    printf '  runtimeconfig %s: %s\n' "$expected_tfm" "$(runtimeconfig_check "$APP" "$expected_tfm" && echo ok || echo FAIL)" >&2
+    for p in 25 465 587 993; do printf '  port %s: %s\n' "$p" "$(grep -Eq ":$p\$" <<<"$listening" && echo listening || echo NOT-LISTENING)" >&2; done
+    printf '  http %s: status %s\n' "$health" "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "$health" 2>/dev/null || echo none)" >&2
+    printf '  imaps greeting: %s\n' "$(timeout 5 openssl s_client -connect 127.0.0.1:993 -quiet < /dev/null 2>/dev/null | head -n1 | tr -d '\r' || true)" >&2
+    die "services, listener ports, health endpoint, $expected_tfm runtimeconfig, or IMAPS greeting failed within 60 seconds"
+  fi
   printf '%s\n' "$release" > "$RELEASES/.verified"; summary "verified release $release (units, ports, health, $expected_tfm, IMAPS greeting)"
 }
 

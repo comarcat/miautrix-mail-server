@@ -22,7 +22,8 @@ case "$(basename "$0")" in
   ss) printf 'State Recv-Q Send-Q Local Address:Port\nLISTEN 0 128 0.0.0.0:25\nLISTEN 0 128 0.0.0.0:465\nLISTEN 0 128 0.0.0.0:587\nLISTEN 0 128 0.0.0.0:993\n';;
   pg_dump) [[ -n "${PGPASSFILE:-}" && -f "$PGPASSFILE" ]] || exit 31; if [[ "$OSTYPE" != msys* && "$OSTYPE" != cygwin* ]]; then [[ "$(stat -c %a "$PGPASSFILE")" == 600 ]] || exit 32; fi; printf '%s\n' "$*" | grep -qi 'p;ss=word' && exit 33 || true; while (($#)); do if [[ "$1" == --file=* ]]; then : > "${1#*=}"; fi; shift; done;;
   pg_restore) [[ "${1:-}" == --list ]] && printf 'fixture dump\n';;
-  nginx|curl) exit 0;;
+  nginx) exit 0;;
+  curl) printf '%s' "${MIAUTRIX_TEST_HTTP_CODE:-401}";;
   openssl) printf '* OK [CAPABILITY IMAP4rev1] fixture\r\n';;
 esac
 SHIM
