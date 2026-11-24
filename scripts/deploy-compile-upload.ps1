@@ -66,6 +66,7 @@
 #>
 
 param (
+    [switch]$IUnderstandNoBackup,
     [string]$TargetIp = "10.11.1.51",
     [string]$TargetUser = "root",
     [switch]$SkipTests,
@@ -82,6 +83,8 @@ param (
 )
 
 $ErrorActionPreference = "Stop"
+Write-Warning "Deprecated: use scripts/deploy-release.ps1. This script has no versioned rollback."
+if (-not $IUnderstandNoBackup) { throw "Refusing destructive rm -rf without -IUnderstandNoBackup." }
 
 # Ensure local tests/migrations use the same DB connection as the deployment worker.
 # (Worker env is configured from -DbConnectionFile; tests/migrations must use it too.)
@@ -181,7 +184,7 @@ Write-Host "[4/6] Uploading to LXC ($TargetIp) via SCP..." -ForegroundColor Gree
 Write-Host " -> Preparing target directories and stopping running service..." -ForegroundColor Green
 # The blob store must survive a deploy: it is never inside the uploaded payload, and this
 # step never removes files from the destination.
-$sshOut = & ssh -o StrictHostKeyChecking=no -o PubkeyAuthentication=no -o PreferredAuthentications=password $Remote "systemctl stop miautrix-mail-worker || true; systemctl stop miautrix-mail || true;
+$sshOut = & ssh -o StrictHostKeyChecking=accept-new -o PubkeyAuthentication=no -o PreferredAuthentications=password $Remote "systemctl stop miautrix-mail-worker || true; systemctl stop miautrix-mail || true;
   mkdir -p $RemoteRoot/app $RemoteRoot/worker $RemoteRoot/admin $RemoteRoot/webmail $RemoteRoot/data;
   rm -rf $RemoteRoot/app/* $RemoteRoot/worker/*"
 
@@ -237,7 +240,7 @@ if ($WorkerCert -and $WorkerKey) {
     if (-not (Test-Path $WorkerKey))  { throw "WorkerKey not found: $WorkerKey" }
 
     Write-Host " -> Staging TLS cert + key..." -ForegroundColor Green
-    ssh -o StrictHostKeyChecking=no $Remote "rm -rf /tmp/miautrix-tls && mkdir -p /tmp/miautrix-tls"
+    ssh -o StrictHostKeyChecking=accept-new $Remote "rm -rf /tmp/miautrix-tls && mkdir -p /tmp/miautrix-tls"
     if ($LASTEXITCODE -ne 0) { throw "Failed to create TLS staging directory." }
     scp $WorkerCert "$($Remote):/tmp/miautrix-tls/cert.pem"
     if ($LASTEXITCODE -ne 0) { throw "Cert upload failed." }
@@ -290,7 +293,7 @@ $remotePrep = "chmod +x /tmp/lxc-prepare-storage.sh && " +
     "systemctl restart miautrix-mail-worker && " +
     "systemctl restart nginx"
 
-ssh -o StrictHostKeyChecking=no $Remote $remotePrep
+ssh -o StrictHostKeyChecking=accept-new $Remote $remotePrep
 if ($LASTEXITCODE -ne 0) { throw "Remote preparation or restart failed." }
 
 Write-Host " -> Protocol ports require firewall/NAT access for 25, 465, 587, and 993." -ForegroundColor Yellow
