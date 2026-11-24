@@ -899,3 +899,21 @@ The root `deploy.ps1` previously included a hardcoded production database passwo
 
 - **Symptom:** `Unable to create a 'DbContext' ... MIAUTRIX_DB_CONNECTION environment variable is required.` from `dotnet ef migrations bundle`. This would have broken `deploy-release.ps1 -RunMigrations`, which the IMAP-006 deploy needs.
 - **Fix:** both `deploy-release.ps1` and `build-windows-package.ps1` set a placeholder, password-less connection string only while bundling, then restore the previous value. No connection is opened; the server supplies the real value at run time.
+
+### 13.10 Fixed: `-RunMigrations` aborted by migration-history drift on production (2026-11-24, High)
+
+- **Symptom:** the first IMAP-006 deploy (`v2.0.0-7e6cc44-202611241829`) stopped at the migration step with `42701: column "direction" of relation "smtp_queue" already exists` while applying `20261006120000_AddQueueDirection`. The pre-migration dump `20261124T183159Z_v2.0.0-0394daf-202611241633.dump` (sha256 `18c284d8…3af8`) had been taken. The migration rolled back, IMAP-006 did not run, and the deploy aborted before the switch, so `v2.0.0-0394daf-202611241633` kept serving.
+- **Root cause:** production had applied the superseded `20261005173819_AddSmtpQueueDirection` (EF 10.0.4). The repository later replaced it with `20261006120000_AddQueueDirection` and deleted the old file. `scripts/db-inspect.sh` (read-only) showed the following production state:
+  - the column existed (`text`, `NOT NULL`, old `DEFAULT 'Inbound'`), holding 188 `Inbound` and 300 `Outbound` rows;
+  - `ck_smtp_queue_direction` was missing;
+  - every migration up to `CalendarEventRecurrenceFix` was applied;
+  - 208 messages in 14 folders, all with UID 0.
+- **Fix:** `AddQueueDirection` is now idempotent:
+  - it keeps an existing column;
+  - it fills NULLs;
+  - it drops the old default;
+  - it enforces NOT NULL;
+  - it recreates `ck_smtp_queue_direction`.
+
+  Fresh databases get the same shape as before. The new integration test `Migrations_apply_over_production_drift_from_superseded_queue_direction_migration` reproduces the production state and migrates through IMAP-006. No hand DDL and no manual history edits were made.
+- **Also:** the local `dotnet-ef` tool was updated from 10.0.11 to 10.0.15 to match the EF Core runtime packages. Manual §13 (drift) and §14 (database tests without Docker) were added.

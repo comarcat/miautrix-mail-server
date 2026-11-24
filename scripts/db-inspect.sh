@@ -52,7 +52,7 @@ SELECT current_database() AS database, split_part(version(), ' ', 2) AS server_v
 \echo '== last 8 applied EF migrations =='
 SELECT "MigrationId", "ProductVersion" FROM "__EFMigrationsHistory" ORDER BY "MigrationId" DESC LIMIT 8;
 \echo '== smtp_queue.direction column (AddQueueDirection) =='
-SELECT column_name, data_type, is_nullable, character_maximum_length FROM information_schema.columns
+SELECT column_name, data_type, is_nullable, coalesce(column_default, '<none>') AS column_default FROM information_schema.columns
 WHERE table_schema = 'public' AND table_name = 'smtp_queue' AND column_name = 'direction';
 \echo '== ck_smtp_queue_direction constraint =='
 SELECT conname, pg_get_constraintdef(oid) AS definition FROM pg_constraint WHERE conname = 'ck_smtp_queue_direction';

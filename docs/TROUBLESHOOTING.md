@@ -20,6 +20,8 @@ Find the closest symptom in the table, start with the read-only Diagnose command
 | Test tenants remain in the database | [Test-tenant cleanup](#10-test-tenant-cleanup) |
 | Credentials may be exposed or need rotation | [Security hygiene](#11-security-hygiene) |
 | Support asks for logs and system state | [Collect diagnostics](#12-collect-diagnostics-for-support) |
+| `-RunMigrations` fails (`42701 already exists`, `42P07`, pending migration that is "already there") | [Migrations and schema drift](#13-database-migrations-and-schema-drift) |
+| Need to run the database tests without Docker | [Database tests on a throwaway server](#14-database-tests-on-a-throwaway-postgresql-server) |
 
 ## 1. Deploy pipeline
 
@@ -328,6 +330,68 @@ find /opt/miautrix-mail/backups -maxdepth 1 -type f -printf '%f %s bytes\n' 2>/d
 **Verify.** Review the captured output locally for secrets and personal data before sending. The commands above do not intentionally print environment values or message bodies.
 
 **Rollback/escalate.** These commands are read-only. If a log line includes a credential or token, do not forward it; report that sensitive output was present and provide a redacted excerpt instead.
+## 13. Database migrations and schema drift
+
+**Symptom.** `scripts\deploy-release.ps1 -RunMigrations` stops at `== running the published migration bundle ==` with `Remote migration failed.` and a PostgreSQL error such as `42701: column "direction" of relation "smtp_queue" already exists` (or `42P07 relation ... already exists`). Incident 2026-11-24: production had run the superseded migration `20261005173819_AddSmtpQueueDirection`, which was later replaced in the repository by `20261006120000_AddQueueDirection`, so the column existed but the newer migration was not recorded as applied.
+
+**What it means for production.** Each EF migration runs in its own transaction. The failed migration rolled back, later migrations did not run, and the deploy aborted **before** the release switch: the previous release keeps serving and the pre-migration dump from this run is in `/opt/miautrix-mail/backups/`. Confirm with `scripts\deploy-release.ps1 -Status`.
+
+**Diagnose.** Compare the database with the repository using the read-only inspection script (its session is forced `default_transaction_read_only=on`; it reads the connection from `/opt/miautrix-mail/.env` and prints no credentials):
+
+```powershell
+scp scripts\db-inspect.sh root@10.11.1.51:/tmp/db-inspect.sh
+ssh root@10.11.1.51 'bash /tmp/db-inspect.sh'
+```
+
+Then list what the repository expects (from the Windows repo root; no database connection is made):
+
+```powershell
+$env:MIAUTRIX_DB_CONNECTION = 'Host=unused.invalid;Database=unused;Username=unused'
+dotnet ef migrations list --project src/Miautrix.Mail.Persistence --startup-project src/Miautrix.Mail.Web --no-connect
+dotnet ef migrations script <last-applied-id> --project src/Miautrix.Mail.Persistence --startup-project src/Miautrix.Mail.Web -o artifacts/pending.sql
+Remove-Item Env:MIAUTRIX_DB_CONNECTION
+```
+
+Drift exists when the database history contains an ID the repository no longer has, or when an object a pending migration creates is already present. Review `artifacts/pending.sql` to see exactly what will run.
+
+**Fix.** Converge through a migration, never with hand DDL (CLAUDE.md: "Nothing else issues DDL") and never by inserting history rows by hand. Make the affected migration idempotent (`ADD COLUMN IF NOT EXISTS`, `DROP CONSTRAINT IF EXISTS` then `ADD CONSTRAINT`, normalise defaults/nullability) so it produces the fresh-install shape on both kinds of database, add an integration test that reproduces the drifted state (see `Migrations_apply_over_production_drift_from_superseded_queue_direction_migration`), run the database tests (§14), commit, then re-run `scripts\deploy-release.ps1 -DryRun -RunMigrations` and the real deploy. For the 2026-11-24 incident this is `20261006120000_AddQueueDirection`: it now keeps the existing column, drops the old `DEFAULT 'Inbound'`, and adds `ck_smtp_queue_direction`; production data (`Inbound`/`Outbound` only) satisfies the constraint.
+
+**Verify.** Re-run `db-inspect.sh`: the newest history rows include the repository's latest migration IDs, the constraint is listed, `column_default` is `<none>`, and after IMAP-006 `uid_zero` is 0 with `ck_messages_uid_positive` and `uq_messages_folder_id_uid` present. Then run `scripts\deploy-release.ps1 -Status`.
+
+**Rollback/escalate.** If a migration fails part-way through a multi-migration run, earlier migrations in that run stay committed; the services still run the previous release, which must tolerate them (EXPAND before CONTRACT). If data must be returned to the pre-deploy state, restore the dump taken by that run (§5) with owner approval. Never edit `__EFMigrationsHistory` by hand to make an error go away.
+
+## 14. Database tests on a throwaway PostgreSQL server
+
+**Symptom.** Integration or protocol tests fail with `MIAUTRIX_DB_CONNECTION environment variable is required`, or the UID tests fail because Docker/Testcontainers is unavailable (the project uses LXC, not Docker).
+
+**Diagnose.** Two variables drive the database tests; both must point at a **non-production** server:
+
+| Variable | Used by | Points at |
+|---|---|---|
+| `MIAUTRIX_TEST_SERVER_CONNECTION` | `MessageUidAllocatorTests` (UID allocator, IMAP-006 migration, migration-drift test) | the maintenance database (`postgres`) as a role with `CREATEDB`; each test creates and drops its own `uidtest_*` database. Without it, Testcontainers starts `postgres:18-alpine` (needs Docker). The fixture refuses database names that look like an application database. |
+| `MIAUTRIX_DB_CONNECTION` | IMAP protocol tests, API/integration tests | an empty, dedicated test database (the tests migrate it themselves) |
+
+**Fix.** On the PostgreSQL server create a test-only role and database (never reuse the production role):
+
+```bash
+sudo -u postgres psql -c "CREATE ROLE miautrix_test LOGIN CREATEDB;"
+sudo -u postgres psql -c "\password miautrix_test"
+sudo -u postgres createdb -O miautrix_test <test-db-name>
+```
+
+Allow the workstation in `pg_hba.conf` for that role only and reload PostgreSQL. On Windows keep the connection strings in a file outside the repository (for example `%USERPROFILE%\.miautrix-test.env`, one `NAME=value` per line) and load it into the current session only:
+
+```powershell
+Get-Content "$env:USERPROFILE\.miautrix-test.env" | ForEach-Object { $k, $v = $_ -split '=', 2; Set-Item "Env:$k" $v }
+dotnet test tests/Miautrix.Mail.IntegrationTests --filter "FullyQualifiedName~MessageUidAllocatorTests"
+dotnet test tests/Miautrix.Mail.ProtocolTests
+dotnet test tests/Miautrix.Mail.IntegrationTests
+Remove-Item Env:MIAUTRIX_TEST_SERVER_CONNECTION, Env:MIAUTRIX_DB_CONNECTION
+```
+
+**Verify.** All three runs report `Failed: 0`. On the server, `sudo -u postgres psql -Atc "SELECT datname FROM pg_database WHERE datname LIKE 'uidtest_%'"` returns nothing after the run.
+
+**Rollback/escalate.** If a run is interrupted, drop leftover `uidtest_*` databases as the test role. Never point either variable at the production database or the production role.
 <!-- APPENDIX:BEGIN (generated by scripts/build-troubleshooting-bundle.ps1; do not edit below) -->
 ## Appendix A — Script reference
 
@@ -1179,6 +1243,79 @@ END $$;
   ROLLBACK;
   \echo '== REHEARSAL ONLY: rolled back, nothing deleted. Apply with: --apply --expect' :candidate_count '=='
 \endif
+SQL
+````
+
+### `scripts/db-inspect.sh`
+
+SHA-256: `05c2fe07736deee80ff08a04d0e35fa6034e987ff914cb9678bfbc15868be5f7`
+
+``bash
+#!/usr/bin/env bash
+# Read-only schema/migration inspection of the database configured in /opt/miautrix-mail/.env.
+# The session is forced read-only (default_transaction_read_only=on); nothing can be changed.
+# Usage (on the app server, as root): bash db-inspect.sh
+set -Eeuo pipefail
+ROOT=${MIAUTRIX_ROOT:-/opt/miautrix-mail}
+die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+command -v psql >/dev/null || die 'psql is required (apt install postgresql-client-18)'
+connection_value() {
+  local input=$1 wanted=$2 key value rest quote ch
+  while [[ -n "$input" ]]; do
+    key=${input%%=*}; [[ "$input" == *=* ]] || break; rest=${input#*=}; value=; quote=
+    while [[ -n "$rest" ]]; do
+      ch=${rest:0:1}; rest=${rest:1}
+      if [[ -n "$quote" ]]; then if [[ "$ch" == "$quote" ]]; then quote=; else value+=$ch; fi
+      elif [[ "$ch" == "'" || "$ch" == '"' ]]; then quote=$ch
+      elif [[ "$ch" == ';' ]]; then break
+      else value+=$ch; fi
+    done
+    key=$(printf '%s' "$key" | tr '[:upper:]' '[:lower:]' | tr -d ' ')
+    case "$key" in
+      host|server) [[ "$wanted" == host ]] && { printf '%s' "$value"; return 0; };;
+      port) [[ "$wanted" == port ]] && { printf '%s' "$value"; return 0; };;
+      database) [[ "$wanted" == database ]] && { printf '%s' "$value"; return 0; };;
+      username|userid|user_id) [[ "$wanted" == username ]] && { printf '%s' "$value"; return 0; };;
+      password) [[ "$wanted" == password ]] && { printf '%s' "$value"; return 0; };;
+    esac
+    input=$rest
+  done
+  return 1
+}
+pgpass_escape() { local v=$1; v=${v//\\/\\\\}; v=${v//:/\\:}; printf '%s' "$v"; }
+[[ -f "$ROOT/.env" ]] || die "missing $ROOT/.env"
+line=$(sed -nE 's/^MIAUTRIX_DB_CONNECTION=(.*)$/\1/p' "$ROOT/.env" | tail -n1)
+line=${line#\"}; line=${line%\"}; line=${line#\'}; line=${line%\'}
+[[ -n "$line" ]] || die 'MIAUTRIX_DB_CONNECTION is missing from .env'
+DB_HOST=$(connection_value "$line" host) || die 'Host missing'
+DB_PORT=$(connection_value "$line" port || printf '5432')
+DB_NAME=$(connection_value "$line" database) || die 'Database missing'
+DB_USER=$(connection_value "$line" username) || die 'Username missing'
+DB_PASSWORD=$(connection_value "$line" password) || die 'Password missing'
+unset line
+passfile=$(mktemp); trap 'rm -f "$passfile"' EXIT; chmod 600 "$passfile"
+printf '%s:%s:%s:%s:%s\n' "$(pgpass_escape "$DB_HOST")" "$DB_PORT" "$(pgpass_escape "$DB_NAME")" "$(pgpass_escape "$DB_USER")" "$(pgpass_escape "$DB_PASSWORD")" > "$passfile"
+unset DB_PASSWORD
+export PGPASSFILE=$passfile PGHOST=$DB_HOST PGPORT=$DB_PORT PGDATABASE=$DB_NAME PGUSER=$DB_USER PGOPTIONS='-c default_transaction_read_only=on'
+
+psql -X -q -v ON_ERROR_STOP=1 <<'SQL'
+\pset footer off
+\echo '== server / database =='
+SELECT current_database() AS database, split_part(version(), ' ', 2) AS server_version, current_setting('default_transaction_read_only') AS read_only;
+\echo '== last 8 applied EF migrations =='
+SELECT "MigrationId", "ProductVersion" FROM "__EFMigrationsHistory" ORDER BY "MigrationId" DESC LIMIT 8;
+\echo '== smtp_queue.direction column (AddQueueDirection) =='
+SELECT column_name, data_type, is_nullable, coalesce(column_default, '<none>') AS column_default FROM information_schema.columns
+WHERE table_schema = 'public' AND table_name = 'smtp_queue' AND column_name = 'direction';
+\echo '== ck_smtp_queue_direction constraint =='
+SELECT conname, pg_get_constraintdef(oid) AS definition FROM pg_constraint WHERE conname = 'ck_smtp_queue_direction';
+\echo '== smtp_queue.direction values =='
+SELECT coalesce(direction, '<NULL>') AS direction, count(*) FROM smtp_queue GROUP BY 1 ORDER BY 1;
+\echo '== IMAP-006 objects (expected absent before the UID migration) =='
+SELECT conname FROM pg_constraint WHERE conname = 'ck_messages_uid_positive'
+UNION ALL SELECT indexname FROM pg_indexes WHERE indexname = 'uq_messages_folder_id_uid';
+\echo '== message UID summary =='
+SELECT count(*) AS messages, count(*) FILTER (WHERE uid = 0) AS uid_zero, count(DISTINCT folder_id) AS folders FROM messages;
 SQL
 ````
 

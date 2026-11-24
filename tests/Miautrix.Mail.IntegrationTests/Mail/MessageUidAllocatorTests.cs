@@ -87,6 +87,34 @@ public sealed class MessageUidAllocatorTests : IClassFixture<UidPostgresFixture>
         await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
     }
 
+    [Fact]
+    public async Task Migrations_apply_over_production_drift_from_superseded_queue_direction_migration()
+    {
+        // Production ran 20261005173819_AddSmtpQueueDirection: column present (DEFAULT 'Inbound'), no
+        // check constraint, and no history row for 20261006120000_AddQueueDirection (ERRORS §13.10).
+        var connectionString = await _fixture.CreateDatabaseAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(connectionString).Options;
+        await using var db = new AppDbContext(options);
+        var migrator = db.GetService<IMigrator>();
+        await migrator.MigrateAsync("20261006120000_AddQueueDirection");
+        await db.Database.ExecuteSqlRawAsync("""
+            ALTER TABLE smtp_queue DROP CONSTRAINT ck_smtp_queue_direction;
+            ALTER TABLE smtp_queue ALTER COLUMN direction SET DEFAULT 'Inbound';
+            DELETE FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261006120000_AddQueueDirection';
+            INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion") VALUES ('20261005173819_AddSmtpQueueDirection', '10.0.4');
+            """);
+
+        await migrator.MigrateAsync();
+
+        Assert.Empty(await db.Database.GetPendingMigrationsAsync());
+        var constraints = await db.Database.SqlQueryRaw<string>(
+            "SELECT conname AS \"Value\" FROM pg_constraint WHERE conname IN ('ck_smtp_queue_direction', 'ck_messages_uid_positive')").ToListAsync();
+        Assert.Equal(2, constraints.Count);
+        var defaults = await db.Database.SqlQueryRaw<string>(
+            "SELECT coalesce(column_default, '') AS \"Value\" FROM information_schema.columns WHERE table_name = 'smtp_queue' AND column_name = 'direction'").ToListAsync();
+        Assert.Equal(string.Empty, Assert.Single(defaults));
+    }
+
     private static async Task<(Tenant Tenant, Mailbox Mailbox, Folder FirstFolder, Folder SecondFolder)> SeedFolderAsync(AppDbContext db)
     {
         var tenant = new Tenant { Id = Guid.NewGuid(), Slug = "uid-" + Guid.NewGuid().ToString("N") };

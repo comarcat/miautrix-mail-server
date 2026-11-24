@@ -11,14 +11,19 @@ All notable changes to this project are documented here.
 - UID/range FETCH, SEARCH parsing/evaluation, MIME envelope/body structure formatting, STORE, COPY, EXPUNGE, STATUS, and folder lifecycle command paths.
 - .NET 10 SDK/framework guard and framework regression unit test.
 - Versioned release tooling with verified database/config backups, rollback, cleanup retention, and deployment documentation.
+- Troubleshooting manual (`docs/TROUBLESHOOTING.md`) with generated script appendix and zip; read-only `scripts/db-inspect.sh`; test-tenant cleanup script.
+- Windows server package (Kestrel static hosting, Windows services, installer) for external testing.
+- UID tests can use an external throwaway PostgreSQL (`MIAUTRIX_TEST_SERVER_CONNECTION`) instead of Docker.
 
 ### Changed
-- Retargeted projects to .NET 10 / C# 14 with Microsoft 10.0.x and Npgsql EF Core 10.0.x packages.
+- Retargeted projects to .NET 10 / C# 14 with Microsoft 10.0.x and Npgsql EF Core 10.0.x packages (EF Core 10.0.15; `dotnet-ef` tool 10.0.15; production PostgreSQL 18.6).
 - Kept Web and Worker self-contained `linux-x64` publishing.
 
 ### Fixed
 
 - Allocated stable non-zero IMAP UIDs atomically per folder and added the UID backfill and uniqueness migration.
+- `AddQueueDirection` migration is idempotent so it applies over databases that ran the superseded `AddSmtpQueueDirection` migration (production drift that aborted the first `-RunMigrations` deploy).
+- EF bundle build no longer needs a real database connection; the seeder no longer creates an admin with a default password (`users bootstrap-admin` instead).
 - Deploy verification no longer fails on the authenticated health endpoint (any local Kestrel status below 500 counts as alive) and prints per-check diagnostics on failure.
 - Corrected single-part MIME transfer decoding, charset handling and encoded subject decoding through MimeKit.
 - Corrected FETCH literal marker placement and byte framing, including the post-literal separator and partial-section source matching; rejected invalid sectionless BODY.PEEK requests. Expanded LIST, SELECT/EXAMINE, SEARCH and FETCH behavior, added mailbox-level tenant authorization checks, and map authorization denials to NO. Oversized synchronising literals receive tagged TOOBIG without continuation; oversized LITERAL+ closes with BYE. FETCH now loads raw content lazily and sequence operations project only required columns.
@@ -27,10 +32,10 @@ All notable changes to this project are documented here.
 ### Security
 - Isolated email HTML in an iframe without scripts, applied a restrictive CSP, and removed remote CSS fetches while images are blocked.
 - Reparse audit records contain counts and actor mode only; message bodies are not logged or audited.
-- Removed the tracked production DB password and replaced runtime storage fallbacks with fail-closed configuration outside Development; the owner must rotate the credential because it remains in repository history.
+- Removed the tracked production DB password and replaced runtime storage fallbacks with fail-closed configuration outside Development; the owner confirmed production credentials were changed long ago and differ from repository history (RSK-11 mitigated).
 - Corrected versioned deployment rollback TFM detection, staged-release failure handling, active-state recording, legacy-file/path preflight guards, and PostgreSQL client/server major-version guidance.
 
-> Release readiness remains incomplete: some RFC 3501 edge semantics, database-backed protocol tests (written, not executed because no Docker/test DB is available), deploy and external client validation are outstanding.
+> Release state (2026-11-24): v2.0 is live on production as `v2.0.0-0394daf-202611241633` (backfill applied). IMAP-006 is not yet deployed: the first `-RunMigrations` attempt aborted safely on migration drift (ERRORS §13.10, now fixed). Outstanding: DB-backed tests on a throwaway PostgreSQL, the IMAP-006 deploy, external IMAP validation, some RFC 3501 edge semantics.
 
 ## [1.0.0] - 2026-10-03
 

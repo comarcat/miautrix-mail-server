@@ -6,11 +6,14 @@
 
 | Item | Value |
 |---|---|
-| Branch | `release/v2.0-imap-mime` (created from `main` @ `dbf8ce3`, the same commit as `origin/main`) |
-| Commits | **None.** All v2.0 work is uncommitted in the working tree, waiting for owner review |
-| Production | Unchanged. `10.11.1.51` still runs the self-contained **net8.0 (8.0.31)** v1.0 build |
-| Database | Unchanged. No migration was added or run. `messages reparse` was **not** run |
-| Version label | 2.0.0 (`CHANGELOG.md`, PMI milestone **M5**) |
+| Branch | `release/v2.0-imap-mime`, pushed to origin; PR to `main` waits for IMAP-006 (owner decision) |
+| Production app | `v2.0.0-0394daf-202611241633` (.NET 10.0, self-contained) on `10.11.1.51`; rollback release `legacy-net8.0-20261124T155032Z` |
+| Production DB | PostgreSQL 18.6 on `10.11.1.52`. Last applied migration is still the superseded `20261005173819_AddSmtpQueueDirection`; `AddQueueDirection` and `Imap006StableFolderUids` are pending (208 messages in 14 folders, all with UID 0) |
+| Last deploy attempt | `v2.0.0-7e6cc44-202611241829` with `-RunMigrations`, **aborted safely** at the migration step (ERRORS §13.10); pre-migration dump `20261124T183159Z_v2.0.0-0394daf-202611241633.dump` |
+| Tooling versions | .NET SDK 10.0.403, EF Core 10.0.15, `dotnet-ef` 10.0.15, PostgreSQL client 18 on the app server |
+| Version label | 2.0.0 (`CHANGELOG.md`, PMI milestone **M5**, still open) |
+
+*The section below is the original state at the first handoff. It is kept for history.*
 
 Verified by the coordinator after the last worker report:
 
@@ -49,6 +52,7 @@ Architecture change to know about: `IMailStorage` / `StorageWriteResult`, the ba
 5. ✅ **Backfill applied 2026-11-24:** 76 messages corrected, 0 failed. Run the CLI on the server after loading `/opt/miautrix-mail/.env` (see ERRORS §13.6 and DEPLOYMENT.md).
 6. **External IMAP validation:** run `python scripts/imap-external-validation.py` (it logs in and prints PASS/FAIL for IMAP-001..004). **First fix IMAP-006** (UID 0 on every delivered message, ERRORS §13.7, PMI V2-08). That is the next development task.
 6a. ✅ **`docs/TROUBLESHOOTING.md` written** (V2-09). After changing any script in its appendix, run `pwsh scripts/build-troubleshooting-bundle.ps1` (use `-Check` to detect drift).
+6d. **Redeploy IMAP-006 after the drift fix (ERRORS §13.10).** Run the DB tests per TROUBLESHOOTING §14, then `scripts/deploy-release.ps1 -DryRun -RunMigrations`, then the real deploy. Confirm with `scripts/db-inspect.sh` (`uid_zero` 0, both constraints present).
 6c. **IMAP-006 (V2-08) is implemented but not deployed.** Run the DB-backed tests on a throwaway PostgreSQL, then deploy with `scripts/deploy-release.ps1 -RunMigrations`. UIDs are renumbered and UIDVALIDITY changes, so clients resync once; the migration is forward-only (restore the pre-deploy dump to go back). Then re-run `scripts/imap-external-validation.py`, which now checks for UID 0 and duplicate UIDs.
 6d. **Windows package (V2-10):** build with `pwsh scripts/build-windows-package.ps1` (needs a clean tree). Give the tester the zip, its `.sha256` file and `docs/WINDOWS-INSTALL.md`.
 6b. ✅ **Test-tenant cleanup applied 2026-11-24:** 297 test tenants removed; only `default` remains (`scripts/cleanup-test-tenants.sh --list` shows 0 candidates).
