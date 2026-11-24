@@ -46,8 +46,8 @@ Architecture change to know about: `IMailStorage` / `StorageWriteResult`, the ba
 2. **Review and commit** the branch. Start with `git diff --stat`. Suggested split: (a) .NET 10 and guards, (b) MIME, reparse and webmail, (c) IMAP, (d) docs. Then open a PR to `main`.
 3. **Run the DB-backed tests against a NON-production database.** Never use `10.11.1.52/miautrix-mail-pro`. Install Docker or provision a throwaway PostgreSQL, set `MIAUTRIX_DB_CONNECTION`, then run `dotnet test`. Fix any failures in `ImapMailKitProtocolTests`, `ImapListenerRawSocketTests` and the integration tests.
 4. ✅ **Deployed 2026-11-24** as `v2.0.0-0394daf-202611241633` (verified). v1.0 is kept as `legacy-net8.0-20261124T155032Z`; roll back with `scripts/deploy-release.ps1 -Rollback`. Future deploys: `scripts/deploy-release.ps1 -DryRun`, then `scripts/deploy-release.ps1` (see [DEPLOYMENT.md](DEPLOYMENT.md)). The app server has `postgresql-client-18` because production PostgreSQL is 18.6.
-5. **Backfill** existing mail using `/opt/miautrix-mail/cli/Miautrix.Mail.Cli messages reparse --tenant all --dry-run`; review counts, then run without `--dry-run` only with owner approval. Open the ChatGPT verification email from the original screenshot in webmail and confirm it renders without `=20` artefacts.
-6. **External IMAP validation** (IMAP Report §10): run `scripts/imap-external-validation.py` with `MIAUTRIX_IMAP_HOST`, `MIAUTRIX_IMAP_USER` and `MIAUTRIX_IMAP_PASSWORD` set, then `himalaya --account miautrix-sales mailbox list` and `envelope list`. Record the results in PMI, `ERRORS_AND_ISSUES.md` §13.3 and the IMAP Report's Resolution section.
+5. ✅ **Backfill applied 2026-11-24:** 76 messages corrected, 0 failed. Run the CLI on the server after loading `/opt/miautrix-mail/.env` (see ERRORS §13.6 and DEPLOYMENT.md).
+6. **External IMAP validation:** run `python scripts/imap-external-validation.py` (it logs in and prints PASS/FAIL for IMAP-001..004). **First fix IMAP-006** (UID 0 on every delivered message, ERRORS §13.7, PMI V2-08). That is the next development task.
 7. **Close M5** in the PMI only after steps 3–6 pass.
 
 ## 4. Known gaps and follow-ups
