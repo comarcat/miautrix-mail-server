@@ -25,7 +25,7 @@ need_root() { [[ "$TEST_MODE" == 1 || $(id -u) == 0 ]] || die 'must run as root'
 safe_id() { [[ "$1" =~ ^[A-Za-z0-9._-]+$ ]] || die 'invalid release id'; }
 current_id() { if [[ -f "$RELEASES/.current" ]]; then local id; id=$(cat "$RELEASES/.current"); safe_id "$id"; printf '%s' "$id"; else printf 'legacy'; fi; }
 previous_id() { if [[ -f "$RELEASES/.previous" ]]; then local id; id=$(cat "$RELEASES/.previous"); [[ -z "$id" ]] && return 0; safe_id "$id"; printf '%s' "$id"; fi; }
-tfm_of() { local f; f=$(find "$1" -maxdepth 1 -name '*.runtimeconfig.json' -type f -print -quit 2>/dev/null || true); [[ -n "$f" ]] || return 1; sed -nE 's/.*"tfm"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' "$f" | head -n1; }
+tfm_of() { local f; f=$(find "${1%/}/" -maxdepth 1 -name '*.runtimeconfig.json' -type f -print -quit 2>/dev/null || true); [[ -n "$f" ]] || return 1; sed -nE 's/.*"tfm"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' "$f" | head -n1; }
 active_environment() { systemctl show -p Environment -p EnvironmentFiles "$1" 2>/dev/null || true; }
 env_value() { local data=$1 key=$2; printf '%s\n' "$data" | grep -oE "${key}=[^[:space:]]+" | tail -n1 | cut -d= -f2- | tr -d '"' || true; }
 resolve_storage() {
@@ -159,7 +159,7 @@ cmd_preflight() {
         case "$name" in appsettings.*.json|*.pem|*.key|*.pfx|*.crt|*.env|logs) sensitive=true;; esac
         case "$candidate" in */logs/*|*/dataprotection*|*/DataProtection*|*/data-protection*|*/dataProtection*|*/dataprotection*/*|*/DataProtection*/*|*/data-protection*/*|*/dataProtection*/*) sensitive=true;; esac
         [[ "$sensitive" == true ]] && [[ ! -e "$upload/$component/$rel" ]] && absent+=("$component/$rel")
-      done < <(find "$ROOT/$component" \( -type f -o -type d \) -print)
+      done < <(find "$ROOT/$component/" -mindepth 1 \( -type f -o -type d \) -print)
     done
     if ((${#absent[@]})); then printf 'Server-local files absent from uploaded payload:\n' >&2; printf '  %s\n' "${absent[@]}" >&2; die 'move server-local configuration/data outside deploy directories (for example /opt/miautrix-mail/config or /etc/miautrix) and reference it via environment variables'; fi
   fi
