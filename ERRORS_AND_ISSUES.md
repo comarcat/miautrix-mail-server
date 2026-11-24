@@ -960,3 +960,20 @@ The root `deploy.ps1` previously included a hardcoded production database passwo
     - Cc/Bcc exist on message 1 only;
     - MailKit rejects STORE on a read-only folder client-side;
     - the raw-socket helper sent commands as ASCII, which turned `Café` into `Caf?`.
+
+### 13.13 Fixed (not yet deployed): sender spoofing over SMTP submission and webmail; shared mailboxes invisible over IMAP (2026-11-24, Critical)
+
+- **Spoofing:** SMTP submission accepted any `MAIL FROM` and header `From`. Webmail checked write access to the selected mailbox, then accepted any `From`. Any authenticated user could send as any address, including other tenants. There was no Send As / Send on Behalf model.
+- **Fix:** `ISenderAuthorizationService` is the single policy for both paths:
+  - own address and aliases are allowed;
+  - shared mailbox with Send As is allowed, with no `Sender:` header;
+  - with Send on Behalf, the server sets `Sender:` to the user and the envelope must be the user's own address;
+  - everything else gets `550 5.7.1` and is audited (domain and reason only).
+  - Messages stay byte-identical unless `Sender:` must change.
+- **Delegate permissions:** new delegate columns default to false. **Delegated sending is blocked until the owner grants Send As or Send on Behalf.** Send permissions never grant mailbox access, and mailbox access now requires `access_level` to be exactly `read` or `write`.
+- **IMAP-009:** see `docs/IMAP-Phase1-Report.md`. Coordinator review fixed three regressions before commit:
+  - subscriptions defaulted to off, which would hide Sent and Shared folders in Thunderbird;
+  - the `\Recent` migration marked every stored message recent;
+  - delegates with only Send As could change shared mailboxes.
+- **Tests:** unit 101, security 7, protocol 27, integration 10, admin 18, webmail 15; build 0 warnings.
+- **Deploy needs `-RunMigrations`:** six new migrations, all idempotent, proven on dev and fresh databases.

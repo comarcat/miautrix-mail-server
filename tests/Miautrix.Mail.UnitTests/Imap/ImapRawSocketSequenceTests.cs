@@ -63,7 +63,7 @@ public sealed class ImapRawSocketSequenceTests
         Assert.True(ContainsBytes(fetch, expectedHeader));
         var itemSpacing = await SendAndReadAsync(client.GetStream(), reader, "A5a FETCH 1 (BODY.PEEK[HEADER] FLAGS UID)", "A5a");
         var expectedSpacing = Encoding.UTF8.GetBytes($"* 1 FETCH (BODY[HEADER] {{{expectedHeader.Length}}}\r\n");
-        var expectedTail = Encoding.UTF8.GetBytes(" FLAGS () UID 1)\r\nA5a OK FETCH completed\r\n");
+        var expectedTail = Encoding.UTF8.GetBytes(" FLAGS (\\Recent) UID 1)\r\nA5a OK FETCH completed\r\n");
         Assert.True(itemSpacing.AsSpan(0, expectedSpacing.Length).SequenceEqual(expectedSpacing));
         Assert.True(ContainsBytes(itemSpacing, expectedHeader));
         Assert.True(itemSpacing.AsSpan(itemSpacing.Length - expectedTail.Length).SequenceEqual(expectedTail));

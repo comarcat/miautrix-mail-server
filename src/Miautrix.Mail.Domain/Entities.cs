@@ -183,6 +183,7 @@ public class Message : TenantScopedEntityBase
     public string Flags { get; set; } = string.Empty;
     public uint Uid { get; set; }
     public bool IsRead { get; set; }
+    public bool IsRecent { get; set; } = true;
     public string? BodyText { get; set; }
     public string? BodyHtml { get; set; }
     public string RawHeaders { get; set; } = string.Empty;

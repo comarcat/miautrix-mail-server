@@ -88,6 +88,30 @@ public sealed class MessageUidAllocatorTests : IClassFixture<UidPostgresFixture>
     }
 
     [Fact]
+    public async Task Upgrade_leaves_existing_messages_not_recent_and_new_messages_recent()
+    {
+        var connectionString = await _fixture.CreateDatabaseAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(connectionString).Options;
+        await using var db = new AppDbContext(options);
+        await db.Database.MigrateAsync();
+        var (tenant, mailbox, folder, _) = await SeedFolderAsync(db);
+        var existing = NewMessage(tenant.Id, mailbox.Id, folder.Id, 1, DateTimeOffset.UtcNow);
+        db.Messages.Add(existing);
+        await db.SaveChangesAsync();
+
+        // Simulate a pre-upgrade production database: no is_recent column yet.
+        await db.Database.ExecuteSqlRawAsync("ALTER TABLE messages DROP COLUMN is_recent;");
+        await db.Database.ExecuteSqlRawAsync("DELETE FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" IN ('20261124222105_ImapRecentMessages', '20261124223011_ImapRecentLegacyBaseline');");
+        await db.GetService<IMigrator>().MigrateAsync();
+
+        Assert.False((await db.Messages.AsNoTracking().SingleAsync(m => m.Id == existing.Id)).IsRecent);
+        await db.Database.ExecuteSqlRawAsync(
+            "INSERT INTO messages (id, tenant_id, mailbox_id, folder_id, uid, sender, recipient, subject, date, size_bytes, content_hash, storage_path, created_at, updated_at) " +
+            "SELECT gen_random_uuid(), tenant_id, mailbox_id, folder_id, 2, sender, recipient, subject, date, size_bytes, content_hash, storage_path, created_at, updated_at FROM messages WHERE id = {0}", existing.Id);
+        Assert.True((await db.Messages.AsNoTracking().SingleAsync(m => m.FolderId == folder.Id && m.Uid == 2)).IsRecent);
+    }
+
+    [Fact]
     public async Task Migrations_apply_over_production_drift_from_superseded_queue_direction_migration()
     {
         // Production ran 20261005173819_AddSmtpQueueDirection: column present (DEFAULT 'Inbound'), no

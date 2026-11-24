@@ -57,6 +57,13 @@ Architecture change to know about: `IMailStorage` / `StorageWriteResult`, the ba
 6c. **IMAP-006 (V2-08) is implemented but not deployed.** Run the DB-backed tests on a throwaway PostgreSQL, then deploy with `scripts/deploy-release.ps1 -RunMigrations`. UIDs are renumbered and UIDVALIDITY changes, so clients resync once; the migration is forward-only (restore the pre-deploy dump to go back). Then re-run `scripts/imap-external-validation.py`, which now checks for UID 0 and duplicate UIDs.
 6d. **Windows package (V2-10):** build with `pwsh scripts/build-windows-package.ps1` (needs a clean tree). Give the tester the zip, its `.sha256` file and `docs/WINDOWS-INSTALL.md`.
 6b. ✅ **Test-tenant cleanup applied 2026-11-24:** 297 test tenants removed; only `default` remains (`scripts/cleanup-test-tenants.sh --list` shows 0 candidates).
+6f. **Deploy IMAP-009 and the Send As fix (ERRORS §13.13).**
+   - **Before deploying:** run `SELECT access_level, count(*) FROM mailbox_delegates GROUP BY 1;` read-only on production. Any value other than `read`/`write` loses access after the deploy.
+   - **Deploy:** `scripts/deploy-release.ps1 -DryRun -RunMigrations`, then the real deploy with `-RunMigrations`.
+   - **Grant permissions:** in admin, grant Send As or Send on Behalf to delegates who must send as shared mailboxes. Delegated sending is blocked until then.
+   - **Validate:** follow the checklist in `docs/IMAP-Phase1-Report.md` (imaplib script, Himalaya, Thunderbird, `Shared/sales@…`) and the SMTP checks in `docs/SMTP-SendAs-Report.md`.
+   - **Rollback:** restore the pre-migration dump first, because the old release does not know the new columns.
+6g. **IMAP Phase 2:** evaluate and implement IMAP4rev2 (RFC 9051: NAMESPACE, MOVE, IDLE, etc.). Advertise `IMAP4rev2` only after full validation.
 7. **Close M5** in the PMI only after steps 3–6 pass.
 
 ## 4. Known gaps and follow-ups

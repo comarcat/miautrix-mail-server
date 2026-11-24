@@ -229,7 +229,7 @@ public class AppDbContext : DbContext
             entity.Property(e => e.Role).HasColumnName("role").IsRequired();
             entity.Property(e => e.ParentId).HasColumnName("parent_id");
             entity.Property(e => e.UidNext).HasColumnName("uid_next");
-            entity.Property(e => e.UidValidity).HasColumnName("uid_validity");
+            entity.Property(e => e.UidValidity).HasColumnName("uid_validity").HasDefaultValueSql("nextval('imap_uid_validity_seq')").ValueGeneratedOnAdd();
 
             entity
                 .HasOne<Folder>()
@@ -265,6 +265,7 @@ public class AppDbContext : DbContext
             entity.Property(e => e.Flags).HasColumnName("flags");
             entity.Property(e => e.Uid).HasColumnName("uid");
             entity.Property(e => e.IsRead).HasColumnName("is_read");
+            entity.Property(e => e.IsRecent).HasColumnName("is_recent").HasDefaultValue(true);
             entity.Property(e => e.BodyText).HasColumnName("body_text");
             entity.Property(e => e.BodyHtml).HasColumnName("body_html");
             entity.Property(e => e.RawHeaders).HasColumnName("raw_headers");

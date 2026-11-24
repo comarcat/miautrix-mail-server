@@ -46,6 +46,12 @@ with imaplib.IMAP4_SSL(host, 993, ssl_context=context) as client:
     names = [f.decode(errors="replace") for f in (folders or []) if f]
     has_inbox = any('"INBOX"' in n.upper() or n.upper().endswith(" INBOX") for n in names)
     check("IMAP-001 LIST returns folders", status == "OK" and has_inbox, f"{len(names)} folders")
+    status, folders = client.lsub()
+    subscribed_names = [f.decode(errors="replace") for f in (folders or []) if f]
+    subscribed_upper = "\n".join(subscribed_names).upper()
+    special_subscribed = all(name in subscribed_upper for name in ("SENT", "DRAFT", "ARCHIVE", "JUNK", "TRASH"))
+    check("IMAP-009 default folders are subscribed", status == "OK" and special_subscribed,
+          f"{len(subscribed_names)} subscribed folders")
 
     status, data = client.select("INBOX", readonly=True)
     exists = int(data[0]) if status == "OK" and data and data[0] else 0
@@ -100,6 +106,10 @@ with imaplib.IMAP4_SSL(host, 993, ssl_context=context) as client:
         shared_names = [f.decode(errors="replace") for f in (folders or []) if f]
         check("IMAP-009 authorized shared LIST", status == "OK" and bool(shared_names),
               f"{len(shared_names)} folders for configured shared mailbox")
+        status, folders = client.lsub('""', f'"{shared_prefix}/*"')
+        subscribed_shared = [f.decode(errors="replace") for f in (folders or []) if f]
+        check("IMAP-009 shared folders are subscribed by default", status == "OK" and bool(subscribed_shared),
+              f"{len(subscribed_shared)} subscribed shared folders")
         shared_inbox = f"{shared_prefix}/INBOX"
         status, data = client.select(shared_inbox, readonly=True)
         shared_count = int(data[0]) if status == "OK" and data and data[0] else 0

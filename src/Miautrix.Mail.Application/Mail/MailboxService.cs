@@ -124,34 +124,21 @@ public sealed class MailboxService : IMailboxService
             return false;
         }
 
-        // Only personal folders can be deleted.
+        // Built-in folders are protected; custom folders can be removed in
+        // personal and delegated mailboxes after the authorization check.
         if (!string.Equals(folder.Role, "custom", StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
 
-        // Collect all descendant folders first so we can delete messages safely.
-        var folderIds = new List<Guid>();
-        var toVisit = new Queue<Guid>();
-        toVisit.Enqueue(folderId);
+        // RFC 3501 DELETE must preserve inferior hierarchy names. This
+        // service has no tombstone/Noselect state, so refuse a parent delete.
+        if (await _db.Folders.AnyAsync(f => f.TenantId == tenantId && f.MailboxId == mailboxId && f.ParentId == folderId, cancellationToken))
+            return false;
 
-        while (toVisit.Count > 0)
-        {
-            var current = toVisit.Dequeue();
-            folderIds.Add(current);
+        var folderIds = new[] { folderId };
 
-            var children = await _db.Folders
-                .Where(f => f.TenantId == tenantId && f.MailboxId == mailboxId && f.ParentId == current)
-                .Select(f => f.Id)
-                .ToListAsync(cancellationToken);
-
-            foreach (var childId in children)
-            {
-                toVisit.Enqueue(childId);
-            }
-        }
-
-        // Delete messages in all these folders (this is destructive).
+        // Delete messages in this mailbox (this is destructive).
         var messageIds = await _db.Messages
             .Where(m => m.TenantId == tenantId && m.MailboxId == mailboxId && folderIds.Contains(m.FolderId))
             .Select(m => m.Id)
@@ -352,6 +339,7 @@ public sealed class MailboxService : IMailboxService
             Name = normalizedName,
             Role = "custom",
             ParentId = parentId,
+            UidValidity = await AllocateUidValidityAsync(cancellationToken),
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow
         };
@@ -375,10 +363,8 @@ public sealed class MailboxService : IMailboxService
         var folder = await _db.Folders.FirstOrDefaultAsync(
             f => f.TenantId == tenantId && f.MailboxId == mailboxId && f.Id == folderId, cancellationToken)
             ?? throw new ResourceNotFoundException("Folder not found.");
-        if (string.Equals(folder.Role, "inbox", StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("INBOX cannot be renamed by this service.");
         if (!string.Equals(folder.Role, "custom", StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("Only personal folders can be renamed.");
+            throw new InvalidOperationException("Only custom folders can be renamed.");
 
         var path = newName.Split('/', StringSplitOptions.TrimEntries);
         if (path.Length == 0 || path.Any(string.IsNullOrWhiteSpace))
@@ -432,6 +418,7 @@ public sealed class MailboxService : IMailboxService
                 MailboxId = mailboxId,
                 Name = name,
                 Role = role,
+                UidValidity = await AllocateUidValidityAsync(cancellationToken),
                 CreatedAt = DateTimeOffset.UtcNow,
                 UpdatedAt = DateTimeOffset.UtcNow
             });
@@ -455,4 +442,14 @@ public sealed class MailboxService : IMailboxService
         m.CreatedAt,
         m.Kind,
         _permissionRepo.GetMailboxEffectiveAccess(tenantId, userId, m));
+
+    private async Task<uint> AllocateUidValidityAsync(CancellationToken cancellationToken)
+    {
+        if (!_db.Database.IsRelational())
+            return (uint)System.Security.Cryptography.RandomNumberGenerator.GetInt32(1, int.MaxValue);
+
+        var value = await _db.Database.SqlQueryRaw<long>("SELECT nextval('imap_uid_validity_seq') AS \"Value\"")
+            .SingleAsync(cancellationToken);
+        return checked((uint)value);
+    }
 }

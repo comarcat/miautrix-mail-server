@@ -35,7 +35,7 @@ Accessible personal and shared folders are subscribed by default, including fold
 
 When a message is marked `\\Deleted`, IMAP EXPUNGE permanently removes it from that mailbox and reports the expunged sequence number. This differs from the web message delete action: its default is still `permanent=false`, which moves a message to Trash; only an explicit permanent delete or deleting a message already in Trash removes it. The IMAP EXPUNGE handler passes the explicit permanent flag, so it does not route expunged messages through Trash.
 
-EXAMINE opens a folder read-only. STORE and EXPUNGE are rejected, APPEND to that same selected folder returns `NO [READ-ONLY]`, and FETCH BODY[] does not set `\\Seen`. CLOSE silently expunges deleted messages when selected read-write; on a read-only selection it leaves them in place. CHECK is valid only after SELECT or EXAMINE.
+EXAMINE opens a folder read-only. STORE and EXPUNGE are rejected, APPEND to that same selected folder returns `NO [READ-ONLY]`, and FETCH BODY[] does not set `\\Seen`. CLOSE silently expunges deleted messages when selected read-write; on a read-only selection it leaves them in place. CHECK is valid only after SELECT or EXAMINE. EXAMINE and read-only NOOP observe pending `\\Recent` messages without consuming them. A read-write SELECT/NOOP claims pending recent UIDs atomically for that session; when the server cannot determine which session was first notified (including concurrent sessions), it conservatively reports the pending messages as recent as RFC 3501 recommends. STATUS reports pending messages without claiming them, so repeated STATUS calls do not change subsequent selection state.
 
 The explicit namespace does not provide RFC 2342 NAMESPACE discovery. Clients should use LIST and select the returned shared paths. Do not configure a shared mailbox address as the login identity to access a delegate mailbox.
 
@@ -49,10 +49,12 @@ python scripts/imap-external-validation.py
 
 To check one delegated mailbox, also set `MIAUTRIX_IMAP_SHARED_MAILBOX` to its full address. The script reports command status, counts and byte lengths only; it does not print message contents. Use `MIAUTRIX_IMAP_INSECURE=1` only for temporary IP-only diagnostics, then validate with the normal hostname and certificate.
 
-For manual Himalaya validation, list mailboxes and select a path such as `Shared/sales@example.test/INBOX`. In Thunderbird, expand the account's folder list, locate `Shared/<address>`, open `INBOX`, fetch a message and refresh the folder list. Repeat after removing delegate access; the next command in an existing session must return NO.
+For manual Himalaya validation, list mailboxes and confirm Sent, Drafts, Archive, Junk, Trash and `Shared/<address>` appear by default; select a path such as `Shared/sales@example.test/INBOX`. Unsubscribe one folder, refresh, subscribe it again, and verify it disappears then returns. In Thunderbird, expand the account's folder list, confirm default personal folders and `Shared/<address>` are visible without manually subscribing, open shared `INBOX`, fetch a message and refresh the folder list. Repeat after removing delegate access; the next command in an existing session must return NO and the shared folders must disappear from LIST/LSUB.
+
+Before deployment, apply all pending EF migrations, including `20261124222105_ImapRecentMessages`, `20261124223011_ImapRecentLegacyBaseline` and `20261124224654_ImapFolderUidValiditySequence` (plus the existing folder-subscription migrations). Validate that delegates have `access_level` set to exactly `read` or `write`; Send As / Send on Behalf permission alone does not expose IMAP. Tell users that IMAP EXPUNGE permanently deletes `\\Deleted` messages; the web UI's normal delete action still moves messages to Trash.
 
 For test failures requiring PostgreSQL, follow [Troubleshooting §9 and §14](TROUBLESHOOTING.md); never point test variables at production.
 
 ## Known limitations
 
-The server does not claim IMAP4rev2 or advertise IDLE/MOVE/ACL/NAMESPACE. Some RFC 3501 edge cases, full external-client validation and portions of the shared-mailbox command matrix require further compatibility verification. See [IMAP Phase 1 report](IMAP-Phase1-Report.md) for the command-by-command audit and evidence status.
+The server does not claim IMAP4rev2 or advertise IDLE/MOVE/ACL/NAMESPACE/STARTTLS; deployment uses implicit TLS. External-client validation still must be run by the owner against the deployed host. See [IMAP Phase 1 report](IMAP-Phase1-Report.md) for the command-by-command audit and evidence status.

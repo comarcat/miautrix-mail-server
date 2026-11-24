@@ -5,6 +5,9 @@ All notable changes to this project are documented here.
 ## [2.0.0] - 2026-11-23
 
 ### Added
+- **IMAP shared mailboxes (IMAP-009):** delegated mailboxes appear under `Shared/<address>/<folder>`; authorization re-checked on every command; revocation applies to open sessions. See `docs/IMAP.md`.
+- **Full RFC 3501 command set:** every IMAP4rev1 MUST row is implemented and tested (`docs/IMAP-Phase1-Report.md`). Persistent subscriptions (default subscribed, UNSUBSCRIBE opts out), `\Recent` tracking, a UIDVALIDITY sequence, APPENDUID/COPYUID, TRYCREATE, and `UTF8=ACCEPT` after ENABLE.
+- **Send As / Send on Behalf:** new delegate permissions (`can_send_as`, `can_send_on_behalf`) in the admin API and UI. One sender policy for SMTP submission and webmail. See `docs/SMTP-SendAs-Report.md`.
 - Shared MimeKit parser contract and Infrastructure implementation; message reparse service and `messages reparse` CLI command.
 - Sandboxed iframe rendering for webmail message bodies and an environment-configured IMAP external validation script.
 - Buffered IMAP byte reader, token collector/tokenizer, segmented response writer, hierarchy-aware LIST/LSUB, AUTHENTICATE PLAIN, and folder rename through the Application service.
@@ -21,6 +24,8 @@ All notable changes to this project are documented here.
 
 ### Fixed
 
+- **Security: SMTP submission and webmail accepted any From address.** An authenticated user could send as another user, a shared mailbox or another tenant. Now only the user's own addresses, aliases and granted Send As / Send on Behalf mailboxes are allowed; everything else gets `550 5.7.1` and is audited.
+- IMAP EXPUNGE deletes permanently (RFC 3501) instead of moving to Trash.
 - Allocated stable non-zero IMAP UIDs atomically per folder and added the UID backfill and uniqueness migration.
 - `AddQueueDirection` migration is idempotent so it applies over databases that ran the superseded `AddSmtpQueueDirection` migration (production drift that aborted the first `-RunMigrations` deploy).
 - EF bundle build no longer needs a real database connection; the seeder no longer creates an admin with a default password (`users bootstrap-admin` instead).

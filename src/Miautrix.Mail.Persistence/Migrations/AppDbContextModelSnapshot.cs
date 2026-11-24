@@ -675,8 +675,10 @@ namespace Miautrix.Mail.Persistence.Migrations
                         .HasColumnName("uid_next");
 
                     b.Property<long>("UidValidity")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
-                        .HasColumnName("uid_validity");
+                        .HasColumnName("uid_validity")
+                        .HasDefaultValueSql("nextval('imap_uid_validity_seq')");
 
                     b.HasIndex("ParentId");
 
@@ -1045,6 +1047,12 @@ namespace Miautrix.Mail.Persistence.Migrations
                     b.Property<bool>("IsRead")
                         .HasColumnType("boolean")
                         .HasColumnName("is_read");
+
+                    b.Property<bool>("IsRecent")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_recent");
 
                     b.Property<Guid>("MailboxId")
                         .HasColumnType("uuid")
