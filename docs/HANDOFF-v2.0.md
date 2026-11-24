@@ -48,6 +48,8 @@ Architecture change to know about: `IMailStorage` / `StorageWriteResult`, the ba
 4. ✅ **Deployed 2026-11-24** as `v2.0.0-0394daf-202611241633` (verified). v1.0 is kept as `legacy-net8.0-20261124T155032Z`; roll back with `scripts/deploy-release.ps1 -Rollback`. Future deploys: `scripts/deploy-release.ps1 -DryRun`, then `scripts/deploy-release.ps1` (see [DEPLOYMENT.md](DEPLOYMENT.md)). The app server has `postgresql-client-18` because production PostgreSQL is 18.6.
 5. ✅ **Backfill applied 2026-11-24:** 76 messages corrected, 0 failed. Run the CLI on the server after loading `/opt/miautrix-mail/.env` (see ERRORS §13.6 and DEPLOYMENT.md).
 6. **External IMAP validation:** run `python scripts/imap-external-validation.py` (it logs in and prints PASS/FAIL for IMAP-001..004). **First fix IMAP-006** (UID 0 on every delivered message, ERRORS §13.7, PMI V2-08). That is the next development task.
+6a. **Write `docs/TROUBLESHOOTING.md`** (PMI V2-09, required for v2.0) alongside the IMAP-006 fix: symptoms, diagnostics and fixes for deploy/verify/rollback, storage, backups/restore, the server CLI with `.env`, reparse, webmail rendering, IMAP validation/UIDs, tenant cleanup and logs. Link it from README and DEPLOYMENT.md.
+6b. ✅ **Test-tenant cleanup applied 2026-11-24:** 297 test tenants removed; only `default` remains (`scripts/cleanup-test-tenants.sh --list` shows 0 candidates).
 7. **Close M5** in the PMI only after steps 3–6 pass.
 
 ## 4. Known gaps and follow-ups
