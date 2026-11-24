@@ -47,8 +47,7 @@ public sealed class ImapMailKitListenerFixture : IAsyncLifetime
         _connectionString = Environment.GetEnvironmentVariable("MIAUTRIX_DB_CONNECTION")
             ?? throw new InvalidOperationException("MIAUTRIX_DB_CONNECTION environment variable is required.");
         var connection = new NpgsqlConnectionStringBuilder(_connectionString);
-        if (string.Equals(connection.Host, "10.11.1.52", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(connection.Database, "miautrix-mail-pro", StringComparison.OrdinalIgnoreCase))
+        if ((connection.Database ?? string.Empty).Contains("-pro", StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("IMAP protocol tests refuse to connect to production.");
     }
 
@@ -58,7 +57,9 @@ public sealed class ImapMailKitListenerFixture : IAsyncLifetime
         _storage = new FileSystemMailStorage(_storageDirectory);
         using var rsa = RSA.Create(2048);
         var request = new CertificateRequest("CN=localhost", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-        _certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddMinutes(30));
+        using (var ephemeral = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddMinutes(30)))
+            // Windows SChannel cannot serve TLS with an ephemeral key; round-trip through PKCS#12 (no-op on Linux).
+            _certificate = X509CertificateLoader.LoadPkcs12(ephemeral.Export(X509ContentType.Pfx), null);
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddDbContext<AppDbContext>(options => options.UseNpgsql(_connectionString));
@@ -217,7 +218,9 @@ public sealed class ImapMailKitProtocolTests(ImapMailKitListenerFixture fixture)
         Assert.Contains(message.Attachments, attachment => attachment.ContentDisposition?.Disposition.Equals("attachment", StringComparison.OrdinalIgnoreCase) == true);
         Assert.Contains("Body π", message.TextBody);
         Assert.Equal(2, (await client.Inbox.SearchAsync(SearchQuery.Not(SearchQuery.Seen))).Count);
-        await Assert.ThrowsAsync<MailKit.CommandException>(() => client.Inbox.AddFlagsAsync(summaries[0].UniqueId, MessageFlags.Seen, true));
+        // MailKit refuses STORE on a read-only folder client-side; the server-side [READ-ONLY] rejection is
+        // asserted by the raw-socket test (A3b).
+        await Assert.ThrowsAsync<MailKit.FolderNotOpenException>(() => client.Inbox.AddFlagsAsync(summaries[0].UniqueId, MessageFlags.Seen, true));
     }
 
     [Fact]

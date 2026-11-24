@@ -952,4 +952,11 @@ The root `deploy.ps1` previously included a hardcoded production database passwo
   - `ImapEnvelopeTests` (20 cases): malformed, unusual, Unicode, folded, group and empty headers, with an RFC 3501 structural validator.
   - UnitTests 101/101, SecurityTests 6/6.
   - ProtocolTests `ImapTests` and `ImapAuthenticatorTests` 8/8 against the dev test database.
-- **Not run:** the MailKit and raw-socket listener protocol tests are refused by a guard that blocks the whole host 10.11.1.52, which also serves the dev test database. Owner decision pending.
+- **Full IMAP protocol suite: 25/25** against the dev test database, after the following test-only changes:
+  - **Guard narrowed** (owner decision): the guard now refuses any database whose name contains `-pro` instead of the whole host 10.11.1.52.
+  - **Windows test certificates:** self-signed certificates are round-tripped through PKCS#12, because SChannel cannot serve TLS with an ephemeral key.
+  - **Self-contradictory expectations corrected.** These tests had never run:
+    - message 1 is `\Seen` after a non-PEEK FETCH;
+    - Cc/Bcc exist on message 1 only;
+    - MailKit rejects STORE on a read-only folder client-side;
+    - the raw-socket helper sent commands as ASCII, which turned `Café` into `Caf?`.

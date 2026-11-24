@@ -31,7 +31,7 @@ public sealed class ImapListenerRawSocketTests
         var connectionString = Environment.GetEnvironmentVariable("MIAUTRIX_DB_CONNECTION")
             ?? throw new InvalidOperationException("MIAUTRIX_DB_CONNECTION environment variable is required.");
         var connection = new NpgsqlConnectionStringBuilder(connectionString);
-        if (string.Equals(connection.Host, "10.11.1.52", StringComparison.OrdinalIgnoreCase) || string.Equals(connection.Database, "miautrix-mail-pro", StringComparison.OrdinalIgnoreCase))
+        if ((connection.Database ?? string.Empty).Contains("-pro", StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("IMAP protocol tests refuse to connect to production.");
 
         var tenantId = Guid.NewGuid();
@@ -73,7 +73,9 @@ public sealed class ImapListenerRawSocketTests
 
         using var rsa = RSA.Create(2048);
         var request = new CertificateRequest("CN=localhost", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-        using var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddMinutes(30));
+        using var ephemeral = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddMinutes(30));
+        // Windows SChannel cannot serve TLS with an ephemeral key; round-trip through PKCS#12 (no-op on Linux).
+        using var certificate = X509CertificateLoader.LoadPkcs12(ephemeral.Export(X509ContentType.Pfx), null);
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
@@ -140,13 +142,23 @@ public sealed class ImapListenerRawSocketTests
             Assert.Contains("* SEARCH 1 2", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A4b UID SEARCH 1:*", "A4b", stopping.Token)));
             var dateCriterion = DateTime.UtcNow.ToString("dd-MMM-yyyy", System.Globalization.CultureInfo.InvariantCulture);
             var searchCriteria = new[] { "UNSEEN", "UNANSWERED", "UNFLAGGED", "UNDELETED", "UNDRAFT", "OLD", "FROM sender@test.invalid", $"TO {address}", "CC copy@test.invalid", "BCC blind@test.invalid", "SUBJECT Café", "BODY searchable", "TEXT Café", "HEADER X-Test value", "SINCE 01-Jan-2020", "BEFORE 01-Jan-2030", $"ON {dateCriterion}", "SENTSINCE 01-Jan-2020", "SENTBEFORE 01-Jan-2030", $"SENTON {dateCriterion}", "LARGER 1", "SMALLER 999999", "CHARSET UTF-8 SUBJECT Café", "NOT SEEN", "OR SEEN UNSEEN", "(UNSEEN SUBJECT Café)" };
+            // Message 1 is \Seen after A3f and is the only one with Cc/Bcc recipients.
+            var expectedOverrides = new Dictionary<string, string>
+            {
+                ["UNSEEN"] = "* SEARCH 2", ["NOT SEEN"] = "* SEARCH 2", ["(UNSEEN SUBJECT Café)"] = "* SEARCH 2",
+                ["CC copy@test.invalid"] = "* SEARCH 1", ["BCC blind@test.invalid"] = "* SEARCH 1",
+            };
+            var searchMismatches = new List<string>();
             for (var index = 0; index < searchCriteria.Length; index++)
             {
                 var tag = $"A4x{index}";
-                var response = await SendAndReadAsync(tls, reader, $"{tag} SEARCH {searchCriteria[index]}", tag, stopping.Token);
-                Assert.Contains("* SEARCH 1 2", Encoding.UTF8.GetString(response));
+                var expected = expectedOverrides.GetValueOrDefault(searchCriteria[index], "* SEARCH 1 2");
+                var response = Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, $"{tag} SEARCH {searchCriteria[index]}", tag, stopping.Token));
+                var untagged = response.Split('\n').Select(line => line.TrimEnd('\r')).FirstOrDefault(line => line.StartsWith("* SEARCH", StringComparison.Ordinal)) ?? "<none>";
+                if (untagged.TrimEnd() != expected) searchMismatches.Add($"SEARCH {searchCriteria[index]}: expected '{expected}', got '{untagged}'");
             }
-            foreach (var (criterion, expected) in new[] { ("SEEN", "* SEARCH\r\n"), ("ANSWERED", "* SEARCH\r\n"), ("FLAGGED", "* SEARCH\r\n"), ("DELETED", "* SEARCH\r\n"), ("DRAFT", "* SEARCH\r\n"), ("NEW", "* SEARCH\r\n"), ("RECENT", "* SEARCH\r\n"), ("1:*", "* SEARCH 1 2\r\n") })
+            Assert.True(searchMismatches.Count == 0, string.Join(Environment.NewLine, searchMismatches));
+            foreach (var (criterion, expected) in new[] { ("SEEN", "* SEARCH 1\r\n"), ("ANSWERED", "* SEARCH\r\n"), ("FLAGGED", "* SEARCH\r\n"), ("DELETED", "* SEARCH\r\n"), ("DRAFT", "* SEARCH\r\n"), ("NEW", "* SEARCH\r\n"), ("RECENT", "* SEARCH\r\n"), ("1:*", "* SEARCH 1 2\r\n") })
             {
                 var tag = $"A4n{Array.IndexOf(new[] { "SEEN", "ANSWERED", "FLAGGED", "DELETED", "DRAFT", "NEW", "RECENT", "1:*" }, criterion)}";
                 Assert.Contains(expected, Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, $"{tag} SEARCH {criterion}", tag, stopping.Token)));
@@ -194,7 +206,7 @@ public sealed class ImapListenerRawSocketTests
             Assert.Empty(await mailKit.Inbox.FetchAsync(98, 98,
                 new MailKit.FetchRequest(MailKit.MessageSummaryItems.UniqueId | MailKit.MessageSummaryItems.Envelope), stopping.Token));
             await mailKit.Inbox.OpenAsync(MailKit.FolderAccess.ReadWrite, stopping.Token);
-            await mailKit.Inbox.AddFlagsAsync(Assert.Single(summaries).UniqueId, MailKit.MessageFlags.Seen, true, stopping.Token);
+            await mailKit.Inbox.AddFlagsAsync(summaries[0].UniqueId, MailKit.MessageFlags.Seen, true, stopping.Token);
             Assert.Single(await mailKit.Inbox.SearchAsync(MailKit.Search.SearchQuery.Seen, stopping.Token));
             var expungedUid = summaries.Single(summary => summary.UniqueId.Id == 1).UniqueId;
             await mailKit.Inbox.AddFlagsAsync(expungedUid, MailKit.MessageFlags.Deleted, true, stopping.Token);
@@ -240,7 +252,8 @@ public sealed class ImapListenerRawSocketTests
 
     private static async Task<byte[]> SendAndReadAsync(SslStream stream, ImapConnectionReader reader, string command, string tag, CancellationToken ct)
     {
-        await stream.WriteAsync(Encoding.ASCII.GetBytes(command + "\r\n"), ct);
+        // UTF-8: the session ENABLEs UTF8=ACCEPT, and ASCII would turn "Café" into "Caf?".
+        await stream.WriteAsync(Encoding.UTF8.GetBytes(command + "\r\n"), ct);
         using var result = new MemoryStream();
         while (true)
         {
