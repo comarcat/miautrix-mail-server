@@ -145,6 +145,67 @@ public sealed class ImapTests : IDisposable
         Assert.Contains("\\Flagged", fetchUntagged);
     }
 
+    [Fact]
+    public async Task Imap_SharedNamespace_SelectsTheDelegatedMailbox_NotTheLoginMailbox()
+    {
+        var tenantId = Guid.NewGuid();
+        var domainId = Guid.NewGuid();
+        var ownMailboxId = Guid.NewGuid();
+        var sharedMailboxId = Guid.NewGuid();
+        var otherSharedMailboxId = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+        var tenant = new Tenant { Id = tenantId, Slug = $"tenant-{Guid.NewGuid():N}", CreatedAt = now, UpdatedAt = now };
+        var domain = new DomainEntity { Id = domainId, TenantId = tenantId, Name = $"imap-{Guid.NewGuid():N}.local", CreatedAt = now, UpdatedAt = now };
+        var own = new Mailbox { Id = ownMailboxId, TenantId = tenantId, DomainId = domainId, Address = $"user@{domain.Name}", Kind = "user", QuotaBytes = 1000000, IsActive = true, CreatedAt = now, UpdatedAt = now };
+        var shared = new Mailbox { Id = sharedMailboxId, TenantId = tenantId, DomainId = domainId, Address = $"sales@{domain.Name}", Kind = "shared", QuotaBytes = 1000000, IsActive = true, CreatedAt = now, UpdatedAt = now };
+        var otherShared = new Mailbox { Id = otherSharedMailboxId, TenantId = tenantId, DomainId = domainId, Address = $"other@{domain.Name}", Kind = "shared", QuotaBytes = 1000000, IsActive = true, CreatedAt = now, UpdatedAt = now };
+        _dbContext.AddRange(tenant, domain, own, shared,
+            new Folder { Id = Guid.NewGuid(), TenantId = tenantId, MailboxId = ownMailboxId, Name = "INBOX", Role = "inbox", UidNext = 1, UidValidity = 11, CreatedAt = now, UpdatedAt = now },
+            otherShared,
+            new Folder { Id = Guid.NewGuid(), TenantId = tenantId, MailboxId = sharedMailboxId, Name = "INBOX", Role = "inbox", UidNext = 1, UidValidity = 22, CreatedAt = now, UpdatedAt = now },
+            new Folder { Id = Guid.NewGuid(), TenantId = tenantId, MailboxId = otherSharedMailboxId, Name = "INBOX", Role = "inbox", UidNext = 1, UidValidity = 33, CreatedAt = now, UpdatedAt = now });
+        await _dbContext.SaveChangesAsync();
+
+        var authz = new RecordingMailboxAuthorization(sharedMailboxId);
+        var mailboxes = new Miautrix.Mail.Application.Mail.MailboxService(_dbContext, authz, new EfPermissionRepository(_dbContext));
+        var session = new ImapSession(_dbContext, _storage, new StubImapAuthenticator(tenantId, ownMailboxId), authz, mailboxes,
+            uidAllocator: new Miautrix.Mail.Application.Mail.MessageUidAllocator(_dbContext));
+        Assert.Equal("OK", (await session.ExecuteCommandAsync($"a001 LOGIN \"{own.Address}\" \"secret\"")).Status);
+
+        var list = await session.ExecuteCommandAsync("a001b LIST \"\" \"*\"");
+        var listed = string.Join("\n", list.ResponseSegments.Select(segment => Encoding.UTF8.GetString(segment.Bytes)));
+        Assert.Contains($"Shared/{shared.Address}/INBOX", listed);
+        Assert.DoesNotContain($"Shared/{otherShared.Address}/INBOX", listed);
+
+        var denied = await session.ExecuteCommandAsync($"a002 SELECT Shared/unknown@{domain.Name}/INBOX");
+        Assert.Equal("NO", denied.Status);
+        Assert.Contains("Mailbox does not exist", denied.Message);
+
+        var unauthorized = await session.ExecuteCommandAsync($"a002b SELECT Shared/{otherShared.Address}/INBOX");
+        Assert.Equal("NO", unauthorized.Status);
+        Assert.Contains("Mailbox does not exist", unauthorized.Message);
+
+        var selected = await session.ExecuteCommandAsync($"a003 SELECT Shared/{shared.Address}/INBOX");
+        Assert.Equal("OK", selected.Status);
+        Assert.Equal(sharedMailboxId, session.SelectedFolder!.MailboxId);
+        Assert.Equal(ownMailboxId, session.MailboxId);
+        Assert.Contains((sharedMailboxId, false), authz.Checks);
+
+        var raw = Encoding.UTF8.GetBytes($"From: sender@example.test\r\nTo: {shared.Address}\r\nSubject: Shared case\r\n\r\nshared body");
+        using var literal = new MemoryStream(raw);
+        var append = await session.ExecuteCommandAsync($"a004 APPEND Shared/{shared.Address}/INBOX {{{raw.Length}}}", literal);
+        Assert.Equal("OK", append.Status);
+        var search = await session.ExecuteCommandAsync("a005 SEARCH SUBJECT \"Shared case\"");
+        Assert.Equal("OK", search.Status);
+        Assert.Contains("* SEARCH 1", string.Join("\n", search.ResponseSegments.Select(segment => Encoding.UTF8.GetString(segment.Bytes))));
+        var fetch = await session.ExecuteCommandAsync("a006 FETCH 1 (UID RFC822.SIZE BODY.PEEK[])");
+        Assert.Equal("OK", fetch.Status);
+        Assert.Contains(fetch.ResponseSegments, segment => segment.Bytes.SequenceEqual(raw));
+        var fetchHeader = string.Join("", fetch.ResponseSegments.Select(segment => Encoding.UTF8.GetString(segment.Bytes)));
+        Assert.Contains($"RFC822.SIZE {raw.Length}", fetchHeader);
+        Assert.Contains("UID 1", fetchHeader);
+    }
+
     /// <summary>
     /// Stands in for credential verification so the APPEND/FETCH tests stay focused on
     /// protocol behaviour. Credential checks themselves are covered by
@@ -171,6 +232,19 @@ public sealed class ImapTests : IDisposable
         public TResource AuthorizeAccess<TResource>(Guid currentTenantId, Guid currentUserId, TResource? resource, string requiredPermissionCode) where TResource : TenantScopedEntityBase => resource!;
         public void AssertPermission(Guid tenantId, Guid userId, string permissionCode) { }
         public void AssertMailboxAccess(Guid tenantId, Guid userId, Mailbox? mailbox, bool requireWrite) { if (mailbox is null) throw new ResourceNotFoundException(); }
+        public void ValidateOwnerDemotion(Guid tenantId, Guid targetUserId) { }
+    }
+
+    private sealed class RecordingMailboxAuthorization(Guid allowedMailboxId) : ITenantAuthorizationHelper
+    {
+        public List<(Guid MailboxId, bool RequireWrite)> Checks { get; } = new();
+        public TResource AuthorizeAccess<TResource>(Guid currentTenantId, Guid currentUserId, TResource? resource, string requiredPermissionCode) where TResource : TenantScopedEntityBase => resource!;
+        public void AssertPermission(Guid tenantId, Guid userId, string permissionCode) { }
+        public void AssertMailboxAccess(Guid tenantId, Guid userId, Mailbox? mailbox, bool requireWrite)
+        {
+            if (mailbox is null || mailbox.Id != allowedMailboxId) throw new ResourceNotFoundException();
+            Checks.Add((mailbox.Id, requireWrite));
+        }
         public void ValidateOwnerDemotion(Guid tenantId, Guid targetUserId) { }
     }
 }

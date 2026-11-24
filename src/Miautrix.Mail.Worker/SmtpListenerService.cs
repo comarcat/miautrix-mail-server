@@ -318,6 +318,15 @@ public class SmtpListenerService : BackgroundService
             if (upper.StartsWith("MAIL FROM"))
             {
                 mailFrom = ExtractAngleAddress(line);
+                if (_mode != SmtpListenerMode.Inbound)
+                {
+                    if (tenantId is null || userId is null || !await submissionHandler.IsEnvelopeSenderAllowedAsync(tenantId.Value, userId.Value, mailFrom, ct))
+                    {
+                        mailFrom = null;
+                        await writer.WriteLineAsync(SmtpResponse.SenderRejected.ToSmtpString());
+                        continue;
+                    }
+                }
                 await writer.WriteLineAsync("250 2.1.0 OK");
                 continue;
             }
@@ -388,6 +397,7 @@ public class SmtpListenerService : BackgroundService
                         isAuthenticated: authenticatedUsername is not null,
                         isTlsEncrypted: isTlsActive,
                         tenantId: tenantId,
+                        userId: userId,
                         sender: mailFrom!,
                         recipient: rcptTo!,
                         rawMessage: rawMessage,

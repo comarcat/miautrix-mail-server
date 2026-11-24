@@ -915,6 +915,18 @@ namespace Miautrix.Mail.Persistence.Migrations
                         .HasColumnType("text")
                         .HasColumnName("access_level");
 
+                    b.Property<bool>("CanSendAs")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("can_send_as");
+
+                    b.Property<bool>("CanSendOnBehalf")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("can_send_on_behalf");
+
                     b.Property<Guid>("MailboxId")
                         .HasColumnType("uuid")
                         .HasColumnName("mailbox_id");

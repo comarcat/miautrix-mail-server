@@ -145,6 +145,8 @@ public class MailboxDelegate : TenantScopedEntityBase
     public Guid MailboxId { get; set; }
     public Guid UserId { get; set; }
     public string AccessLevel { get; set; } = "read";
+    public bool CanSendAs { get; set; }
+    public bool CanSendOnBehalf { get; set; }
 }
 
 public class Folder : TenantScopedEntityBase

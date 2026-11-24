@@ -149,6 +149,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddScoped<ITenantAuthorizationHelper, TenantAuthorizationHelper>();
         services.AddScoped<IMailboxService, MailboxService>();
         services.AddScoped<IMessageService, MessageService>();
+        services.AddScoped<ISenderAuthorizationService, SenderAuthorizationService>();
         services.AddScoped<IMessageUidAllocator, MessageUidAllocator>();
 
         // Identity

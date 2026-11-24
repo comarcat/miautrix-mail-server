@@ -27,6 +27,7 @@ public sealed class MessageService : IMessageService
 
     private readonly IMailStorage _storage;
     private readonly ILogger<MessageService> _logger;
+    private readonly ISenderAuthorizationService? _senderAuthorization;
 
     public MessageService(
         AppDbContext db,
@@ -34,7 +35,8 @@ public sealed class MessageService : IMessageService
         IMailboxService mailboxes,
         IMessageUidAllocator uidAllocator,
         IMailStorage storage,
-        ILogger<MessageService> logger)
+        ILogger<MessageService> logger,
+        ISenderAuthorizationService? senderAuthorization = null)
     {
         _db = db;
         _auth = auth;
@@ -42,6 +44,7 @@ public sealed class MessageService : IMessageService
         _uidAllocator = uidAllocator;
         _storage = storage;
         _logger = logger;
+        _senderAuthorization = senderAuthorization;
     }
 
     public async Task<MessageListPage> ListMessagesAsync(
@@ -580,8 +583,17 @@ public sealed class MessageService : IMessageService
             request.BodyHtml,
             storedMimeAttachments.Concat(generatedAttachments).ToList(),
             now));
-        var sizeBytes = built.SizeBytes;
-        var contentHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(built.RawMessage))).ToLowerInvariant();
+        if (_senderAuthorization is null)
+            return new SendMessageResult(false, null, null, "Sender authorization is unavailable.");
+        var senderAuthorization = await _senderAuthorization.AuthorizeWebmailAsync(tenantId, userId, request.From, built.RawMessage, cancellationToken);
+        if (!senderAuthorization.IsAuthorized)
+            return new SendMessageResult(false, null, null, "Sender address is not authorized.");
+        var finalBytes = Encoding.UTF8.GetBytes(senderAuthorization.RawMessage);
+        built = built with { RawMessage = senderAuthorization.RawMessage, TopLevelHeaders = GetTopLevelHeaders(senderAuthorization.RawMessage), SizeBytes = finalBytes.Length };
+        await using var rawMessageStream = new MemoryStream(finalBytes, writable: false);
+        var storedMessage = await _storage.StoreAsync(rawMessageStream, cancellationToken);
+        var sizeBytes = storedMessage.SizeBytes;
+        var contentHash = storedMessage.ContentHash;
 
         var messageId = Guid.NewGuid();
         var message = new Message
@@ -596,7 +608,7 @@ public sealed class MessageService : IMessageService
             Subject = request.Subject,
             Date = now,
             ContentHash = contentHash,
-            StoragePath = $"/storage/mail/{tenantId}/{mailboxId}/{messageId}.eml",
+            StoragePath = storedMessage.StoragePath,
             SizeBytes = sizeBytes,
             Flags = "\\Seen",
             IsRead = true,
@@ -653,7 +665,7 @@ public sealed class MessageService : IMessageService
                     Subject = request.Subject,
                     Date = now,
                     ContentHash = contentHash,
-                    StoragePath = $"/storage/mail/{tenantId}/{recipientMailbox.Id}/{deliveredMessageId}.eml",
+                    StoragePath = storedMessage.StoragePath,
                     SizeBytes = sizeBytes,
                     Flags = string.Empty,
                     IsRead = false,
@@ -674,7 +686,7 @@ public sealed class MessageService : IMessageService
                 Id = Guid.NewGuid(),
                 TenantId = tenantId,
                 Direction = QueueDirection.Outbound,
-                Sender = request.From,
+                Sender = senderAuthorization.EnvelopeSender,
                 Recipient = recipient,
                 Subject = request.Subject,
                 RawMessage = built.RawMessage,
@@ -722,6 +734,14 @@ public sealed class MessageService : IMessageService
         await AutoSaveRecipientContactsAsync(tenantId, userId, request.From, deliveryRecipients, cancellationToken);
 
         return new SendMessageResult(true, messageId, firstQueueItemId, "Message sent and queued for delivery.");
+    }
+
+    private static string GetTopLevelHeaders(string rawMessage)
+    {
+        var split = rawMessage.IndexOf("\r\n\r\n", StringComparison.Ordinal);
+        if (split >= 0) return rawMessage[..split];
+        split = rawMessage.IndexOf("\n\n", StringComparison.Ordinal);
+        return split >= 0 ? rawMessage[..split] : rawMessage;
     }
 
     private async Task AutoSaveRecipientContactsAsync(Guid tenantId, Guid userId, string from, IReadOnlyList<string> recipients, CancellationToken cancellationToken)

@@ -2013,7 +2013,7 @@ public sealed class AdminService : IAdminService
             .Select(assignment =>
             {
                 var user = usersById[assignment.UserId];
-                return new MailboxDelegateDto(user.Id, user.Email, user.Name, assignment.AccessLevel);
+                return new MailboxDelegateDto(user.Id, user.Email, user.Name, assignment.AccessLevel, assignment.CanSendAs, assignment.CanSendOnBehalf);
             })
             .ToList();
 
@@ -2027,7 +2027,7 @@ public sealed class AdminService : IAdminService
         {
             var level = request.AccessLevel.Trim().ToLowerInvariant();
             if (level is not ("read" or "write")) throw new InvalidOperationException("Delegate access level must be 'read' or 'write'.");
-            return new MailboxDelegateRequest(request.UserId, level);
+            return new MailboxDelegateRequest(request.UserId, level, request.CanSendAs, request.CanSendOnBehalf);
         }).ToList();
         if (normalized.Select(d => d.UserId).Distinct().Count() != normalized.Count)
             throw new InvalidOperationException("A delegate may only be assigned once.");
@@ -2047,7 +2047,7 @@ public sealed class AdminService : IAdminService
         _db.MailboxDelegates.AddRange(normalized.Select(d => new MailboxDelegate
         {
             Id = Guid.NewGuid(), TenantId = tenantId, MailboxId = mailbox.Id, UserId = d.UserId,
-            AccessLevel = d.AccessLevel, CreatedAt = now, UpdatedAt = now
+            AccessLevel = d.AccessLevel, CanSendAs = d.CanSendAs, CanSendOnBehalf = d.CanSendOnBehalf, CreatedAt = now, UpdatedAt = now
         }));
     }
 

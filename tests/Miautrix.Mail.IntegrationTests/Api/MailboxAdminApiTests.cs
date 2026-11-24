@@ -413,6 +413,55 @@ public sealed class MailboxAdminApiTests : IClassFixture<WebApplicationFactory<M
         }
     }
 
+    [Fact]
+    public async Task Shared_mailbox_delegate_sender_grants_can_be_created_edited_and_are_tenant_scoped()
+    {
+        var tenant = await SeedTenantAsync();
+        var foreignTenant = await SeedTenantAsync();
+        var delegateId = await SeedUserAsync(tenant, "delegate@" + DomainName, "Delegate");
+        var foreignMailbox = Guid.NewGuid();
+        await SeedMailboxAsync(foreignTenant, foreignMailbox, "foreign@" + DomainName, "shared", "Foreign");
+        try
+        {
+            using var createRequest = BuildRequest(tenant, HttpMethod.Post, "/api/v1/shared-mailboxes", new
+            {
+                email = "sales@" + DomainName,
+                name = "Sales",
+                delegates = new[] { new { user_id = delegateId, access_level = "read", can_send_as = true, can_send_on_behalf = false } }
+            });
+            var createResponse = await _factory.CreateClient().SendAsync(createRequest);
+            Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+            using var createJson = JsonDocument.Parse(await createResponse.Content.ReadAsStringAsync());
+            var mailboxId = createJson.RootElement.GetProperty("data").GetProperty("id").GetGuid();
+            var createdGrant = createJson.RootElement.GetProperty("data").GetProperty("delegates")[0];
+            Assert.True(createdGrant.GetProperty("can_send_as").GetBoolean());
+            Assert.False(createdGrant.GetProperty("can_send_on_behalf").GetBoolean());
+
+            var update = await SendAsync(tenant, HttpMethod.Put, $"/api/v1/shared-mailboxes/{mailboxId}/delegates", new
+            {
+                delegates = new[] { new { user_id = delegateId, access_level = "write", can_send_as = false, can_send_on_behalf = true } }
+            });
+            Assert.Equal(HttpStatusCode.OK, update.StatusCode);
+            using var updatedJson = JsonDocument.Parse(await update.Content.ReadAsStringAsync());
+            var updatedGrant = updatedJson.RootElement.GetProperty("data").GetProperty("delegates")[0];
+            Assert.False(updatedGrant.GetProperty("can_send_as").GetBoolean());
+            Assert.True(updatedGrant.GetProperty("can_send_on_behalf").GetBoolean());
+
+            using var context = CreateContext();
+            var stored = await context.MailboxDelegates.AsNoTracking().SingleAsync(d => d.MailboxId == mailboxId && d.UserId == delegateId);
+            Assert.False(stored.CanSendAs);
+            Assert.True(stored.CanSendOnBehalf);
+
+            var foreignEdit = await SendAsync(tenant, HttpMethod.Put, $"/api/v1/shared-mailboxes/{foreignMailbox}/delegates", new { delegates = Array.Empty<object>() });
+            Assert.Equal(HttpStatusCode.NotFound, foreignEdit.StatusCode);
+        }
+        finally
+        {
+            await CleanupTenantAsync(tenant.TenantId);
+            await CleanupTenantAsync(foreignTenant.TenantId);
+        }
+    }
+
     // ------------------------------------------------------------------
     // HTTP helpers
     // ------------------------------------------------------------------

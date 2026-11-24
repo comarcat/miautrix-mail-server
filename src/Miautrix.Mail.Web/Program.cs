@@ -86,6 +86,7 @@ public class Program
         builder.Services.AddScoped<IMailQueueService, MailQueueService>();
         builder.Services.AddScoped<IMailboxService, MailboxService>();
         builder.Services.AddScoped<IMessageService, MessageService>();
+        builder.Services.AddScoped<ISenderAuthorizationService, SenderAuthorizationService>();
         builder.Services.AddScoped<IMessageUidAllocator, MessageUidAllocator>();
         builder.Services.AddScoped<IContactService, ContactService>();
         builder.Services.AddSingleton(sp =>

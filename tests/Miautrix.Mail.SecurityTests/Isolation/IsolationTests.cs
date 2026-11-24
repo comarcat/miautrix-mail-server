@@ -104,4 +104,31 @@ public class IsolationTests
         Assert.Single(events);
         Assert.Equal(SecurityEventCodes.AuthPrivilegeEscalation, events[0].EventCode);
     }
+
+    [Fact]
+    public void Send_as_only_delegate_does_not_receive_imap_read_or_write_access()
+    {
+        var tenantId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var mailbox = new Mailbox { Id = Guid.NewGuid(), TenantId = tenantId, Kind = "shared" };
+        var repo = new DelegatePermissionRepo("send");
+        var auth = new TenantAuthorizationHelper(repo, new InMemorySecurityEventSink());
+
+        Assert.Throws<ResourceNotFoundException>(() => auth.AssertMailboxAccess(tenantId, userId, mailbox, requireWrite: false));
+        Assert.Throws<ResourceNotFoundException>(() => auth.AssertMailboxAccess(tenantId, userId, mailbox, requireWrite: true));
+
+        var readOnlyAuth = new TenantAuthorizationHelper(new DelegatePermissionRepo("read"), new InMemorySecurityEventSink());
+        readOnlyAuth.AssertMailboxAccess(tenantId, userId, mailbox, requireWrite: false);
+        Assert.Throws<ResourceNotFoundException>(() => readOnlyAuth.AssertMailboxAccess(tenantId, userId, mailbox, requireWrite: true));
+    }
+
+    private sealed class DelegatePermissionRepo(string? access) : IPermissionRepository
+    {
+        public bool HasPermission(Guid tenantId, Guid userId, string permissionCode) => false;
+        public int GetTenantOwnerCount(Guid tenantId) => 0;
+        public bool IsUserTenantOwner(Guid tenantId, Guid userId) => false;
+        public bool IsMailboxOwner(Guid tenantId, Guid userId, Guid mailboxId) => false;
+        public string? GetMailboxDelegateAccess(Guid tenantId, Guid userId, Guid mailboxId) => access;
+        public string GetMailboxEffectiveAccess(Guid tenantId, Guid userId, Mailbox mailbox) => access ?? "none";
+    }
 }

@@ -21,6 +21,7 @@ public sealed class ImapUidStabilityTests
         var inboxId = Guid.NewGuid();
         var sentId = Guid.NewGuid();
         var draftsId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
         var address = "path-tests@example.test";
         var storagePath = Path.Combine(Path.GetTempPath(), "message_uid_paths_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(storagePath);
@@ -30,6 +31,7 @@ public sealed class ImapUidStabilityTests
             await using var db = new AppDbContext(options);
             db.Tenants.Add(new Tenant { Id = tenantId, Slug = "path-tests" });
             db.Domains.Add(new Miautrix.Mail.Domain.Domain { Id = domainId, TenantId = tenantId, Name = "example.test" });
+            db.Users.Add(new User { Id = userId, TenantId = tenantId, Email = address, Name = "Path Test" });
             db.Mailboxes.Add(new Mailbox { Id = mailboxId, TenantId = tenantId, DomainId = domainId, Address = address, Name = address });
             db.Folders.AddRange(
                 new Folder { Id = inboxId, TenantId = tenantId, MailboxId = mailboxId, Name = "INBOX", Role = "inbox" },
@@ -37,9 +39,10 @@ public sealed class ImapUidStabilityTests
                 new Folder { Id = draftsId, TenantId = tenantId, MailboxId = mailboxId, Name = "Drafts", Role = "drafts" });
             await db.SaveChangesAsync();
             var allocator = new InMemoryUidAllocator(db);
-            var service = new MessageService(db, new AllowAuthorization(), null!, allocator, new FileSystemMailStorage(storagePath), NullLogger<MessageService>.Instance);
+            var senderAuthorization = new SenderAuthorizationService(db);
+            var service = new MessageService(db, new AllowAuthorization(), null!, allocator, new FileSystemMailStorage(storagePath), NullLogger<MessageService>.Instance, senderAuthorization);
 
-            var send = await service.SendMessageAsync(tenantId, Guid.NewGuid(), mailboxId,
+            var send = await service.SendMessageAsync(tenantId, userId, mailboxId,
                 new SendMessageRequest(address, new[] { address }, null, null, "Local send", "body", null));
             Assert.True(send.Success);
             var sentMessage = await db.Messages.SingleAsync(m => m.FolderId == sentId);

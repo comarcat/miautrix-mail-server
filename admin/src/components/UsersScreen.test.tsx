@@ -119,7 +119,7 @@ describe('UsersScreen — mailboxes without users', () => {
     await waitFor(() => {
       expect(assign).toHaveBeenCalledWith('orphan-1', expect.objectContaining({
         address: 'renamed@example.com',
-        delegates: [{ user_id: 'u-2', access_level: 'read' }],
+        delegates: [{ user_id: 'u-2', access_level: 'read', can_send_as: false, can_send_on_behalf: false }],
       }));
     });
   });

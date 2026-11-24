@@ -69,11 +69,15 @@ public sealed record MailboxDelegateDto(
     Guid UserId,
     string Email,
     string Name,
-    string AccessLevel);
+    string AccessLevel,
+    bool CanSendAs,
+    bool CanSendOnBehalf);
 
 public sealed record MailboxDelegateRequest(
     Guid UserId,
-    string AccessLevel);
+    string AccessLevel,
+    bool CanSendAs = false,
+    bool CanSendOnBehalf = false);
 
 public sealed record SharedMailboxDto(
     Guid Id,

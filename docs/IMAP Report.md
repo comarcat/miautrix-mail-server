@@ -1,350 +1,521 @@
-# Miautrix Mail Server — IMAP Protocol Compatibility Bug Report
+# MIAUTRIX MAIL SERVER
+
+# IMAP-009 — Shared Mailboxes and Complete IMAP Protocol Compliance Review
 
 **Project:** Miautrix Mail Server  
-**Component:** IMAP Server  
-**Type:** Bug Report / Corrective Development Task  
-**Priority:** P1 — High  
-**Status:** Confirmed defects requiring investigation and correction  
-**Date:** November 23, 2026
+**Component:** IMAP Server, Mailbox Access, Authorization, Protocol Compliance  
+**Priority:** Critical  
+**Status:** Development Required  
+**Scope:** Shared mailbox implementation + comprehensive IMAP audit and integration testing
 
 ---
 
-## 1. Executive Summary
+## 1. Objective
 
-During the integration of Miautrix Mail Server with Hermes Agent and Himalaya CLI, several IMAP protocol compatibility defects were identified.
+Implement complete and secure IMAP access to authorized shared mailboxes and perform a comprehensive review of the existing IMAP implementation.
 
-SMTP message submission and IMAP authentication were successfully tested. However, standard IMAP operations failed, preventing external clients from listing mailboxes and retrieving messages reliably.
+**This task must not be limited to fixing shared mailbox visibility.**
 
-The server advertises IMAP4rev1 compatibility but rejects several standard commands and produces an incorrectly formatted response during message retrieval.
+Previous development iterations exposed missing or defective IMAP functionality through external client testing, requiring multiple deployments and corrections.
 
-**The primary objective is to correct the IMAP implementation without introducing regressions in the existing SMTP, authentication, or mailbox functionality.**
+The objective is to prevent additional rounds of isolated troubleshooting by performing a systematic protocol compliance review, implementing required missing functionality, and validating the complete implementation with real IMAP clients.
 
-## 2. Test Environment
+## 2. Existing Application Behavior
 
+The Miautrix Mail Server web interface already displays personal folders and shared mailboxes.
 
-| Component          | Configuration                             |
-| ------------------ | ----------------------------------------- |
-| Mail Server        | Miautrix Mail Server (custom development) |
-| Server Address     | 10.11.1.51                                |
-| IMAP               | TCP 993 / TLS                             |
-| SMTP Submission    | TCP 587 / STARTTLS                        |
-| Client OS          | Debian Linux LXC                          |
-| Python IMAP Client | Python 3.13 `imaplib`                     |
-| Himalaya           | v2.2.1                                    |
-| Hermes Agent       | v0.23.3                                   |
+The authenticated user [`cristobal@miautrix.tech`](mailto:cristobal@miautrix.tech) has access to these shared mailboxes:
 
 
-The IMAP client successfully authenticated using an account credential separate from the mailbox email address.
-
-TLS certificate validation completed successfully after configuring the appropriate certificate authority.
-
-## 3. Confirmed Test Results
-
-
-| IMAP Command | Result       | Details                                                            |
-| ------------ | ------------ | ------------------------------------------------------------------ |
-| CAPABILITY   | PASS         | Server advertises IMAP4REV1, AUTH=PLAIN, SASL-IR, LITERAL+, ENABLE |
-| LOGIN        | PASS         | Authentication successful                                          |
-| SELECT INBOX | PASS         | Returned 15 messages                                               |
-| LIST         | FAIL         | BAD Unsupported command LIST                                       |
-| EXAMINE      | FAIL         | BAD Unsupported command EXAMINE                                    |
-| SEARCH       | FAIL         | BAD Unsupported command SEARCH                                     |
-| FETCH        | FAIL         | Malformed response detected by Python imaplib                      |
-| LOGOUT       | INCONCLUSIVE | Parser failure observed after malformed FETCH response             |
+| Shared mailbox                                      | Access                     |
+| --------------------------------------------------- | -------------------------- |
+| [alerts@miautrix.tech](mailto:alerts@miautrix.tech) | Available in web interface |
+| [flows@miautrix.tech](mailto:flows@miautrix.tech)   | Available in web interface |
+| [owner@miautrix.tech](mailto:owner@miautrix.tech)   | Available in web interface |
+| [sales@miautrix.tech](mailto:sales@miautrix.tech)   | Full Access — confirmed    |
 
 
-These results were reproduced using standard IMAP client operations. Himalaya also failed to list mailboxes and decode message retrieval responses.
+The web interface shows the following folders inside the sales mailbox:
 
-## 4. Defect IMAP-001 — LIST Command Not Supported
+- Inbox
+- Sent
+- Drafts
+- Archive
+- Junk
+- Trash
 
-**Observed response:**
+The user must be able to access these same resources through a standard IMAP client, subject to the authorization rules already implemented by the application.
+
+**Important:** Do not assume Full Access automatically includes Send As or Send on Behalf permissions. Inspect the existing authorization model and preserve those distinctions.
+
+### Current IMAP behavior
+
+Authentication succeeds using:
+
+[`cristobal@miautrix.tech`](mailto:cristobal@miautrix.tech)
+
+However, the following command:
 
 ```
-IMAP LIST failed: BAD Unsupported command LIST
+LIST "" "*"
 ```
 
-**Expected behavior:**
+Returns only personal folders.
 
-The server must support standard IMAP4rev1 LIST operations and return mailbox information using correctly formatted untagged and tagged responses.
+The shared mailbox namespace is not exposed through the tested IMAP paths.
 
-Example:
+Consequently, Himalaya displays the user's personal inbox instead of the required [`sales@miautrix.tech`](mailto:sales@miautrix.tech) shared inbox.
 
-```
-C001 LIST "" "*"
-* LIST (\HasNoChildren) "/" "INBOX"
-C001 OK LIST completed
-```
+## 3. Required Architecture Review
 
-**Required correction:**
+Before implementing changes, inspect the existing application architecture.
 
-- Implement LIST command parsing and dispatch.
-- Support mailbox reference names and mailbox patterns.
-- Return mailbox names and hierarchy delimiters correctly.
-- Handle nonexistent mailboxes and malformed arguments.
-- Validate compatibility with standard IMAP clients.
+Identify and document:
 
-## 5. Defect IMAP-002 — EXAMINE Command Not Supported
+1. How personal mailboxes are stored.
+2. How shared mailboxes are represented.
+3. How mailbox ownership is determined.
+4. How Full Access and delegated permissions are stored.
+5. How the web interface retrieves shared mailbox contents.
+6. Which application services or repositories the web interface uses.
+7. How the existing IMAP service resolves mailbox paths.
+8. How message UIDs, folder identifiers and UIDVALIDITY are generated.
+9. How authorization is enforced for mailbox operations.
+10. Whether shared mailbox functionality already exists in another application layer.
 
-**Observed response:**
+**Mandatory:** Reuse existing business logic, repositories and authorization services wherever practical. Do not create a separate shared mailbox permission system solely for IMAP.
 
-```
-IMAP EXAMINE failed:
-BAD Unsupported command EXAMINE
-```
+## 4. Shared Mailbox IMAP Implementation
 
-**Expected behavior:**
+### 4.1 Namespace design
 
-EXAMINE must allow a mailbox to be selected in read-only mode.
+Implement a documented namespace that distinguishes personal and shared mailboxes.
 
-Example:
+Suggested structure:
 
 ```
-C002 EXAMINE "INBOX"
-* 15 EXISTS
-* FLAGS (\Seen \Answered \Flagged \Deleted \Draft)
-C002 OK [READ-ONLY] EXAMINE completed
+INBOX
+Sent
+Drafts
+Archive
+Junk
+Trash
+
+Shared/alerts/INBOX
+Shared/alerts/Sent
+
+Shared/flows/INBOX
+Shared/flows/Sent
+
+Shared/owner/INBOX
+Shared/owner/Sent
+
+Shared/sales/INBOX
+Shared/sales/Sent
+Shared/sales/Drafts
+Shared/sales/Archive
+Shared/sales/Junk
+Shared/sales/Trash
 ```
 
-**Required correction:**
+These are proposed IMAP paths. The development agent may choose a more appropriate convention based on existing architecture and standards.
 
-- Implement EXAMINE using the existing mailbox selection logic where appropriate.
-- Maintain read-only mailbox state.
-- Reject subsequent operations that would modify mailbox state.
-- Include the appropriate READ-ONLY response code.
-- Ensure messages are not marked as read by read-only retrieval operations.
+The design must document how shared mailbox addresses map to IMAP paths, including potential naming collisions and renames.
 
-## 6. Defect IMAP-003 — SEARCH Command Not Supported
+### 4.2 Required behavior
 
-**Observed response:**
+The implementation must support:
 
-```
-IMAP SEARCH failed:
-BAD Unsupported command SEARCH
-```
+- Discovery of authorized shared mailboxes.
+- Listing folders inside a shared mailbox.
+- Selecting personal and shared folders.
+- Reading messages from shared folders.
+- Searching messages in shared folders.
+- Copying and moving messages where authorized.
+- Managing flags and read/unread state.
+- Folder creation, renaming and deletion where authorized.
+- Message append and expunge where authorized.
+- Correct permission enforcement on every operation.
+- Multiple users accessing the same shared mailbox.
+- Consistent visibility between web and IMAP clients.
 
-The error was reproduced after a successful SELECT operation.
+### 4.3 Authorization
 
-**Expected behavior:**
+Every mailbox operation must validate the authenticated user's effective permissions.
 
-A valid SEARCH request must return matching message sequence numbers.
+Access must not depend exclusively on whether a mailbox appears in a `LIST` response.
 
-Example:
+Explicitly prevent:
 
-```
-C003 SEARCH ALL
-* SEARCH 1 2 3 4 5
-C003 OK SEARCH completed
-```
+- Unauthorized SELECT requests.
+- Unauthorized UID FETCH requests.
+- Cross-mailbox message disclosure.
+- Access through crafted mailbox paths.
+- Bypassing permission checks through renamed folders.
+- Unauthorized modifications or deletion.
+- Permission escalation through IMAP commands.
 
-**Required correction:**
+Revoking Full Access must prevent subsequent unauthorized operations, including those attempted over an already established IMAP session according to the documented authorization-refresh behavior.
 
-Implement and validate standard IMAP4rev1 search behavior, including:
+### 4.4 Shared mailbox identity
 
-- ALL
-- SEEN / UNSEEN
-- FROM
-- TO
-- SUBJECT
-- SINCE / BEFORE
-- UID
-- Compound search criteria
+The IMAP implementation must distinguish:
 
-The implementation must correctly distinguish message sequence numbers from message UIDs.
+**Authenticated identity:** [`cristobal@miautrix.tech`](mailto:cristobal@miautrix.tech)
 
-Unsupported or malformed search criteria must return appropriate protocol errors rather than incorrect results.
+**Selected mailbox owner:** [`sales@miautrix.tech`](mailto:sales@miautrix.tech)
 
-## 7. Defect IMAP-004 — Malformed FETCH Response
+**Selected folder:** sales mailbox Inbox
 
-**Severity:** Critical for message retrieval.
+The `INBOX` alias must resolve consistently to the authenticated user's personal inbox unless the server explicitly documents another supported selection mechanism.
+
+Simply changing an email address in a client configuration must not silently redirect access to a different mailbox.
 
-**Observed result:**
+## 5. Comprehensive IMAP Standards Audit
 
-```
-FETCH => unexpected response:
-b'Received: from hosting.miautrix.local (38.59.164.121)'
-```
+Perform a complete review against the applicable IMAP RFC specifications.
 
-A subsequent response produced:
+### Primary references
 
-```
-unexpected response:
-b'by cloudflare-email.net (cloudflare) ...'
-```
+- RFC 9051 — IMAP4rev2
+- RFC 3501 — IMAP4rev1
+- RFC 5322 — Internet Message Format
+- RFC 2045–2049 — MIME
+- RFC 4314 — IMAP ACL extension, if supported
+- RFC 6154 — Special-Use Mailboxes, if supported
+- RFC 8314 — TLS requirements for email access
+
+Review additional RFCs required by the capabilities currently advertised or selected for implementation.
 
-The Python IMAP parser aborted after encountering unexpected raw email header content.
+**Protocol compatibility policy:** Determine which protocol versions the server currently claims to support. Fully implement the mandatory features of every advertised version, or correct the advertised capabilities. Do not advertise optional extensions without implementing their required behavior.
 
-Himalaya also reported:
+### 5.1 Connection and authentication
 
-```
-IMAP FETCH failed:
-Decode IMAP response error
-```
+Audit:
 
-### Suspected Root Cause
+- CAPABILITY
+- NOOP
+- LOGOUT
+- LOGIN
+- AUTHENTICATE, where advertised
+- STARTTLS, where supported
+- TLS certificate handling
+- Authentication failures
+- Command state transitions
+- Tagged and untagged responses
+- Multiple commands per connection
+- Session timeouts
+- Malformed command handling
+
+### 5.2 Mailbox management
+
+Audit all applicable mailbox operations:
 
-The server may be returning message header data without correctly framing the response as an IMAP FETCH literal.
+- LIST
+- LSUB, where applicable
+- SELECT
+- EXAMINE
+- STATUS
+- CREATE
+- DELETE
+- RENAME
+- SUBSCRIBE
+- UNSUBSCRIBE
+- APPEND
+- CLOSE
+- CHECK
+- UNSELECT, where supported
+- NAMESPACE, where supported or required
+
+Verify personal and shared mailbox behavior independently.
+
+### 5.3 Message retrieval
+
+Audit:
+
+- FETCH
+- UID FETCH
+- RFC822.SIZE
+- FLAGS
+- INTERNALDATE
+- ENVELOPE
+- BODY
+- BODYSTRUCTURE
+- BODY[]
+- BODY.PEEK[]
+- BODY[HEADER]
+- BODY[TEXT]
+- BODY section selectors
+- Partial message retrieval
+- MIME multipart messages
+- Attachments
+- Message literals and binary-safe retrieval
+
+A complete message must be returned with correct literal framing and byte lengths.
+
+### 5.4 Message operations
+
+Audit:
+
+- SEARCH
+- UID SEARCH
+- STORE
+- UID STORE
+- COPY
+- UID COPY
+- EXPUNGE
+- UID EXPUNGE, where supported
+- MOVE and UID MOVE, where supported
+- Message flags and keywords
+- Permanent flag behavior
+- Deleted-message handling
+
+### 5.5 UID handling
+
+Verify:
+
+- UID uniqueness within each mailbox.
+- UID persistence across sessions.
+- Correct UIDVALIDITY behavior.
+- Correct UIDNEXT behavior.
+- Message sequence numbers versus UIDs.
+- UID behavior after deletions.
+- UID behavior after moving or copying.
+- UID behavior in shared mailboxes.
+- Concurrent access consistency.
+
+Never return UID zero for a valid assigned message.
+
+### 5.6 Response correctness
+
+Review all response serialization code for:
+
+- Correct tagged completion responses.
+- Correct OK, NO and BAD usage.
+- Correct IMAP string escaping.
+- Correct NIL handling.
+- Correct parentheses and nested structures.
+- Correct literal byte lengths.
+- Correct ENVELOPE formatting.
+- UTF-8 and encoded headers.
+- RFC 5322 parsing.
+- CRLF framing.
+- Proper handling of empty mailboxes.
+- Proper handling of malformed messages.
+- Unexpected null values and storage errors.
+
+Avoid returning generic `BAD Internal server error` for server-side defects without logging the underlying exception. Use protocol-appropriate error responses and preserve session synchronization.
+
+## 6. Previously Discovered Defects
+
+Ensure these historical defects have regression tests.
+
+
+| ID       | Defect                                             |
+| -------- | -------------------------------------------------- |
+| IMAP-001 | LIST command unsupported or incomplete             |
+| IMAP-002 | EXAMINE command unsupported                        |
+| IMAP-003 | SEARCH command unsupported                         |
+| IMAP-004 | Incorrect FETCH response framing                   |
+| IMAP-005 | Incomplete protocol compatibility                  |
+| IMAP-006 | Invalid message UID values                         |
+| IMAP-007 | ENVELOPE serialization fails for certain messages  |
+| IMAP-008 | RFC822.SIZE differs from returned message content  |
+| IMAP-009 | Shared mailboxes are not discoverable through IMAP |
+
+
+Historical corrections must not regress when new functionality is introduced.
 
-This is a hypothesis based on observed client errors. The actual server response serializer must be inspected to establish the root cause.
+## 7. Required Integration Testing
 
-### Expected IMAP Response Structure
+Unit tests alone are insufficient.
 
-A valid response using a literal must follow the IMAP protocol framing rules:
+### 7.1 External clients
 
-```
-* 1 FETCH (UID 123 BODY[HEADER] {<byte-count>}
-<exact header bytes>
-)
-C004 OK FETCH completed
-```
+Use real IMAP connections to validate behavior with:
 
-The placeholder `<byte-count>` represents the exact byte length of the returned literal.
+1. Python `imaplib`
+2. Himalaya CLI
+3. Mozilla Thunderbird
+4. An additional compatible IMAP client or independent protocol test suite, where practical
 
-### Required Correction
+Tests must run against a deployed server instance, not exclusively mocked services.
 
-Inspect and correct:
+### 7.2 Shared mailbox test matrix
 
-1. FETCH command parsing and message data retrieval.
-2. Literal length calculation using byte counts rather than character counts.
-3. Correct placement of CRLF delimiters.
-4. Correct response parentheses and tagged completion.
-5. Handling of multiline email headers.
-6. Header folding and MIME message content.
-7. Support for BODY.PEEK without implicitly setting the Seen flag.
-8. Handling of multiple FETCH data items in one request.
-9. UID-based retrieval.
-10. Correct protocol stream synchronization following FETCH.
 
-The server must never expose raw message lines outside the framing expected by the IMAP protocol.
+| Test      | Personal         | Sales shared     | Other authorized shared | Unauthorized shared            |
+| --------- | ---------------- | ---------------- | ----------------------- | ------------------------------ |
+| LIST      | PASS             | PASS             | PASS                    | Not disclosed unless permitted |
+| SELECT    | PASS             | PASS             | PASS                    | Denied                         |
+| FETCH     | PASS             | PASS             | PASS                    | Denied                         |
+| SEARCH    | PASS             | PASS             | PASS                    | Denied                         |
+| STORE     | Permission-based | Permission-based | Permission-based        | Denied                         |
+| COPY/MOVE | Permission-based | Permission-based | Permission-based        | Denied                         |
+| APPEND    | Permission-based | Permission-based | Permission-based        | Denied                         |
+| EXPUNGE   | Permission-based | Permission-based | Permission-based        | Denied                         |
 
-## 8. Defect IMAP-005 — Protocol Compliance Review
 
-The server currently advertises:
+All tests must validate actual mailbox ownership, not simply successful command responses.
 
-```
-IMAP4REV1 AUTH=PLAIN SASL-IR LITERAL+ ENABLE
-```
+### 7.3 Message compatibility cases
 
-However, mandatory IMAP4rev1 functionality is incomplete or failing.
+Test at minimum:
 
-**Required action:**
+- Empty inbox.
+- Single message.
+- Large mailbox.
+- Plain-text email.
+- HTML email.
+- Multipart MIME email.
+- Email with attachments.
+- Unicode subject.
+- Internationalized sender display name.
+- Missing optional headers.
+- Folded headers.
+- Malformed header values.
+- Zero-byte or inaccessible stored message.
+- Large message.
+- Multiple concurrent FETCH operations.
+- Multiple clients accessing the same shared mailbox.
+- Message deletion during another client's session.
+- Invalid or revoked mailbox permissions.
 
-Conduct an IMAP protocol compliance review against RFC 3501.
+### 7.4 Concurrency and reliability
 
-Verify that advertised capabilities match implemented behavior.
+Validate:
 
-Particular attention should be given to command dispatch, state transitions, mailbox selection, message retrieval, UID handling, response formatting, and authentication.
+- Simultaneous sessions from the same account.
+- Multiple delegates accessing one shared mailbox.
+- Consistent UID mapping across sessions.
+- Flag updates across clients.
+- Folder updates and message movement.
+- Reconnection after network interruption.
+- Server restart while clients are connected.
+- No message corruption or loss.
+- No unauthorized data exposure.
 
-Do not simply suppress unsupported command errors or modify the capability advertisement as a substitute for implementing required IMAP4rev1 functionality.
+## 8. Capability and Feature Matrix
 
-## 9. Regression and Compatibility Testing
+The agent must generate a complete protocol coverage report.
 
-The development agent must create automated tests covering:
+For every applicable IMAP command, response, feature and extension, record:
 
-- Successful and failed authentication.
-- CAPABILITY response.
-- LIST with mailbox patterns.
-- SELECT and EXAMINE.
-- SEARCH with standard criteria.
-- FETCH with plain text, MIME, attachments, and folded headers.
-- FETCH with Unicode and long headers.
-- BODY.PEEK behavior.
-- Message flags and read-only restrictions.
-- UID stability and message sequence numbering.
-- Empty mailboxes and nonexistent messages.
-- Repeated commands within a persistent IMAP connection.
-- LOGOUT after successful and unsuccessful operations.
-- Concurrent access by multiple clients.
 
-Tests should use actual IMAP protocol clients wherever possible, not only direct calls to internal server methods.
+| Field             | Description                                               |
+| ----------------- | --------------------------------------------------------- |
+| Feature           | Command or protocol capability                            |
+| Applicable RFC    | Specification reference                                   |
+| Requirement level | Mandatory, conditional or optional for advertised version |
+| Current status    | Implemented, partial, missing, not applicable             |
+| Test coverage     | Unit, integration and external client                     |
+| Result            | PASS, FAIL, BLOCKED                                       |
+| Action            | Required correction or documented limitation              |
 
-## 10. Required External Validation
 
-After implementing corrections, execute the following Python tests against the running server:
+Every capability advertised in the IMAP CAPABILITY response must have corresponding passing compatibility tests.
 
-```
-import imaplib
-import ssl
+If a feature is intentionally unsupported, document that decision and verify that capability advertising and error handling remain standards-compliant.
 
-with imaplib.IMAP4_SSL(
-    "mail.miautrix.tech",
-    993,
-    ssl_context=ssl.create_default_context()
-) as imap:
+## 9. Deliverables
 
-    imap.login(USERNAME, PASSWORD)
+The development agent must produce:
 
-    print(imap.capabilities)
-    print(imap.list())
-    print(imap.select("INBOX", readonly=True))
-    print(imap.search(None, "ALL"))
-    print(imap.fetch("1", "(UID FLAGS BODY.PEEK[HEADER])"))
-    print(imap.logout())
-```
+**A. Architecture Review**
 
-The credentials must be supplied securely, never embedded directly in committed source code.
+Existing mailbox architecture, delegated access design and reusable services.
 
-Additional external validation:
+**B. IMAP Compliance Matrix**
 
-```
-himalaya --account miautrix-sales mailbox list
+Complete comparison against the applicable protocol specifications.
 
-himalaya --account miautrix-sales envelope list
-```
+**C. Gap Analysis**
 
-Both operations must succeed without protocol parsing errors.
+Every missing, partial or defective feature, classified by severity.
 
-## 11. Acceptance Criteria
+**D. Implementation**
 
-The corrective task can be considered complete only when:
+Corrected IMAP server with shared mailbox access and required protocol fixes.
 
-- LIST is implemented and returns compliant responses.
-- EXAMINE works and enforces read-only behavior.
-- SEARCH supports the required standard criteria.
-- FETCH returns correctly framed message data.
-- Standard Python imaplib tests pass.
-- Himalaya mailbox listing succeeds.
-- Himalaya envelope listing succeeds.
-- Existing IMAP authentication remains functional.
-- SMTP submission and message delivery remain unaffected.
-- Automated regression tests are added.
-- No security regression is introduced.
-- External client test evidence is documented.
+**E. Automated Test Suite**
 
-## 12. Instructions to Development Agent
+Unit tests, protocol tests and integration tests covering personal and shared mailbox operations.
 
-Review the existing Miautrix Mail Server architecture and identify the modules responsible for IMAP command parsing, mailbox operations, FETCH serialization and command response handling.
+**F. External Client Validation**
 
-Correct the underlying protocol defects rather than implementing client-specific workarounds.
+Evidence of successful tests using Himalaya, Python and Thunderbird, including any environmental blockers.
 
-Preserve the existing authentication architecture, including support for mailbox access using authenticated identities that may differ from the mailbox email address.
+**G. Technical Documentation**
 
-Follow this workflow:
+Document:
 
-**Code Review → Root Cause Analysis → Corrective Implementation → Unit Tests → Integration Tests → External Client Validation → Regression Review**
+- Supported IMAP versions and capabilities.
+- Shared mailbox namespace.
+- Authentication and delegated authorization.
+- Shared folder selection.
+- Known limitations.
+- Configuration examples.
+- Troubleshooting procedures.
 
-Do not mark the task completed until the external Python and Himalaya compatibility tests pass against a running instance of the corrected server.
+**H. Final Validation Report**
 
-**Reference:** RFC 3501 — Internet Message Access Protocol, Version 4rev1.
+Include test results, remaining defects, regression status and objective evidence of completion.
 
-## Resolution — Version 2.0 implementation status
+## 10. Acceptance Criteria
 
-This section records code changes in the current branch and remaining acceptance work. It does not claim full RFC 3501 compliance.
+The task cannot be marked complete until:
 
-| Defect | Change made | Tests and remaining validation |
-|---|---|---|
-| IMAP-001 LIST/LSUB | Added reference handling, `/` hierarchy paths from `ParentId`, `*` and `%` matching, child attributes, special-use roles, and non-persistent SUBSCRIBE/UNSUBSCRIBE acknowledgements. | The compile-only listener/MailKit test now exercises LIST patterns and LSUB. LSUB consistently returns the available set because subscriptions are not stored. |
-| IMAP-002 SELECT/EXAMINE | Added UID-ordered sequence snapshots, real first-unseen sequence reporting, `RECENT 0`, UID metadata and read-only permanent flags. | The compile-only test exercises EXAMINE, SELECT, first unseen, read-only STORE rejection, and CHECK; no DB protocol run was performed. |
-| IMAP-003 SEARCH | Added parser/evaluator for standard flag, address, text, date, size, UID and sequence criteria, boolean groups, NOT/OR, and UTF-8/US-ASCII charset handling. UID SEARCH returns UIDs. | The compile-only listener/MailKit test now includes a broad criteria matrix and error responses. Database execution and external-client validation remain outstanding. |
-| IMAP-004 FETCH | Added sequence sets/ranges, requested-item parsing, multi-message segmented output, exact byte literal framing, sections, partial ranges, PEEK handling, FLAGS/UID/INTERNALDATE/SIZE, ENVELOPE and BODYSTRUCTURE formatting through MimeKit, including `message/rfc822`. | Unit and compile-only listener tests cover exact header framing, ranged UID fetch, PEEK/Seen behavior, envelope, body structure, Unicode/folded/long headers and an attachment. Exhaustive MIME part/partial combinations remain open. |
-| IMAP-005 commands and state | Added state availability checks, AUTHENTICATE PLAIN (initial response and continuation), ENABLE, STATUS, STORE, COPY, EXPUNGE/UID EXPUNGE, CLOSE, UNSELECT, CREATE/DELETE/RENAME via application services, and matching advertised capabilities. INBOX rename returns `NO [CANNOT]`. | `CLOSE` expunge semantics and all mandatory RFC command response codes require review; no external client validation has run. |
-| D1/D3 parser and literals | Byte-oriented buffered reader shares line/literal buffer; tokenizer handles quoted escapes, parenthesized lists and literal placeholders; collector handles multiple `{n}`/`{n+}` literals and suppresses continuations for LITERAL+. | MemoryStream tests cover buffered line/literal framing, bounds, multiple literals and tagged overlong-line errors; listener protocol suite compiles but was not run. |
-| D2/D4/D5 response and logging | Response segments preserve exact binary lengths and multiple literals; LOGIN and APPEND use token parsing; error logging records only command name, tag and exception type and produces a tagged response. | Exact report sequence with BODY.PEEK[HEADER] framing is covered by local session and TLS listener tests; the TLS test is compile-only here. |
-| R1/R2 FETCH syntax | Corrected the post-literal separator to exactly one SP, associate partial ranges with their source request item, and reject sectionless `BODY.PEEK`. | Unit tests assert exact `FETCH 1 (BODY.PEEK[HEADER] FLAGS UID)` bytes and ensure `BODY[]<0.10>` does not truncate `BODY[HEADER]`. |
-| R3 authorization and read-only delegates | SELECT probes write authorization and selects read-only when only read access is available; authorization denials in mailbox service paths map to `NO`. | Unit fake-helper test confirms a non-PEEK fetch succeeds without changing Seen for a read-only delegate. DB delegate scenarios remain compile-only. |
-| R4 oversized literals | Oversized `{n+}` receives `* BYE Literal too large` and closes; oversized synchronising `{n}` receives tagged `NO [TOOBIG]` without continuation. | MemoryStream unit tests cover both outcomes and synchronization. |
-| R5 fetch/database efficiency | Raw content is opened only for items that require it; sequence operations project required metadata rather than message body fields. | Build and unit tests passed; DB-backed performance behavior is not benchmarked. |
-| R6 dead authentication path | Removed unused `AuthenticateAsMailboxAsync` path that installed an empty user identity. | Solution build and unit tests passed. |
-| D7 tenant authorization | IMAP session invokes `ITenantAuthorizationHelper.AssertMailboxAccess` for mailbox operations using authenticated `UserId`; `IImapAuthenticator` returns that ID. Application services authorize folder creation/deletion/rename, flag changes, copy and expunge-to-trash semantics. | Shared-mailbox authorization behavior requires DB protocol tests; do not claim deployment validation. |
+1. All four authorized shared mailboxes are discoverable using the documented IMAP mechanism.
+2. The sales shared mailbox can be selected and read without accessing the personal mailbox.
+3. Full Access permissions work consistently with existing application authorization rules.
+4. Unauthorized users cannot access shared mailbox contents.
+5. Applicable mandatory IMAP functionality is implemented and tested.
+6. Advertised optional capabilities are functional.
+7. All historical IMAP defects have passing regression tests.
+8. Standard clients can list folders, list messages, retrieve complete messages and perform authorized operations.
+9. UID behavior remains stable and compliant.
+10. Shared mailbox operations remain safe during concurrent access.
+11. No message loss, mailbox data corruption or security regression is observed.
+12. Documentation and the compliance matrix are complete.
 
-Unit coverage now includes tokenizer quoting/literals, MemoryStream line/literal buffering and bounds, byte-count framing with Unicode/folded headers, sequence sets, SEARCH and FETCH parsers, state transitions, MimeKit envelope/body structure including `message/rfc822`, and folder rename. Latest local results: solution build 0 warnings/0 errors, UnitTests 70 passed, SecurityTests 6 passed, webmail tests 15 passed, and webmail build passed. A local raw-socket harness runs against the session engine and checks the report command sequence and exact FETCH header literal bytes. The TLS in-process listener/MailKit protocol suite is authored and compiles, but was not run because Docker/test DB is unavailable; the full RFC matrix and shared-mailbox database authorization validation remain open. External validation still required: run `scripts/imap-external-validation.py` with `MIAUTRIX_IMAP_HOST`, `MIAUTRIX_IMAP_USER`, and `MIAUTRIX_IMAP_PASSWORD`, then run Himalaya mailbox and envelope listing against an approved non-production server. No external validation is claimed.
+## 11. Implementation Instructions
 
+Work in this order:
+
+**Phase 1 — Discovery and audit**
+
+Review source code, architecture, existing tests, RFC requirements and advertised IMAP capabilities.
+
+**Phase 2 — Gap analysis**
+
+Identify all incomplete and noncompliant behavior before implementing isolated fixes.
+
+**Phase 3 — Architecture design**
+
+Define shared namespace, permissions, mailbox routing and message ownership.
+
+**Phase 4 — Implementation**
+
+Implement shared mailbox access and correct protocol defects.
+
+**Phase 5 — Automated verification**
+
+Run comprehensive protocol, security and regression tests.
+
+**Phase 6 — External interoperability validation**
+
+Test with real clients and confirm actual mailbox contents.
+
+**Phase 7 — Final report**
+
+Provide objective evidence, compliance status and remaining limitations.
+
+### Mandatory development rule
+
+Do not declare a feature complete merely because a command returns `OK`.
+
+Verify that the response is correctly formatted, represents the intended data, satisfies applicable RFC requirements and behaves correctly in an independent client.
+
+**Do not report the IMAP implementation as fully compliant unless the claimed protocol version and advertised capabilities have been validated.**
+
+The goal is a reliable, reusable IMAP implementation—not another series of individual fixes discovered during production testing.

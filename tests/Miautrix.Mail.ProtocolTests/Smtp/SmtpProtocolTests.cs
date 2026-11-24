@@ -1,4 +1,5 @@
 using Miautrix.Mail.Domain;
+using Miautrix.Mail.Application.Mail;
 using Miautrix.Mail.Protocols.Smtp;
 using Miautrix.Mail.Queue;
 using Xunit;
@@ -8,6 +9,13 @@ namespace Miautrix.Mail.ProtocolTests.Smtp;
 [Trait("Category", "Smtp")]
 public class SmtpProtocolTests
 {
+    private sealed class AllowSenderAuthorization : ISenderAuthorizationService
+    {
+        public Task<bool> IsEnvelopeSenderAllowedAsync(Guid tenantId, Guid userId, string sender, CancellationToken ct = default) => Task.FromResult(true);
+        public Task<bool> HasSharedMailboxSendPermissionAsync(Guid tenantId, Guid userId, Guid mailboxId, CancellationToken ct = default) => Task.FromResult(true);
+        public Task<SenderAuthorizationResult> AuthorizeMessageAsync(Guid tenantId, Guid userId, string envelopeSender, string rawMessage, CancellationToken ct = default) => Task.FromResult(new SenderAuthorizationResult(true, envelopeSender, rawMessage));
+        public Task<SenderAuthorizationResult> AuthorizeWebmailAsync(Guid tenantId, Guid userId, string requestedFrom, string rawMessage, CancellationToken ct = default) => Task.FromResult(new SenderAuthorizationResult(true, requestedFrom, rawMessage));
+    }
     private class MockSmtpQueueManager : ISmtpQueueManager
     {
         public List<SmtpQueueItem> EnqueuedItems { get; } = new();
@@ -179,13 +187,14 @@ public class SmtpProtocolTests
         var userId = Guid.NewGuid();
         var auth = new MockAuthenticator(tenantId, userId);
         var queueManager = new MockSmtpQueueManager();
-        var submissionHandler = new SmtpSubmissionHandler(auth, queueManager);
+        var submissionHandler = new SmtpSubmissionHandler(auth, queueManager, new AllowSenderAuthorization());
 
         // ACT: Unauthenticated client attempts submission on 587
         var (response, queueItem) = await submissionHandler.HandleSubmissionAsync(
             isAuthenticated: false,
             isTlsEncrypted: true,
             tenantId: null,
+            userId: null,
             sender: "user@local.org",
             recipient: "recipient@remote.com",
             rawMessage: "Test payload");
@@ -207,7 +216,7 @@ public class SmtpProtocolTests
         var userId = Guid.NewGuid();
         var auth = new MockAuthenticator(tenantId, userId);
         var queueManager = new MockSmtpQueueManager();
-        var submissionHandler = new SmtpSubmissionHandler(auth, queueManager);
+        var submissionHandler = new SmtpSubmissionHandler(auth, queueManager, new AllowSenderAuthorization());
 
         // ACT: Client attempts AUTH over unencrypted connection
         var authResponse = submissionHandler.HandleAuth(

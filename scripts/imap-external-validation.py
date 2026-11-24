@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""External IMAP compliance probe for the IMAP Report defects (IMAP-001..005).
+"""External IMAP compatibility probe, including an optional delegated mailbox.
 
 Host and credentials come from the environment, never from argv:
   MIAUTRIX_IMAP_HOST      hostname that mail clients use (certificate must match)
   MIAUTRIX_IMAP_USER      mailbox address
   MIAUTRIX_IMAP_PASSWORD  mailbox password or application password
   MIAUTRIX_IMAP_INSECURE  optional; "1" skips certificate validation (testing by IP only)
+  MIAUTRIX_IMAP_SHARED_MAILBOX optional; full address to probe under Shared/<address>
 
 Read-only: it uses EXAMINE and BODY.PEEK, so no flags change. It prints counts,
 sizes and status only, never message contents.
@@ -70,7 +71,7 @@ with imaplib.IMAP4_SSL(host, 993, ssl_context=context) as client:
             if "RFC822.SIZE" in meta:
                 declared = int(meta.split("RFC822.SIZE")[1].split()[0].strip(")"))
         body_len = len(data[0][1]) if ok else 0
-        check("IMAP-004 FETCH full body framing", ok and (declared is None or declared == body_len),
+        check("IMAP-008 RFC822.SIZE equals BODY.PEEK[] octets", ok and declared is not None and declared == body_len,
               f"{body_len} bytes, RFC822.SIZE {declared}")
 
         last = ids[-1].decode() if ids else str(exists)
@@ -91,6 +92,37 @@ with imaplib.IMAP4_SSL(host, 993, ssl_context=context) as client:
 
     status, _ = client.close()
     check("CLOSE", status == "OK")
+
+    shared_address = os.environ.get("MIAUTRIX_IMAP_SHARED_MAILBOX")
+    if shared_address:
+        shared_prefix = f"Shared/{shared_address}"
+        status, folders = client.list('""', f'"{shared_prefix}/*"')
+        shared_names = [f.decode(errors="replace") for f in (folders or []) if f]
+        check("IMAP-009 authorized shared LIST", status == "OK" and bool(shared_names),
+              f"{len(shared_names)} folders for configured shared mailbox")
+        shared_inbox = f"{shared_prefix}/INBOX"
+        status, data = client.select(shared_inbox, readonly=True)
+        shared_count = int(data[0]) if status == "OK" and data and data[0] else 0
+        check("IMAP-009 shared EXAMINE", status == "OK", f"{shared_count} messages")
+        if status == "OK":
+            status, data = client.search(None, "ALL")
+            shared_ids = data[0].split() if status == "OK" and data and data[0] else []
+            check("IMAP-009 shared SEARCH", status == "OK", f"{len(shared_ids)} ids")
+            if shared_ids:
+                status, data = client.fetch("1", "(UID FLAGS RFC822.SIZE BODY.PEEK[])")
+                ok = status == "OK" and data and isinstance(data[0], tuple)
+                literal_len = len(data[0][1]) if ok else 0
+                declared = None
+                if ok:
+                    meta = data[0][0].decode(errors="replace")
+                    if "RFC822.SIZE" in meta:
+                        declared = int(meta.split("RFC822.SIZE", 1)[1].split()[0].strip(")"))
+                check("IMAP-009 shared FETCH literal and size", ok and declared == literal_len,
+                      f"{literal_len} bytes, RFC822.SIZE {declared}")
+            client.close()
+    else:
+        print("SKIP  IMAP-009 shared checks: MIAUTRIX_IMAP_SHARED_MAILBOX is unset")
+
     client.logout()
 
 print(f"\n{sum(results)}/{len(results)} checks passed")

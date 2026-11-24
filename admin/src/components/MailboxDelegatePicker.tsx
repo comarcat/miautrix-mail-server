@@ -32,12 +32,16 @@ export const MailboxDelegatePicker: React.FC<MailboxDelegatePickerProps> = ({
   const toggle = (userId: string) => {
     onChange(selected.some((delegate) => delegate.user_id === userId)
       ? selected.filter((delegate) => delegate.user_id !== userId)
-      : [...selected, { user_id: userId, access_level: 'read' }]);
+      : [...selected, { user_id: userId, access_level: 'read', can_send_as: false, can_send_on_behalf: false }]);
   };
 
   const setAccess = (userId: string, accessLevel: 'read' | 'write') => {
     onChange(selected.map((delegate) =>
-      delegate.user_id === userId ? { user_id: userId, access_level: accessLevel } : delegate));
+      delegate.user_id === userId ? { ...delegate, access_level: accessLevel } : delegate));
+  };
+
+  const setSenderPermission = (userId: string, permission: 'can_send_as' | 'can_send_on_behalf', value: boolean) => {
+    onChange(selected.map((delegate) => delegate.user_id === userId ? { ...delegate, [permission]: value } : delegate));
   };
 
   return (
@@ -57,6 +61,7 @@ export const MailboxDelegatePicker: React.FC<MailboxDelegatePickerProps> = ({
             />
             <span style={{ flex: 1 }}>{user.name} ({user.email})</span>
             {delegate && (
+              <>
               <select
                 className="input-select"
                 value={delegate.access_level}
@@ -66,6 +71,9 @@ export const MailboxDelegatePicker: React.FC<MailboxDelegatePickerProps> = ({
                 <option value="read">Read</option>
                 <option value="write">Read / Write</option>
               </select>
+              <label><input type="checkbox" checked={delegate.can_send_as ?? false} onChange={(e) => setSenderPermission(user.id, 'can_send_as', e.target.checked)} aria-label={`Send As ${user.email}`} /> Send As</label>
+              <label><input type="checkbox" checked={delegate.can_send_on_behalf ?? false} onChange={(e) => setSenderPermission(user.id, 'can_send_on_behalf', e.target.checked)} aria-label={`Send on Behalf ${user.email}`} /> Send on Behalf</label>
+              </>
             )}
           </div>
         );

@@ -127,7 +127,11 @@ public sealed class TenantAuthorizationHelper : ITenantAuthorizationHelper
         var access = mailbox.Kind.Equals("shared", StringComparison.OrdinalIgnoreCase)
             ? _permissionRepo.GetMailboxDelegateAccess(tenantId, userId, mailbox.Id)
             : null;
-        if (access is not null && (!requireWrite || access.Equals("write", StringComparison.OrdinalIgnoreCase)))
+        // Only explicit read/write mailbox delegation grants IMAP access. A delegate row
+        // carrying Send As or Send on Behalf alone must never imply mailbox visibility.
+        if (access is not null &&
+            (access.Equals("write", StringComparison.OrdinalIgnoreCase) ||
+             !requireWrite && access.Equals("read", StringComparison.OrdinalIgnoreCase)))
         {
             return;
         }

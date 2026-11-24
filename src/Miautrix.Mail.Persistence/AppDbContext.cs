@@ -212,6 +212,8 @@ public class AppDbContext : DbContext
             entity.Property(e => e.MailboxId).HasColumnName("mailbox_id");
             entity.Property(e => e.UserId).HasColumnName("user_id");
             entity.Property(e => e.AccessLevel).HasColumnName("access_level").IsRequired();
+            entity.Property(e => e.CanSendAs).HasColumnName("can_send_as").HasDefaultValue(false).IsRequired();
+            entity.Property(e => e.CanSendOnBehalf).HasColumnName("can_send_on_behalf").HasDefaultValue(false).IsRequired();
 
             entity.HasIndex(e => new { e.MailboxId, e.UserId })
                 .IsUnique()

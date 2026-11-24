@@ -97,11 +97,15 @@ export interface MailboxDelegate {
   email: string;
   name: string;
   access_level: 'read' | 'write';
+  can_send_as: boolean;
+  can_send_on_behalf: boolean;
 }
 
 export interface MailboxDelegateRequest {
   user_id: string;
   access_level: 'read' | 'write';
+  can_send_as?: boolean;
+  can_send_on_behalf?: boolean;
 }
 
 export interface SharedMailbox {

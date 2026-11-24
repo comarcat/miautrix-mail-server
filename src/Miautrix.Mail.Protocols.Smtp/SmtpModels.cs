@@ -9,6 +9,7 @@ public record SmtpResponse(int Code, string EnhancedCode, string Message)
     public static readonly SmtpResponse Ok = new(250, "2.0.0", "OK");
     public static readonly SmtpResponse Queued = new(250, "2.0.0", "Message accepted and queued");
     public static readonly SmtpResponse RelayAccessDenied = new(550, "5.7.1", "Relay access denied");
+    public static readonly SmtpResponse SenderRejected = new(550, "5.7.1", "Sender address is not authorized");
     public static readonly SmtpResponse AuthenticationRequired = new(530, "5.7.0", "Authentication required");
     public static readonly SmtpResponse EncryptionRequired = new(538, "5.7.11", "Encryption required for requested authentication mechanism");
     public static readonly SmtpResponse InvalidRecipient = new(550, "5.1.1", "User unknown");
