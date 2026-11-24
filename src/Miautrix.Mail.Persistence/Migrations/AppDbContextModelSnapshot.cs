@@ -1340,6 +1340,9 @@ namespace Miautrix.Mail.Persistence.Migrations
                         .HasColumnType("text")
                         .HasColumnName("subject");
 
+                    b.HasIndex("TenantId", "Direction", "Status", "NextAttemptAt")
+                        .HasDatabaseName("idx_smtp_queue_tenant_id_direction_status_next_attempt_at");
+
                     b.ToTable("smtp_queue", (string)null);
                 });
 

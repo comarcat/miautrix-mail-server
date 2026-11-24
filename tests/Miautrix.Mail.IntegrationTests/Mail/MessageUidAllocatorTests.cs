@@ -102,6 +102,8 @@ public sealed class MessageUidAllocatorTests : IClassFixture<UidPostgresFixture>
             ALTER TABLE smtp_queue ALTER COLUMN direction SET DEFAULT 'Inbound';
             DELETE FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261006120000_AddQueueDirection';
             INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion") VALUES ('20261005173819_AddSmtpQueueDirection', '10.0.4');
+            DROP TABLE flag_alert_configurations;
+            CREATE INDEX "IX_smtp_queue_tenant_id_direction_status_next_attempt_at" ON smtp_queue (tenant_id, direction, status, next_attempt_at);
             """);
 
         await migrator.MigrateAsync();
@@ -113,6 +115,9 @@ public sealed class MessageUidAllocatorTests : IClassFixture<UidPostgresFixture>
         var defaults = await db.Database.SqlQueryRaw<string>(
             "SELECT coalesce(column_default, '') AS \"Value\" FROM information_schema.columns WHERE table_name = 'smtp_queue' AND column_name = 'direction'").ToListAsync();
         Assert.Equal(string.Empty, Assert.Single(defaults));
+        var converged = await db.Database.SqlQueryRaw<string>(
+            "SELECT relname AS \"Value\" FROM pg_class WHERE relname IN ('flag_alert_configurations', 'idx_flag_alert_configurations_tenant_id', 'idx_smtp_queue_tenant_id_direction_status_next_attempt_at', 'IX_smtp_queue_tenant_id_direction_status_next_attempt_at') ORDER BY relname").ToListAsync();
+        Assert.Equal(new[] { "flag_alert_configurations", "idx_flag_alert_configurations_tenant_id", "idx_smtp_queue_tenant_id_direction_status_next_attempt_at" }, converged);
     }
 
     private static async Task<(Tenant Tenant, Mailbox Mailbox, Folder FirstFolder, Folder SecondFolder)> SeedFolderAsync(AppDbContext db)

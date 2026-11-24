@@ -15,6 +15,8 @@ $scriptFiles = @(
     @{ Path = 'scripts/lxc-prepare-storage.sh'; Language = 'bash' },
     @{ Path = 'scripts/cleanup-test-tenants.sh'; Language = 'bash' },
     @{ Path = 'scripts/db-inspect.sh'; Language = 'bash' },
+    @{ Path = 'scripts/db-schema-snapshot.sh'; Language = 'bash' },
+    @{ Path = 'scripts/db-schema-snapshot.sql'; Language = 'sql' },
     @{ Path = 'scripts/imap-external-validation.py'; Language = 'python' }
 )
 

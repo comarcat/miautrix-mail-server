@@ -917,3 +917,20 @@ The root `deploy.ps1` previously included a hardcoded production database passwo
 
   Fresh databases get the same shape as before. The new integration test `Migrations_apply_over_production_drift_from_superseded_queue_direction_migration` reproduces the production state and migrates through IMAP-006. No hand DDL and no manual history edits were made.
 - **Also:** the local `dotnet-ef` tool was updated from 10.0.11 to 10.0.15 to match the EF Core runtime packages. Manual §13 (drift) and §14 (database tests without Docker) were added.
+
+### 13.11 Fixed: production and dev schemas differed from a fresh install; DB tests found two release-blocking bugs (2026-11-24, Critical)
+
+- **How it was found:** the DB-backed tests were run on a throwaway PostgreSQL (TROUBLESHOOTING §14). The new read-only `scripts/db-schema-snapshot.sh` was used to compare production, dev and a freshly migrated database.
+- **Schema drift (production = dev):**
+  - Before the test run, production and dev were structurally identical.
+  - Both lacked `flag_alert_configurations`, although `UpdateFlagSystem` was recorded as applied. That migration was edited after it had been applied (`302e467`), so the flag-alert settings feature could not work.
+  - Both carried `IX_smtp_queue_tenant_id_direction_status_next_attempt_at`, left by the superseded `AddSmtpQueueDirection`. Fresh installs lacked it.
+- **Fix:** the new idempotent migration `20261124191829_ConvergeProductionSchemaDrift`:
+  - creates the table and its index if missing;
+  - renames the queue index to the `idx_` convention, or creates it;
+  - the index is now declared in the model.
+
+  After migrating, dev's snapshot equals a fresh install's (only the legacy history row differs). The drift regression test covers this migration as well.
+- **Bug 1, `MessageUidAllocator`:** it composed `SingleOrDefault` over the non-composable `UPDATE … RETURNING` query, which throws at run time on PostgreSQL. Every delivery would have failed after the IMAP-006 deploy. It now materialises the result.
+- **Bug 2, `ImapSession`:** the session keeps one DbContext per connection, so folders came from the change tracker and UIDNEXT/UIDVALIDITY went stale for long-lived clients. The selected folder is now reloaded.
+- **Process note:** the IntegrationTests module initializer migrates `MIAUTRIX_DB_CONNECTION` at start-up, so the test run applied the pending migrations to `miautrix-mail-dev` (and renumbered its UIDs). That database must therefore be a test database.

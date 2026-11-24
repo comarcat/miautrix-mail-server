@@ -354,6 +354,16 @@ Remove-Item Env:MIAUTRIX_DB_CONNECTION
 
 Drift exists when the database history contains an ID the repository no longer has, or when an object a pending migration creates is already present. Review `artifacts/pending.sql` to see exactly what will run.
 
+To compare whole schemas, take a read-only structural fingerprint of each database. It lists migrations, columns, constraints, indexes, sequences, views, functions and triggers, with no row data and no credentials, and psql never prompts:
+
+```powershell
+scp scripts\db-schema-snapshot.sh scripts\db-schema-snapshot.sql root@10.11.1.51:/tmp/
+ssh root@10.11.1.51 'bash /tmp/db-schema-snapshot.sh > /tmp/schema-pro.txt; echo "exit=$?"; wc -l /tmp/schema-pro.txt'
+scp root@10.11.1.51:/tmp/schema-pro.txt artifacts\schema-pro.txt
+```
+
+Use `--env-file <path>` for another database (for example dev). Build the fresh-install reference by migrating an empty throwaway database (§14). Compare the files with `LC_ALL=C sort` and `diff` after stripping CR line endings. On 2026-11-24 this found `flag_alert_configurations` missing on production and dev, and a legacy queue index (ERRORS §13.11).
+
 **Fix.** Converge through a migration, never with hand DDL (CLAUDE.md: "Nothing else issues DDL") and never by inserting history rows by hand. Make the affected migration idempotent (`ADD COLUMN IF NOT EXISTS`, `DROP CONSTRAINT IF EXISTS` then `ADD CONSTRAINT`, normalise defaults/nullability) so it produces the fresh-install shape on both kinds of database, add an integration test that reproduces the drifted state (see `Migrations_apply_over_production_drift_from_superseded_queue_direction_migration`), run the database tests (§14), commit, then re-run `scripts\deploy-release.ps1 -DryRun -RunMigrations` and the real deploy. For the 2026-11-24 incident this is `20261006120000_AddQueueDirection`: it now keeps the existing column, drops the old `DEFAULT 'Inbound'`, and adds `ck_smtp_queue_direction`; production data (`Inbound`/`Outbound` only) satisfies the constraint.
 
 **Verify.** Re-run `db-inspect.sh`: the newest history rows include the repository's latest migration IDs, the constraint is listed, `column_default` is `<none>`, and after IMAP-006 `uid_zero` is 0 with `ck_messages_uid_positive` and `uq_messages_folder_id_uid` present. Then run `scripts\deploy-release.ps1 -Status`.
@@ -1317,6 +1327,100 @@ UNION ALL SELECT indexname FROM pg_indexes WHERE indexname = 'uq_messages_folder
 \echo '== message UID summary =='
 SELECT count(*) AS messages, count(*) FILTER (WHERE uid = 0) AS uid_zero, count(DISTINCT folder_id) AS folders FROM messages;
 SQL
+````
+
+### `scripts/db-schema-snapshot.sh`
+
+SHA-256: `bc070aa097ea157944fef8d2411073a0e6215a1a146a9d37640f73e814312346`
+
+``bash
+#!/usr/bin/env bash
+# Read-only schema fingerprint of the database in /opt/miautrix-mail/.env (or --env-file <file>).
+# Prints one sorted line per migration/column/constraint/index; no row data, no credentials.
+# Never prompts for a password (psql -w): a parsing problem fails instead of echoing input.
+# Usage (app server, root): bash db-schema-snapshot.sh [--env-file <path>] > /tmp/schema-<name>.txt
+# Needs db-schema-snapshot.sql next to it. Compare two outputs with: diff -u a.txt b.txt
+set -Eeuo pipefail
+ENV_FILE=${MIAUTRIX_ROOT:-/opt/miautrix-mail}/.env
+[[ ${1:-} == --env-file ]] && ENV_FILE=${2:?--env-file needs a path}
+SQL="$(dirname "$0")/db-schema-snapshot.sql"
+die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+command -v psql >/dev/null || die 'psql is required (apt install postgresql-client-18)'
+[[ -f "$SQL" ]] || die "missing $SQL"
+[[ -f "$ENV_FILE" ]] || die "missing $ENV_FILE"
+connection_value() {
+  local input=$1 wanted=$2 key value rest quote ch
+  while [[ -n "$input" ]]; do
+    key=${input%%=*}; [[ "$input" == *=* ]] || break; rest=${input#*=}; value=; quote=
+    while [[ -n "$rest" ]]; do
+      ch=${rest:0:1}; rest=${rest:1}
+      if [[ -n "$quote" ]]; then if [[ "$ch" == "$quote" ]]; then quote=; else value+=$ch; fi
+      elif [[ "$ch" == "'" || "$ch" == '"' ]]; then quote=$ch
+      elif [[ "$ch" == ';' ]]; then break
+      else value+=$ch; fi
+    done
+    key=$(printf '%s' "$key" | tr '[:upper:]' '[:lower:]' | tr -d ' ')
+    case "$key" in
+      host|server) [[ "$wanted" == host ]] && { printf '%s' "$value"; return 0; };;
+      port) [[ "$wanted" == port ]] && { printf '%s' "$value"; return 0; };;
+      database) [[ "$wanted" == database ]] && { printf '%s' "$value"; return 0; };;
+      username|userid|user_id) [[ "$wanted" == username ]] && { printf '%s' "$value"; return 0; };;
+      password) [[ "$wanted" == password ]] && { printf '%s' "$value"; return 0; };;
+    esac
+    input=$rest
+  done
+  return 1
+}
+pgpass_escape() { local v=$1; v=${v//\\/\\\\}; v=${v//:/\\:}; printf '%s' "$v"; }
+line=$(sed -nE 's/^MIAUTRIX_DB_CONNECTION=(.*)$/\1/p' "$ENV_FILE" | tail -n1 | tr -d '\r')
+line=${line#\"}; line=${line%\"}; line=${line#\'}; line=${line%\'}
+[[ -n "$line" ]] || die 'MIAUTRIX_DB_CONNECTION is missing'
+DB_HOST=$(connection_value "$line" host) || die 'Host missing'
+DB_PORT=$(connection_value "$line" port || printf '5432')
+DB_NAME=$(connection_value "$line" database) || die 'Database missing'
+DB_USER=$(connection_value "$line" username) || die 'Username missing'
+DB_PASSWORD=$(connection_value "$line" password) || die 'Password missing'
+unset line
+passfile=$(mktemp); trap 'rm -f "$passfile"' EXIT; chmod 600 "$passfile"
+printf '%s:%s:%s:%s:%s\n' "$(pgpass_escape "$DB_HOST")" "$DB_PORT" "$(pgpass_escape "$DB_NAME")" "$(pgpass_escape "$DB_USER")" "$(pgpass_escape "$DB_PASSWORD")" > "$passfile"
+unset DB_PASSWORD
+export PGPASSFILE=$passfile PGHOST=$DB_HOST PGPORT=$DB_PORT PGDATABASE=$DB_NAME PGUSER=$DB_USER PGOPTIONS='-c default_transaction_read_only=on'
+psql -X -w -At -v ON_ERROR_STOP=1 -f "$SQL" </dev/null
+````
+
+### `scripts/db-schema-snapshot.sql`
+
+SHA-256: `247a13c13fdce710fa211cdc818678df8fb555a96a268048e59ade56c1d88b29`
+
+``sql
+-- Normalised, sorted schema fingerprint of the public schema (read-only). One line per object, so two
+-- databases can be compared with a plain diff. Contains no row data, only structure and EF history IDs.
+SELECT line FROM (
+  SELECT 'migration ' || "MigrationId" AS line FROM "__EFMigrationsHistory"
+  UNION ALL
+  SELECT format('column %s.%s %s null=%s default=%s', table_name, column_name,
+                CASE WHEN data_type = 'character varying' THEN 'varchar(' || coalesce(character_maximum_length::text, '') || ')'
+                     WHEN data_type = 'USER-DEFINED' THEN udt_name ELSE data_type END,
+                is_nullable, coalesce(column_default, '-'))
+  FROM information_schema.columns WHERE table_schema = 'public'
+  UNION ALL
+  SELECT format('constraint %s %s %s', conrelid::regclass, conname, pg_get_constraintdef(oid))
+  FROM pg_constraint WHERE connamespace = 'public'::regnamespace
+  UNION ALL
+  SELECT format('index %s %s', tablename, regexp_replace(indexdef, '^CREATE (UNIQUE )?INDEX \S+ ON \S+ ', 'CREATE \1INDEX ON '))
+         || ' name=' || indexname
+  FROM pg_indexes WHERE schemaname = 'public'
+  UNION ALL
+  SELECT format('sequence %s', sequencename) FROM pg_sequences WHERE schemaname = 'public'
+  UNION ALL
+  SELECT format('view %s', viewname) FROM pg_views WHERE schemaname = 'public'
+  UNION ALL
+  SELECT format('function %s(%s)', p.proname, pg_get_function_identity_arguments(p.oid))
+  FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace
+  UNION ALL
+  SELECT format('trigger %s %s', tgrelid::regclass, tgname) FROM pg_trigger WHERE NOT tgisinternal
+    AND tgrelid IN (SELECT oid FROM pg_class WHERE relnamespace = 'public'::regnamespace)
+) s ORDER BY line;
 ````
 
 ### `scripts/imap-external-validation.py`
