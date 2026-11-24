@@ -107,27 +107,69 @@ public sealed class MessageUidAllocatorTests : IClassFixture<UidPostgresFixture>
     };
 }
 
+/// <summary>
+/// Provides a throwaway PostgreSQL server. When MIAUTRIX_TEST_SERVER_CONNECTION is set (a role with
+/// CREATEDB on a NON-production server, connected to its maintenance database), each test creates its
+/// own uidtest_* database there and every one of them is dropped afterwards; otherwise Testcontainers
+/// starts a disposable PostgreSQL 18 container (requires Docker).
+/// </summary>
 public sealed class UidPostgresFixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder()
-        .WithImage("postgres:16-alpine")
-        .WithDatabase("postgres")
-        .WithUsername("postgres")
-        .WithPassword("postgres")
-        .Build();
+    private const string ServerConnectionVariable = "MIAUTRIX_TEST_SERVER_CONNECTION";
+    private readonly string? _externalServer = Environment.GetEnvironmentVariable(ServerConnectionVariable);
+    private readonly List<string> _createdDatabases = [];
+    private PostgreSqlContainer? _container;
 
-    public Task InitializeAsync() => _container.StartAsync();
-    public Task DisposeAsync() => _container.DisposeAsync().AsTask();
+    private string ServerConnection => _externalServer ?? _container!.GetConnectionString();
+
+    public async Task InitializeAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(_externalServer))
+        {
+            var database = new NpgsqlConnectionStringBuilder(_externalServer).Database ?? string.Empty;
+            if (database.Contains("pro", StringComparison.OrdinalIgnoreCase) || database.StartsWith("miautrix", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException($"{ServerConnectionVariable} must point at the server maintenance database (e.g. 'postgres'), never an application database.");
+            return;
+        }
+
+        _container = new PostgreSqlBuilder()
+            .WithImage("postgres:18-alpine")
+            .WithDatabase("postgres")
+            .WithUsername("postgres")
+            .WithPassword("postgres")
+            .Build();
+        await _container.StartAsync();
+    }
+
+    public async Task DisposeAsync()
+    {
+        if (_container is not null)
+        {
+            await _container.DisposeAsync();
+            return;
+        }
+
+        NpgsqlConnection.ClearAllPools();
+        await using var connection = new NpgsqlConnection(ServerConnection);
+        await connection.OpenAsync();
+        foreach (var database in _createdDatabases)
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = $"DROP DATABASE IF EXISTS \"{database}\" WITH (FORCE)";
+            await command.ExecuteNonQueryAsync();
+        }
+    }
 
     public async Task<string> CreateDatabaseAsync()
     {
         var database = "uidtest_" + Guid.NewGuid().ToString("N");
-        await using var connection = new NpgsqlConnection(_container.GetConnectionString());
+        await using var connection = new NpgsqlConnection(ServerConnection);
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = $"CREATE DATABASE \"{database}\"";
         await command.ExecuteNonQueryAsync();
-        var builder = new NpgsqlConnectionStringBuilder(_container.GetConnectionString()) { Database = database };
+        _createdDatabases.Add(database);
+        var builder = new NpgsqlConnectionStringBuilder(ServerConnection) { Database = database };
         return builder.ConnectionString;
     }
 }
