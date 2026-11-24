@@ -17,7 +17,7 @@
 .PARAMETER DbUser
     PostgreSQL database user. Default: mmdb-user
 .PARAMETER DbPass
-    PostgreSQL database password. Default: Mi@usito#2026!
+    PostgreSQL database password from MIAUTRIX_DB_PASSWORD (required).
 .PARAMETER DropExisting
     If specified, drops the database if it already exists before running migrations.
 .PARAMETER Force
@@ -28,12 +28,13 @@ param (
     [int]$DbPort = 5432,
     [string]$DbName = "miautrix-mail-pro",
     [string]$DbUser = "mmdb-user",
-    [string]$DbPass = "Mi@usito#2026!",
+    [string]$DbPass = $env:MIAUTRIX_DB_PASSWORD,
     [switch]$DropExisting,
     [switch]$Force
 )
 
 $ErrorActionPreference = "Stop"
+if ([string]::IsNullOrWhiteSpace($DbPass)) { throw "Set MIAUTRIX_DB_PASSWORD in the environment." }
 
 Write-Host "==========================================================" -ForegroundColor Cyan
 Write-Host "  Miautrix Mail Server - Greenfield Database Deployment" -ForegroundColor Cyan
@@ -58,7 +59,7 @@ if ($DropExisting) {
 
     Write-Host "[1/4] Dropping existing database '$($DbName)'..." -ForegroundColor Red
     Push-Location $RepoRoot
-    dotnet ef database drop --project src/Miautrix.Mail.Persistence --startup-project src/Miautrix.Mail.Web --connection "$ConnectionString" --force
+    dotnet ef database drop --project src/Miautrix.Mail.Persistence --startup-project src/Miautrix.Mail.Web --force
     Pop-Location
 } else {
     Write-Host "[1/4] Skipping drop step (using existing or clean database)..." -ForegroundColor Gray
@@ -67,7 +68,7 @@ if ($DropExisting) {
 # 2. Apply EF Core Schema Migrations
 Write-Host "[2/4] Applying Entity Framework Core migrations from scratch..." -ForegroundColor Yellow
 Push-Location $RepoRoot
-dotnet ef database update --project src/Miautrix.Mail.Persistence --startup-project src/Miautrix.Mail.Web --connection "$ConnectionString"
+dotnet ef database update --project src/Miautrix.Mail.Persistence --startup-project src/Miautrix.Mail.Web
 
 if ($LASTEXITCODE -ne 0) {
     Pop-Location

@@ -12,10 +12,11 @@ param (
     [int]$DbPort = 5432,
     [string]$DbName = "miautrix-mail-pro",
     [string]$DbUser = "mmdb-user",
-    [string]$DbPass = "Mi@usito#2026!"
+    [string]$DbPass = $env:MIAUTRIX_DB_PASSWORD
 )
 
 $ErrorActionPreference = "Stop"
+if ([string]::IsNullOrWhiteSpace($DbPass)) { throw "Set MIAUTRIX_DB_PASSWORD in the environment." }
 
 Write-Host "==========================================================" -ForegroundColor Cyan
 Write-Host "  Miautrix Mail Server - TEST Database Update & Migration" -ForegroundColor Cyan
@@ -25,7 +26,7 @@ $ConnectionString = "Host=$($DbHost);Port=$($DbPort);Database=$($DbName);Usernam
 $env:MIAUTRIX_DB_CONNECTION = $ConnectionString
 
 Write-Host "[1/2] Applying EF Core schema migrations to $($DbHost)/$($DbName)..." -ForegroundColor Yellow
-& dotnet ef database update --project src/Miautrix.Mail.Persistence --startup-project src/Miautrix.Mail.Web --connection "$ConnectionString"
+& dotnet ef database update --project src/Miautrix.Mail.Persistence --startup-project src/Miautrix.Mail.Web
 if ($LASTEXITCODE -ne 0) {
     throw "EF Core migration failed with exit code $LASTEXITCODE"
 }

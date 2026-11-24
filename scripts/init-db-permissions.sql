@@ -4,19 +4,15 @@
 -- Fixes PostgreSQL 15+ "ERROR: 42501: permission denied for schema public"
 -- Run this as superuser 'postgres' against the database cluster.
 
--- 1. Create or alter user mmdb-user
-DO
-$do$
-BEGIN
-   IF NOT EXISTS (
-      SELECT FROM pg_catalog.pg_roles
-      WHERE  rolname = 'mmdb-user') THEN
-      CREATE ROLE "mmdb-user" WITH LOGIN PASSWORD 'Mi@usito#2026!' CREATEDB;
-   ELSE
-      ALTER ROLE "mmdb-user" WITH LOGIN PASSWORD 'Mi@usito#2026!' CREATEDB;
-   END IF;
-END
-$do$;
+-- 1. Create or alter user mmdb-user. Set MIAUTRIX_DB_PASSWORD in psql's
+-- environment before running; the credential is not stored in this file.
+\getenv db_password MIAUTRIX_DB_PASSWORD
+SELECT format('CREATE ROLE %I WITH LOGIN PASSWORD %L CREATEDB', 'mmdb-user', :'db_password')
+WHERE NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'mmdb-user')
+\gexec
+SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L CREATEDB', 'mmdb-user', :'db_password')
+WHERE EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'mmdb-user')
+\gexec
 
 -- 2. Provision and configure target database: miautrix-mail-pro
 SELECT 'CREATE DATABASE "miautrix-mail-pro" OWNER "mmdb-user"'

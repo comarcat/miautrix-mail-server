@@ -8,7 +8,8 @@ DB_HOST="${1:-10.11.1.52}"
 DB_PORT="${2:-5432}"
 DB_NAME="${3:-miautrix-mail-pro}"
 DB_USER="${4:-mmdb-user}"
-DB_PASS="${5:-Mi@usito#2026!}"
+DB_PASS="${MIAUTRIX_DB_PASSWORD:-}"
+if [[ -z "$DB_PASS" ]]; then echo "Set MIAUTRIX_DB_PASSWORD in the environment." >&2; exit 1; fi
 DROP_EXISTING="${6:-false}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -28,13 +29,13 @@ cd "${REPO_ROOT}"
 
 if [ "${DROP_EXISTING}" = "true" ] || [ "${DROP_EXISTING}" = "--drop" ]; then
     echo "[1/4] Dropping existing database '${DB_NAME}'..."
-    dotnet ef database drop --project src/Miautrix.Mail.Persistence --startup-project src/Miautrix.Mail.Web --connection "${CONNECTION_STRING}" --force || true
+    dotnet ef database drop --project src/Miautrix.Mail.Persistence --startup-project src/Miautrix.Mail.Web --force || true
 else
     echo "[1/4] Skipping drop step (using existing or clean database)..."
 fi
 
 echo "[2/4] Applying Entity Framework Core migrations from scratch..."
-dotnet ef database update --project src/Miautrix.Mail.Persistence --startup-project src/Miautrix.Mail.Web --connection "${CONNECTION_STRING}"
+dotnet ef database update --project src/Miautrix.Mail.Persistence --startup-project src/Miautrix.Mail.Web
 
 echo "[3/4] Running Miautrix Seeder for bootstrap entities..."
 dotnet run --project src/Miautrix.Mail.Seeder
