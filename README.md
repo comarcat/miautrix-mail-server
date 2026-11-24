@@ -6,14 +6,21 @@ Self-hosted, multi-tenant mail platform designed as a modular monolith in .NET 1
 
 - **Architecture Diagram:** [`architecture.html`](architecture.html) (interactive diagram with showcase quality profile)
 - **Architecture Blueprint:** [`blueprints/miautrix-mail-server/blueprint.md`](blueprints/miautrix-mail-server/blueprint.md)
-- **Charter & Plan:** [`PMI_Project_Charter_and_Plan.md`](PMI_Project_Charter_and_Plan.md) — Version 1.0 complete (2026-10-03)
+- **Charter & Plan:** [`PMI_Project_Charter_and_Plan.md`](PMI_Project_Charter_and_Plan.md) — Version 1.0 complete (2026-10-03); Version 2.0 implemented, pending validation (M5)
+- **Session handoff (v2.0):** [`docs/HANDOFF-v2.0.md`](docs/HANDOFF-v2.0.md) — start here to catch up
+- **Deployment:** [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — versioned deploy, storage preflight, rollback and cleanup
+- **Changelog:** [`CHANGELOG.md`](CHANGELOG.md)
 - **Calendar/Webmail final solution:** [`CALENDAR_WEBMAIL_FINAL_SOLUTION_2026-10-03.md`](CALENDAR_WEBMAIL_FINAL_SOLUTION_2026-10-03.md)
 - **Admin UI Specification:** [`DESIGN-Admin.md`](DESIGN-Admin.md) — Comprehensive technical design for the Admin Website
 - **Webmail UI Specification:** [`DESIGN-WEBMAIL.md`](DESIGN-WEBMAIL.md) — Comprehensive technical design for the Webmail Frontend
 
 ## 🚀 Project Status
 
-**Version 1.0 is complete as of 2026-10-03.** The final closure pass fixed public calendar RSVP actions, reschedule proposal links, explicit UTC schedule-email wording, and Webmail bulk-delete empty-inbox stability.
+**Version 2.0 implementation is in progress (2026-11-24).** .NET 10, MIME parsing/backfill, webmail isolation, IMAP review fixes, and versioned deployment tooling are implemented locally. Database-backed protocol tests, production deployment and external validation remain pending owner action.
+
+Build and run with the .NET 10 SDK (`global.json` pins 10.0.403). The `messages reparse` command can backfill stored messages after deployment. Without `--user`, it trusts the local host operator, matching the existing CLI local-access model.
+
+Example: `dotnet run --project src/Miautrix.Mail.Cli -- messages reparse --tenant <tenant-guid> --dry-run`.
 
 Tasks completed and verified (T1–T13):
 
