@@ -63,7 +63,7 @@ Tenant-owned domains define transport configuration. External recipient domains 
 ## 🛠️ Tech Stack & Prerequisites
 
 - **Backend:** .NET 10 LTS / C# 13
-- **Database:** PostgreSQL 17 (`Npgsql.EntityFrameworkCore.PostgreSQL 10.0.3` / `EF Core 10.0.4`)
+- **Database:** PostgreSQL 18 (production 18.6) (`Npgsql.EntityFrameworkCore.PostgreSQL 10.0.3` / `EF Core 10.0.4`)
 - **Frontend Surfaces:** React 19, TypeScript, Tailwind CSS, Vite
 - **Storage:** Content-addressable storage (CAS) with SHA-256 deduplication and bounded streaming
 - **Authentication:** Argon2id / bcrypt, TOTP MFA, WebAuthn
