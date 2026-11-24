@@ -13,6 +13,8 @@ Self-hosted, multi-tenant mail platform. Modular monolith, .NET 10, PostgreSQL, 
 | `dotnet build Miautrix.Mail.sln -warnaserror` | Build everything, warnings are errors |
 | `dotnet test` | Run the full test suite |
 | `dotnet ef database update` | Apply migrations |
+| `dotnet run --project src/Miautrix.Mail.Cli -- messages reparse --tenant <tenantId|all> [--since <ISO date>] [--dry-run] [--user <guid>]` | Reparse stored messages; without `--user`, trusts the local host operator |
+| `scripts/deploy-release.ps1 [-DryRun] [-RunMigrations] [-Rollback] [-Status]` | Build and deploy an owner-approved versioned release; see `docs/DEPLOYMENT.md` |
 | `pnpm --filter admin dev` | Web admin in dev mode |
 | `pnpm --filter webmail dev` | Webmail in dev mode |
 | `pnpm --filter desktop dev` | Desktop shell in dev mode |
@@ -24,6 +26,8 @@ Self-hosted, multi-tenant mail platform. Modular monolith, .NET 10, PostgreSQL, 
 - Fall back to `Grep`, `Glob`, and `Read` for literals, config files, docs, and coverage gaps.
 
 ## Architecture rules
+
+- The target framework, language version, and Microsoft package majors follow `.claude/rules/target-framework.md`.
 
 - **Dependency direction is inward.** `Domain` depends on nothing. `Application` depends only on
   `Domain`. A test enforces this and fails the build when it is violated.

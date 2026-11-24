@@ -1,0 +1,5 @@
+<Project>
+  <Target Name="RequireNet10" BeforeTargets="Build">
+    <Error Text="Miautrix requires net10.0 (see .claude/rules/target-framework.md). Found $(TargetFramework)." Condition="'$(TargetFramework)' != 'net10.0'" />
+  </Target>
+</Project>

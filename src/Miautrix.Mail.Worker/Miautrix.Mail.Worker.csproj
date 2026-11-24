@@ -10,9 +10,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="8.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.15" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.15" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.15" />
   </ItemGroup>
 
   <ItemGroup>
@@ -26,6 +26,7 @@
     <ProjectReference Include="..\Miautrix.Mail.Application\Miautrix.Mail.Application.csproj" />
     <ProjectReference Include="..\Miautrix.Mail.Infrastructure\Miautrix.Mail.Infrastructure.csproj" />
     <ProjectReference Include="..\Miautrix.Mail.Persistence\Miautrix.Mail.Persistence.csproj" />
+    <ProjectReference Include="..\Miautrix.Mail.Security\Miautrix.Mail.Security.csproj" />
     <ProjectReference Include="..\Miautrix.Mail.Identity\Miautrix.Mail.Identity.csproj" />
     <ProjectReference Include="..\Miautrix.Mail.Protocols.Smtp\Miautrix.Mail.Protocols.Smtp.csproj" />
     <ProjectReference Include="..\Miautrix.Mail.Protocols.Imap\Miautrix.Mail.Protocols.Imap.csproj" />

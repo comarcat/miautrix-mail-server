@@ -1,0 +1,1 @@
+The platform targets .NET 10 (`net10.0`, SDK 10.0.x). Never downgrade the target framework, LangVersion, or Microsoft.* package majors to make a build pass; a downgrade requires explicit written approval from the project owner recorded in the PMI change log. Fix the code instead. Guarded by global.json, Directory.Build.targets and a unit test.

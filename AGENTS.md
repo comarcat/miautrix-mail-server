@@ -2,6 +2,8 @@
 
 Agent-facing orientation. Humans want `CLAUDE.md`.
 
+Target framework and package version rules: `.claude/rules/target-framework.md`.
+
 ## Where things are
 
 | Path | Contents |
