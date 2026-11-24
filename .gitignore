@@ -43,3 +43,4 @@ certificates/
 
 # deploy-release.ps1 build output
 /publish/
+__pycache__/
