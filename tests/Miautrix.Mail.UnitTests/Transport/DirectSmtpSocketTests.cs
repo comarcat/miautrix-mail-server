@@ -280,6 +280,7 @@ public sealed class DirectSmtpSocketTests
             return Task.FromResult(fallbackAddresses ?? (IReadOnlyList<IPAddress>)[]);
         }
         public Task<IReadOnlyList<string>> GetTxtAsync(string name, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<string>>([]);
+        public Task<IReadOnlyList<string>> GetPtrAsync(IPAddress address, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<string>>([]);
     }
 
     private sealed class NoPolicyProvider : IMtaStsPolicyProvider

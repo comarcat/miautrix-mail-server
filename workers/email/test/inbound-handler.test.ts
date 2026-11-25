@@ -78,6 +78,7 @@ test("email(): rejects missing or malformed sender cleanly (no uncaught error / 
 
 test("email(): webhook delivery succeeds when token and destination are configured", async () => {
   const msg = createMockEmailMessage("someone@miautrix.tech", "recipient@miautrix.tech");
+  msg.headers.set("Authentication-Results", "mx.cloudflare.net; spf=pass; dkim=pass; dmarc=pass");
   let requestedUrl = "";
   let requestHeaders: Headers | null = null;
 
@@ -101,6 +102,7 @@ test("email(): webhook delivery succeeds when token and destination are configur
     assert.equal(requestHeaders?.get("X-Miautrix-Inbound-Token"), "secret-inbound-token-12345");
     assert.equal(requestHeaders?.get("X-Miautrix-Envelope-From"), "someone@miautrix.tech");
     assert.equal(requestHeaders?.get("X-Miautrix-Envelope-To"), "recipient@miautrix.tech");
+    assert.equal(requestHeaders?.get("X-Miautrix-Cloudflare-Authentication-Results"), "mx.cloudflare.net; spf=pass; dkim=pass; dmarc=pass");
     assert.equal(requestHeaders?.get("Content-Type"), "message/rfc822");
   } finally {
     globalThis.fetch = originalFetch;

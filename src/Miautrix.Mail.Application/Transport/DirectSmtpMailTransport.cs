@@ -18,6 +18,11 @@ public interface IDnsResolver
     Task<IReadOnlyList<MxHost>> GetMxAsync(string domain, CancellationToken ct = default);
     Task<IReadOnlyList<IPAddress>> GetAddressesAsync(string host, CancellationToken ct = default);
     Task<IReadOnlyList<string>> GetTxtAsync(string name, CancellationToken ct = default);
+    Task<IReadOnlyList<string>> GetPtrAsync(IPAddress address, CancellationToken ct = default);
+    async Task<IReadOnlyList<IPAddress>> GetAAsync(string host, CancellationToken ct = default) =>
+        (await GetAddressesAsync(host, ct)).Where(address => address.AddressFamily == AddressFamily.InterNetwork).ToArray();
+    async Task<IReadOnlyList<IPAddress>> GetAaaaAsync(string host, CancellationToken ct = default) =>
+        (await GetAddressesAsync(host, ct)).Where(address => address.AddressFamily == AddressFamily.InterNetworkV6).ToArray();
 }
 
 public sealed record TlsaRecord(byte Usage, byte Selector, byte MatchingType, byte[] AssociationData);
@@ -63,10 +68,28 @@ public sealed class DnsClientResolver : IDnsResolver
         return result;
     }
 
+    public async Task<IReadOnlyList<IPAddress>> GetAAsync(string host, CancellationToken ct = default)
+    {
+        var response = await _client.QueryAsync(host, QueryType.A, cancellationToken: ct);
+        return response.Answers.ARecords().Select(record => record.Address).ToArray();
+    }
+
+    public async Task<IReadOnlyList<IPAddress>> GetAaaaAsync(string host, CancellationToken ct = default)
+    {
+        var response = await _client.QueryAsync(host, QueryType.AAAA, cancellationToken: ct);
+        return response.Answers.AaaaRecords().Select(record => record.Address).ToArray();
+    }
+
     public async Task<IReadOnlyList<string>> GetTxtAsync(string name, CancellationToken ct = default)
     {
         var response = await _client.QueryAsync(name, QueryType.TXT, cancellationToken: ct);
         return response.Answers.TxtRecords().Select(record => string.Concat(record.Text)).ToArray();
+    }
+
+    public async Task<IReadOnlyList<string>> GetPtrAsync(IPAddress address, CancellationToken ct = default)
+    {
+        var response = await _client.QueryReverseAsync(address, cancellationToken: ct);
+        return response.Answers.PtrRecords().Select(record => record.PtrDomainName.Value.TrimEnd('.')).ToArray();
     }
 }
 

@@ -296,6 +296,13 @@ export default {
           "X-Miautrix-Envelope-To": typeof message.to === "string" ? message.to.trim() : "",
           "Content-Type": "message/rfc822",
         };
+        // Cloudflare Email Routing prepends its Authentication-Results header before
+        // invoking this Worker. Forward only that header value; the origin authenticates
+        // the configured authserv-id before using any SPF/DKIM/DMARC verdict.
+        const authenticationResults = message.headers.get("Authentication-Results");
+        if (authenticationResults) {
+          headers["X-Miautrix-Cloudflare-Authentication-Results"] = authenticationResults;
+        }
 
         const response = await fetch(destination, {
           method: "POST",

@@ -28,6 +28,9 @@ var environment = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
 
 var isDevelopment = environment.Equals("Development", StringComparison.OrdinalIgnoreCase);
 var antiMalwareOptions = AntiMalwareOptions.FromEnvironment(isDevelopment);
+InboundAuthenticationOptions inboundAuthOptions;
+try { inboundAuthOptions = InboundAuthenticationOptions.FromEnvironment(); }
+catch (InvalidOperationException ex) { Console.Error.WriteLine($"[Worker] FATAL: {ex.Message}"); return 1; }
 SmtpListenerOptions smtpListenerOptions;
 try
 {
@@ -150,6 +153,8 @@ var host = Host.CreateDefaultBuilder(args)
             sp => sp.GetRequiredService<CloudflareApiMailTransport>());
         services.AddSingleton(DirectSmtpOptions.FromEnvironment());
         services.AddSingleton<IDnsResolver, DnsClientResolver>();
+        services.AddSingleton(inboundAuthOptions);
+        services.AddScoped<IInboundAuthenticationService, InboundAuthenticationService>();
         services.AddHttpClient(nameof(MtaStsPolicyFetcher), client => client.Timeout = TimeSpan.FromSeconds(10));
         services.AddSingleton<IMtaStsPolicyFetcher, MtaStsPolicyFetcher>();
         services.AddSingleton<IMtaStsPolicyProvider, CachedMtaStsPolicyProvider>();
@@ -170,7 +175,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddScoped<IMessageUidAllocator, MessageUidAllocator>();
         services.AddScoped<SieveCompiler>();
         services.AddScoped<SieveInterpreter>();
-        services.AddSingleton(new SieveSenderAuthenticationGate(hostname));
+        services.AddSingleton(new SieveSenderAuthenticationGate(inboundAuthOptions.AuthservId)); // same authserv-id as inbound auth
         services.AddScoped<ISieveDeliveryService, SieveDeliveryService>();
 
         // Identity

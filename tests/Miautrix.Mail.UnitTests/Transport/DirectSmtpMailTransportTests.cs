@@ -33,6 +33,7 @@ public sealed class DirectSmtpMailTransportTests
         public Task<IReadOnlyList<MxHost>> GetMxAsync(string domain, CancellationToken ct = default) => Task.FromResult(mx);
         public Task<IReadOnlyList<IPAddress>> GetAddressesAsync(string host, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<IPAddress>>([]);
         public Task<IReadOnlyList<string>> GetTxtAsync(string name, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<string>>([]);
+        public Task<IReadOnlyList<string>> GetPtrAsync(IPAddress address, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<string>>([]);
     }
 
     private sealed class NoPolicyProvider : IMtaStsPolicyProvider

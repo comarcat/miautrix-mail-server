@@ -7,6 +7,7 @@ using System.Globalization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Miautrix.Mail.Application.Transport;
 using Miautrix.Mail.Protocols.Smtp;
 
 namespace Miautrix.Mail.Worker;
@@ -169,6 +170,8 @@ public class SmtpListenerService : BackgroundService
         var inboundHandler = scope.ServiceProvider.GetRequiredService<ISmtpInboundHandler>();
 
         // State
+        var clientIp = (client.Client.RemoteEndPoint as IPEndPoint)?.Address;
+        string? heloName = null;
         string? authenticatedUsername = null;
         Guid? tenantId = null;
         Guid? userId = null;
@@ -208,6 +211,7 @@ public class SmtpListenerService : BackgroundService
                 }
                 mailFrom = null;
                 recipients.Clear();
+                heloName = line[(commandEnd + 1)..].Trim();
                 greeted = true;
                 extendedSmtp = command == "EHLO";
                 if (!extendedSmtp)
@@ -537,13 +541,37 @@ public class SmtpListenerService : BackgroundService
                 if (_mode != SmtpListenerMode.Inbound)
                     rawMessage = SmtpSubmissionHandler.EnsureSubmissionHeaders(rawMessage);
 
+                InboundAuthenticationResult? precomputedAuthentication = null;
+                if (_mode == SmtpListenerMode.Inbound)
+                {
+                    var inboundAuthentication = scope.ServiceProvider.GetService<IInboundAuthenticationService>();
+                    var inboundOptions = scope.ServiceProvider.GetService<InboundAuthenticationOptions>();
+                    if (inboundAuthentication is not null && inboundOptions?.Mode != AuthenticationMode.Off)
+                    {
+                        try
+                        {
+                            precomputedAuthentication = await inboundAuthentication.EvaluateAsync(
+                                new InboundAuthenticationInput(clientIp, heloName, mailFrom, rawMessage, InboundMailPath.Smtp25), ct);
+                        }
+                        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                        catch
+                        {
+                            var authserv = inboundOptions?.AuthservId ?? "unknown";
+                            precomputedAuthentication = new(new("temperror", null), [new(null, null, "temperror", "verification service error")],
+                                new("temperror", null, null, "none", []), $"{authserv}; spf=temperror; dkim=temperror; dmarc=temperror");
+                        }
+                    }
+                }
+
                 SmtpResponse response = SmtpResponse.Queued;
                 foreach (var recipient in recipients)
                 {
                     if (_mode == SmtpListenerMode.Inbound)
                     {
                         var (resp, _) = await inboundHandler.HandleDataAsync(
-                            recipient.TenantId, mailFrom!, recipient.Address, rawMessage, cancellationToken: ct);
+                            recipient.TenantId, mailFrom!, recipient.Address, rawMessage, cancellationToken: ct,
+                            path: InboundMailPath.Smtp25, clientIp: clientIp, helo: heloName,
+                            precomputedAuthentication: precomputedAuthentication);
                         if (!resp.IsSuccess) { response = resp; break; }
                     }
                     else

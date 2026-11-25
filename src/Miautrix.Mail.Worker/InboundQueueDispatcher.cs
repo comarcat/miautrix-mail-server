@@ -17,6 +17,7 @@ using Miautrix.Mail.Persistence;
 using Miautrix.Mail.Storage;
 using Miautrix.Mail.Application.Mail.Mime;
 using Miautrix.Mail.Application.Mail;
+using Miautrix.Mail.Application.Transport;
 
 namespace Miautrix.Mail.Worker;
 
@@ -29,11 +30,13 @@ public sealed class InboundQueueDispatcher : BackgroundService
 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<InboundQueueDispatcher> _logger;
+    private readonly InboundAuthenticationOptions? _inboundAuthenticationOptions;
 
-    public InboundQueueDispatcher(IServiceScopeFactory scopeFactory, ILogger<InboundQueueDispatcher> logger)
+    public InboundQueueDispatcher(IServiceScopeFactory scopeFactory, ILogger<InboundQueueDispatcher> logger, InboundAuthenticationOptions? inboundAuthenticationOptions = null)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
+        _inboundAuthenticationOptions = inboundAuthenticationOptions;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -246,7 +249,9 @@ public sealed class InboundQueueDispatcher : BackgroundService
             return;
         }
 
-        var deliveredRole = result.Score >= junkThreshold ? "junk" : "inbox";
+        var dmarcQuarantine = _inboundAuthenticationOptions?.Mode == AuthenticationMode.Enforce &&
+            InboundAuthenticationHeaderParser.IsOwnDmarcQuarantine(item.RawMessage, _inboundAuthenticationOptions.AuthservId);
+        var deliveredRole = dmarcQuarantine ? "junk" : result.Score >= junkThreshold ? "junk" : "inbox";
         var _ = result; // keep result in scope for the following role decision
 
         // Continue with folder selection using deliveredRole
@@ -305,6 +310,16 @@ public sealed class InboundQueueDispatcher : BackgroundService
         }
 
         var desiredRole = deliveredRole;
+        var dmarcFlagFallback = false;
+        if (dmarcQuarantine)
+        {
+            var junkFolderExists = await db.Folders.AnyAsync(f => f.TenantId == item.TenantId && f.MailboxId == mailbox.Id && f.Role == "junk", ct);
+            if (!junkFolderExists)
+            {
+                desiredRole = "inbox";
+                dmarcFlagFallback = true;
+            }
+        }
 
         var folder = sieveDecision.FolderId is Guid sieveFolderId
             ? db.Folders.Local.FirstOrDefault(f => f.Id == sieveFolderId)
@@ -358,6 +373,8 @@ public sealed class InboundQueueDispatcher : BackgroundService
         var storageResult = await storage.StoreAsync(contentStream, ct);
         var now = DateTimeOffset.UtcNow;
         var messages = new List<Message>();
+        // DMARC quarantine with no Junk folder falls back to INBOX flagged (inbound auth, v2.2).
+        var deliveryFlags = (sieveDecision.Flags ?? []).Concat(dmarcFlagFallback ? ["\\Flagged"] : Array.Empty<string>()).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         foreach (var destination in destinationFolders)
         {
             var message = new Message
@@ -366,12 +383,12 @@ public sealed class InboundQueueDispatcher : BackgroundService
                 Uid = await uidAllocator.AllocateAsync(item.TenantId, destination.Id, cancellationToken: ct),
                 Sender = item.Sender, Recipient = item.Recipient, Subject = subject, Date = parsed.Date ?? now,
                 ContentHash = storageResult.ContentHash, StoragePath = storageResult.StoragePath, SizeBytes = storageResult.SizeBytes,
-                IsRead = false, RawHeaders = parsed.RawHeaders, Flags = string.Join(' ', sieveDecision.Flags ?? []),
+                IsRead = false, RawHeaders = parsed.RawHeaders, Flags = string.Join(' ', deliveryFlags),
                 BodyText = parsed.BodyText, BodyHtml = parsed.BodyHtml, CreatedAt = now, UpdatedAt = now
             };
             messages.Add(message);
             db.Messages.Add(message);
-            foreach (var flag in sieveDecision.Flags ?? [])
+            foreach (var flag in deliveryFlags)
                 db.MessageFlags.Add(new MessageFlag { Id = Guid.NewGuid(), TenantId = item.TenantId, MessageId = message.Id, Flag = flag, CreatedAt = now, UpdatedAt = now });
         }
 
