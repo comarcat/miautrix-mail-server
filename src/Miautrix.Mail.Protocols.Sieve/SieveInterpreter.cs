@@ -9,7 +9,8 @@ public sealed record SieveMessageContext(
     string EnvelopeTo,
     long SizeBytes,
     string? BodyText = null,
-    IReadOnlySet<string>? ExistingMailboxes = null);
+    IReadOnlySet<string>? ExistingMailboxes = null,
+    IReadOnlySet<string>? Flags = null);
 
 public sealed record SieveEffect(string Name, IReadOnlyList<string> Values, IReadOnlyList<string> Flags, IReadOnlyList<string> Tags, IReadOnlyList<IReadOnlyList<string>>? ArgumentGroups = null);
 public sealed record SieveExecutionResult(IReadOnlyList<SieveEffect> Effects, bool RuntimeError, bool TimedOut, int Steps);
@@ -85,6 +86,14 @@ public sealed class SieveInterpreter
             return values.All(name => test.Name == "mailboxexists"
                 ? _context.ExistingMailboxes?.Contains(name) == true
                 : _context.Headers.Keys.Any(h => h.Equals(name, StringComparison.OrdinalIgnoreCase)));
+        }
+        if (test.Name == "hasflag")
+        {
+            var flags = test.Arguments.FirstOrDefault()?.Strings ?? [];
+            var flagComparator = test.Tags.FirstOrDefault(x => x.StartsWith(":comparator=", StringComparison.Ordinal));
+            var flagOctet = flagComparator?.EndsWith("i;octet", StringComparison.OrdinalIgnoreCase) == true;
+            var flagMode = test.Tags.Contains(":contains") ? "contains" : test.Tags.Contains(":matches") ? "matches" : "is";
+            return (_context.Flags ?? new HashSet<string>()).Any(actual => flags.Any(flag => Match(actual, flag, flagMode, flagOctet)));
         }
         if (test.Name is not ("header" or "address" or "envelope")) throw new InvalidOperationException("Unsupported test.");
 

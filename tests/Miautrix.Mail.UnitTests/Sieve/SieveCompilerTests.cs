@@ -43,6 +43,8 @@ public sealed class SieveCompilerTests
     [InlineData("if exists [\"Subject\", \"From\"] { discard; }", true)]
     [InlineData("if address :domain :contains \"From\" \"example.test\" { discard; }", true)]
     [InlineData("if address :localpart :is \"From\" \"alice\" { discard; }", true)]
+    [InlineData("if address :all :is \"From\" \"alice@example.test\" { discard; }", true)]
+    [InlineData("if header :is :comparator \"i;ascii-casemap\" \"Subject\" \"weekly project REPORT\" { discard; }", true)]
     [InlineData("if envelope :is \"to\" \"bob@example.test\" { discard; }", true)]
     [InlineData("if size :over 100 { discard; }", true)]
     [InlineData("if allof (true, anyof (false, not false)) { discard; }", true)]
@@ -54,6 +56,15 @@ public sealed class SieveCompilerTests
         var executed = _interpreter.Execute(compiled.Program!, Context);
         Assert.False(executed.RuntimeError);
         Assert.Equal(expected, executed.Effects.Any(x => x.Name == "discard"));
+    }
+
+    [Fact]
+    public void Interpreter_EvaluatesHasflag()
+    {
+        var compiled = _compiler.Compile("require [\"imap4flags\"]; if hasflag [\"\\\\Seen\"] { discard; }");
+        Assert.True(compiled.Success, compiled.Diagnostic.ErrorMessage);
+        var result = _interpreter.Execute(compiled.Program!, Context with { Flags = new HashSet<string>(["\\Seen"], StringComparer.OrdinalIgnoreCase) });
+        Assert.Contains(result.Effects, effect => effect.Name == "discard");
     }
 
     [Fact]

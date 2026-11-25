@@ -129,7 +129,7 @@ public sealed class SieveCompiler
             }
             var testName = Take();
             if (testName.Kind != TokenKind.Word) throw new ParseException("Expected a test.", testName);
-            if (!new[] { "header", "address", "envelope", "exists", "size", "true", "false", "mailboxexists" }.Contains(testName.Value, StringComparer.OrdinalIgnoreCase))
+            if (!new[] { "header", "address", "envelope", "exists", "size", "true", "false", "mailboxexists", "hasflag" }.Contains(testName.Value, StringComparer.OrdinalIgnoreCase))
                 throw new ParseException($"Unknown or unsupported Sieve test '{testName.Value}'.", testName);
             var (args, tags) = ReadArguments(until: "{", stopAtComma: true, stopAtParen: true);
             return new SieveTest(testName.Value.ToLowerInvariant(), args, tags);

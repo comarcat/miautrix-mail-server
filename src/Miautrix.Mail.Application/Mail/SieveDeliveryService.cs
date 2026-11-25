@@ -227,7 +227,9 @@ public sealed class SieveDeliveryService : ISieveDeliveryService
                (inReplyTo.Length > 0 ? $"In-Reply-To: {Safe(inReplyTo)}\r\n" : string.Empty) +
                (string.Join(" ", references, inReplyTo).Trim().Length > 0 ? $"References: {Safe(string.Join(" ", references, inReplyTo).Trim())}\r\n" : string.Empty) +
                $"Message-ID: <{Guid.NewGuid():N}@{mailbox[(mailbox.LastIndexOf('@') + 1)..]}>\r\n" +
-               "MIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n" + body + "\r\n";
+               "MIME-Version: 1.0\r\n" +
+               (options.Mime ? "" : "Content-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n") +
+               "\r\n" + body + "\r\n";
     }
 
     private static bool IsOwnDsn(SmtpQueueItem item, ParsedMailMessage parsed) =>

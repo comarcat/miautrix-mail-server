@@ -102,6 +102,13 @@ public sealed class SieveDeliveryIntegrationTests
             Assert.Equal(string.Empty, vacation.Sender);
             Assert.Contains("Auto-Submitted: auto-replied", vacation.RawMessage);
             await db.SmtpQueue.ExecuteDeleteAsync();
+            await db.SieveScripts.Where(s => s.MailboxId == mailbox.Id).ExecuteUpdateAsync(set => set.SetProperty(s => s.Content,
+                "require [\"vacation\"]; vacation :mime :handle \"mime-test\" text:\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<b>Away</b>\r\n.\r\n;"));
+            await service.EvaluateAsync(mailbox, rejectRaw, parsed, "inbox");
+            var mimeVacation = await db.SmtpQueue.SingleAsync(q => q.Direction == QueueDirection.Outbound);
+            Assert.Contains("Content-Type: text/html", mimeVacation.RawMessage);
+            Assert.Contains("<b>Away</b>", mimeVacation.RawMessage);
+            await db.SmtpQueue.ExecuteDeleteAsync();
             await service.EvaluateAsync(mailbox, Inbound(tenant.Id, "From: sender@remote.test\r\nList-Id: test\r\n"), parsed, "inbox");
             await service.EvaluateAsync(mailbox, Inbound(tenant.Id, "From: <>\r\n"), parsed, "inbox");
             Assert.Empty(await db.SmtpQueue.ToListAsync());
