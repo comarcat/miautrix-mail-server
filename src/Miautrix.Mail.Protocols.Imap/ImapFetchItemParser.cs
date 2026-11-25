@@ -50,6 +50,12 @@ public static class ImapFetchItemParser
                     : raw.StartsWith("BINARY", StringComparison.OrdinalIgnoreCase) ? (peek ? "BINARY.PEEK" : "BINARY")
                     : peek ? "BODY.PEEK" : "BODY";
                 section = raw[(sectionStart + 1)..^1].Trim();
+                // RFC 9051 section-binary is a part specifier, unlike BODY[] which
+                // designates the complete RFC 5322 message.
+                if (name.StartsWith("BINARY", StringComparison.Ordinal) && section.Length == 0)
+                    throw new FormatException("BINARY requires a body part section.");
+                if (name == "BINARY.SIZE" && partialStart is not null)
+                    throw new FormatException("BINARY.SIZE does not accept a partial range.");
             }
             else
             {

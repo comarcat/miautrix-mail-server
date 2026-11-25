@@ -84,3 +84,50 @@ The latest implementation slice was run twice with build (`-warnaserror`): UnitT
 - [ ] Start IDLE in one client, APPEND/STORE/EXPUNGE from another, and confirm changes appear within five seconds.
 - [ ] Revoke shared access during IDLE and confirm updates stop and the session leaves selected state.
 - [ ] Re-run the Phase 1 checklist for clients and confirm rev1 behavior remains unchanged.
+
+## v2.2 worker checkpoint — 2026-11-25
+
+**Disposition: partial; IMAP4rev2 remains unadvertised.** This checkpoint closes specific implementation defects, but does not satisfy the requested paragraph-by-paragraph audit of every server-applicable MUST/SHOULD/REQUIRED in RFC 9051 §§2–7 and Appendix E. Advertisement is intentionally unchanged: `* CAPABILITY IMAP4rev1 AUTH=PLAIN SASL-IR LITERAL+ ENABLE UTF8=ACCEPT UNSELECT UIDPLUS SPECIAL-USE NAMESPACE MOVE IDLE`.
+
+### Paragraph-level audit status for this checkpoint
+
+This is the bounded audit completed during this worker dispatch. The full RFC paragraph enumeration remains **Missing** and cannot be represented as green based on command-level tests alone.
+
+| RFC area / requirement | Level | Status | Code location | Test evidence |
+|---|---:|---|---|---|
+| §2 client command tag reuse must be accepted | MUST | Missing / not audited | `ImapEngine.cs`, command dispatcher | No focused tag-reuse test identified |
+| §2 strict command syntax; server should reject syntax errors | SHOULD | Partial | `ImapCommandTokenizer.cs`, command-specific handlers | `ImapListenerRawSocketTests` syntax cases; full grammar matrix absent |
+| §2 server accepts unrequested data and correctly frames continuations/literals | MUST / SHOULD | Partial | `ImapListenerService.cs`, `ImapResponseWriter.cs` | Raw literal and IDLE tests; full unsolicited response audit absent |
+| §2.3 UID nonzero, ascending, stable; UIDNEXT and UIDVALIDITY semantics | MUST | Implemented (bounded behavior) | `ImapEngine.cs`; UID allocator/storage | `ImapUidStabilityTests`; raw UID/MOVE tests |
+| §3 authenticated/selected state command permissions | MUST | Partial | `ImapStateMachine.cs`, `ImapEngine.cs` | Raw auth-state assertions; per-command RFC table absent |
+| §4 UTF-8 and literal syntax / framing | MUST | Partial | `ImapCommandTokenizer.cs`, `ImapListenerService.cs`, `ImapEngine.cs` | Raw LITERAL- 4096/4097 boundary and rev2 ENABLE test; full malformed-octet corpus absent |
+| §5 mailbox naming and Net-Unicode validity | MUST | Missing / not audited | `ImapEngine.cs` mailbox path encoding/decoding | No normalization / invalid Net-Unicode test identified |
+| §6.1 CAPABILITY and ENABLE response semantics | MUST | Implemented for ENABLE response; rev2 advertisement withheld | `ImapEngine.cs: CapabilityLine`, `HandleEnable` | `ImapListenerRawSocketTests`: capability exact string, R5/R5a ENABLE |
+| §6.3.1 ENABLE IMAP4rev2 session behavior; ENABLED sent even if none enabled | MUST | Implemented (bounded) | `ImapEngine.cs: HandleEnable` | `ImapListenerRawSocketTests`: R5 and R5a |
+| §6.3.1 rev2 UTF-8 mailbox names | MUST | Partial; UTF-8 acceptance toggled by rev2, Net-Unicode validation unproven | `ImapEngine.cs: HandleEnable`, mailbox path codec | No rev2 Unicode mailbox round-trip test identified |
+| §6.3.2–3 SELECT/EXAMINE response codes, LIST response, omit RECENT, CLOSED | MUST | Partial | `ImapEngine.cs: HandleSelectAsync` | `ImapListenerRawSocketTests`: rev2 select, no RECENT, CLOSED; LIST response code matrix absent |
+| §6.3.9 LIST-EXTENDED return/selection options and attributes | MUST | Partial | `ImapEngine.cs: HandleListAsync` | Raw LIST-EXTENDED tests; complete RETURN/attribute truth-table absent |
+| §6.3.11 STATUS DELETED and SIZE | MUST | Implemented (bounded) | `ImapEngine.cs: BuildStatusResponseAsync` | Existing rev2 STATUS=SIZE raw test; new external validation check for DELETED/SIZE |
+| §6.4.4 SEARCH/UID SEARCH ESEARCH and SEARCHRES SAVE/$ | MUST | Implemented (bounded) | `ImapEngine.cs: HandleSearchAsync` | Raw ESEARCH, UID ESEARCH, RETURN and SEARCHRES assertions in `ImapListenerRawSocketTests` |
+| §6.4.5 BINARY leaf-only section-binary; partial is over decoded octets; matching SIZE | MUST | Partial | `ImapFetchItemParser.cs`; `ImapEngine.cs` partial emission; `MimeKitImapMimeFormatter.cs` | Raw `R24a` verifies decoded partial origin/count; empty section and SIZE partial rejection `R24b/R24c`; remaining multipart/message and CRLF normalization tests absent |
+| §6.4.5 unknown CTE returns NO [UNKNOWN-CTE] | MUST | Implemented for unknown transfer-encoding token | `MimeKitImapMimeFormatter.cs`; `ImapEngine.cs` | Raw `R29`; formatter unit test `Decodes_binary_sections_and_reports_unknown_transfer_encoding` |
+| §6.4.9 UID EXPUNGE, APPENDUID/COPYUID semantics | MUST | Partial | `ImapEngine.cs` UID/COPY/MOVE/APPEND handlers | Raw UID EXPUNGE/COPYUID/APPENDUID assertions; complete NO/error-code placement matrix absent |
+| §6 rev2 removed CHECK and LSUB; no \Recent | MUST | Implemented for CHECK/LSUB dispatch and existing response omission | `ImapEngine.cs` | New raw `R6a/R6b`; existing SELECT/FETCH/STATUS recent assertions |
+| Appendix E folded/removed extension semantics, including ID and unsupported commands | MUST / conditional | Missing / not audited | Capability line and command dispatch | No complete Appendix E checklist/test mapping |
+| §§7.1–7.6 response syntax, codes, placement, untagged response ordering | MUST | Partial | `ImapEngine.cs`, `ImapResponseWriter.cs` | Selected exact-code raw tests; complete code/command placement matrix remains open |
+
+### Exact remaining blockers to advertisement
+
+- Full paragraph enumeration and evidence for RFC 9051 §§2–7 and Appendix E, including all applicable MUST, MUST NOT, SHOULD, and REQUIRED statements.
+- BINARY still needs server enforcement that the requested part is a leaf (not multipart, `message/rfc822`, or `message/global`), correct textual CRLF output, and tests proving BINARY.SIZE matches each corresponding decoded BINARY response across empty, out-of-range, and partial boundaries.
+- Net-Unicode mailbox validation and UTF-8 create/select/rename round trips in rev2 have not been proven.
+- Rev2 LIST response-code requirements, exact LIST RETURN/attribute truth table (`\\NonExistent`, `\\HasChildren`, `\\HasNoChildren`, `\\Subscribed`), and full STATUS DELETED/SIZE exact response tests remain incomplete.
+- Full SELECT/EXAMINE responses (including required LIST code, READ-ONLY/READ-WRITE and no RECENT), APPENDUID/COPYUID and failure response codes, UID EXPUNGE, ID handling, SAVE/`$` behavior beyond current tests, and rev2 NOOP/CHECK edge behavior need systematic coverage.
+- MailKit tests in explicit rev2 mode, a named rev1 no-ENABLE Thunderbird compatibility regression covering shared mailboxes, MOVE, IDLE and WEBMAIL-001 drafts, and exact capability checks at pre-auth/post-auth are not complete. External script now includes a rev2 pass, but it was not run against any host.
+- Response-code placement and semantics have not been audited exhaustively. The existing code paths and a few exact raw assertions do not establish all RFC 9051 server requirements.
+
+### Implementation changes and verification
+
+BINARY section parsing now rejects an empty `section-binary` (BODY[] remains the separate complete-message fetch); decoded BINARY partial responses slice at the requested octet offset and report the returned origin. BINARY.SIZE partial syntax is rejected. IMAP4rev2 ENABLE now returns an untagged ENABLED response even when no supported extension was enabled, enables UTF-8 mailbox decoding for the rev2 session, treats CHECK as NOOP, and rejects LSUB. These changes are tested in `ImapListenerRawSocketTests` (`R5a`, `R6a`, `R6b`, `R24a`–`R24c`). `scripts/imap-external-validation.py` now runs a distinct ENABLE IMAP4rev2 validation pass following the legacy rev1 pass.
+
+Build: `dotnet build tests/Miautrix.Mail.ProtocolTests/Miautrix.Mail.ProtocolTests.csproj -warnaserror -m:1` succeeded with 0 warnings and 0 errors. Protocol tests: 38/38 passed with the configured non-production test DB. An initial run without passing the test environment into the test process failed because `MIAUTRIX_DB_CONNECTION` was absent; it was rerun correctly. The full solution and all baseline suites were not run in this partial checkpoint.

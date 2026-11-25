@@ -143,5 +143,27 @@ with imaplib.IMAP4_SSL(host, 993, ssl_context=context) as client:
 
     client.logout()
 
+# Run a separate session in explicit rev2 mode so the read-only rev1 pass above
+# remains a regression check for clients (including Thunderbird) that never ENABLE.
+with imaplib.IMAP4_SSL(host, 993, ssl_context=context) as rev2:
+    status, _ = rev2.login(username, password)
+    check("IMAP4rev2 LOGIN", status == "OK")
+    status, data = rev2._simple_command("ENABLE", "IMAP4rev2")
+    enabled = status == "OK" and any(b"IMAP4REV2" in (line or b"").upper() for line in (data or []))
+    check("IMAP4rev2 ENABLE", enabled)
+    status, data = rev2.select("INBOX", readonly=True)
+    check("IMAP4rev2 EXAMINE/SELECT", status == "OK", f"{data[0].decode(errors='replace') if data and data[0] else '0'} messages")
+    if status == "OK":
+        status, data = rev2.search(None, "ALL")
+        check("IMAP4rev2 SEARCH", status == "OK", f"{len(data[0].split()) if data and data[0] else 0} ids")
+        status, data = rev2.status("INBOX", "(MESSAGES DELETED SIZE)")
+        check("IMAP4rev2 STATUS DELETED/SIZE", status == "OK")
+        status, _ = rev2.status("INBOX", "(RECENT)")
+        check("IMAP4rev2 rejects RECENT", status == "NO" or status == "BAD", status)
+        status, _ = rev2.lsub()
+        check("IMAP4rev2 LSUB rejected", status == "NO" or status == "BAD", status)
+        rev2.close()
+    rev2.logout()
+
 print(f"\n{sum(results)}/{len(results)} checks passed")
 sys.exit(0 if all(results) else 1)

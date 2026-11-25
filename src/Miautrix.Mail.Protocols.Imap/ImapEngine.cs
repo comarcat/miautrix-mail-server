@@ -202,6 +202,8 @@ public sealed partial class ImapSession
                 return await HandleListAsync(tag, args, cancellationToken);
 
             case "LSUB":
+                if (_imap4Rev2Enabled)
+                    return new ImapCommandResult(tag, "BAD", "LSUB is not available in IMAP4rev2", Array.Empty<string>());
                 return await HandleListAsync(tag, args, cancellationToken, subscribed: true);
 
             case "SUBSCRIBE":
@@ -216,6 +218,7 @@ public sealed partial class ImapSession
                 return HandleNamespace(tag);
 
             case "CHECK":
+                if (_imap4Rev2Enabled) return await HandleNoopAsync(tag, cancellationToken);
                 return State == ImapState.Selected
                     ? new ImapCommandResult(tag, "OK", "CHECK completed", Array.Empty<string>())
                     : new ImapCommandResult(tag, "NO", "No mailbox selected", Array.Empty<string>());
@@ -334,15 +337,14 @@ public sealed partial class ImapSession
             else if (argument.Text.Equals("IMAP4rev2", StringComparison.OrdinalIgnoreCase))
             {
                 _imap4Rev2Enabled = true;
+                _utf8AcceptEnabled = true;
                 _enabledExtensions.Add("IMAP4rev2");
             }
         }
 
         var enabledNow = args.Select(argument => argument.Text.ToUpperInvariant())
             .Where(name => _enabledExtensions.Contains(name)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-        var enabled = enabledNow.Length == 0
-            ? Array.Empty<string>()
-            : new[] { $"* ENABLED {string.Join(' ', enabledNow)}" };
+        var enabled = new[] { $"* ENABLED{(enabledNow.Length == 0 ? string.Empty : " " + string.Join(' ', enabledNow))}" };
         return new ImapCommandResult(tag, "OK", "ENABLE completed", enabled);
     }
 
@@ -1732,7 +1734,8 @@ public sealed partial class ImapSession
                 if (literalBytes is null) prefix += sep + itemName + " " + text;
                 else
                 {
-                if (values[i].Name.StartsWith("BODY", StringComparison.OrdinalIgnoreCase) && values[i].Name != "BODY")
+                    if ((values[i].Name.StartsWith("BODY", StringComparison.OrdinalIgnoreCase) && values[i].Name != "BODY") ||
+                        values[i].Name.StartsWith("BINARY[", StringComparison.OrdinalIgnoreCase))
                     {
                         if (sourceItem?.PartialStart is uint start && start < literalBytes.Length)
                         {
