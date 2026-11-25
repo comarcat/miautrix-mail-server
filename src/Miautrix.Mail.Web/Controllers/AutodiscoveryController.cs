@@ -12,7 +12,7 @@ namespace Miautrix.Mail.Web.Controllers;
 
 [ApiController]
 [EnableRateLimiting("discovery")]
-public sealed class AutodiscoveryController(AppDbContext db, IConfiguration configuration, IRequestContextAccessor context) : ControllerBase
+public sealed class AutodiscoveryController(AppDbContext db, IConfiguration configuration, IRequestContextAccessor context, IHttpContextAccessor httpContextAccessor) : ControllerBase
 {
     [HttpGet("/.well-known/autoconfig/mail/config-v1.1.xml")]
     [HttpGet("/mail/config-v1.1.xml")]
@@ -76,8 +76,10 @@ public sealed class AutodiscoveryController(AppDbContext db, IConfiguration conf
     [HttpGet("/api/v1/webmail/mobileconfig")]
     public async Task<IActionResult> MobileConfig(CancellationToken ct)
     {
-        if (context.CurrentUserId == Guid.Empty || context.CurrentTenantId == Guid.Empty) return Unauthorized();
-        var email = await db.Users.AsNoTracking().Where(u => u.TenantId == context.CurrentTenantId && u.Id == context.CurrentUserId).Select(u => u.Email).FirstOrDefaultAsync(ct);
+        var request = httpContextAccessor.HttpContext?.Request;
+        if (request is null || !Guid.TryParse(request.Headers["X-User-Id"], out var userId) || !Guid.TryParse(request.Headers["X-Tenant-Id"], out var tenantId)) return Unauthorized();
+        if (userId != context.CurrentUserId || tenantId != context.CurrentTenantId) return Unauthorized();
+        var email = await db.Users.AsNoTracking().Where(u => u.TenantId == tenantId && u.Id == userId).Select(u => u.Email).FirstOrDefaultAsync(ct);
         if (email is null) return NotFound();
         var domain = EmailDomain(email); if (domain is null) return NotFound();
         var imap = PublicHost("IMAP"); var smtp = PublicHost("SMTP");
