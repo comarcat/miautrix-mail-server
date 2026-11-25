@@ -58,15 +58,16 @@
 
 - `dotnet build Miautrix.Mail.sln -warnaserror -m:1`: passed, zero warnings.
 - UnitTests: 125 passed; SecurityTests: 7 passed; ProtocolTests: 38 passed.
-- Targeted IntegrationTests: 47 passed, including the existing required subsets plus all package contracts.
+- Targeted IntegrationTests: 48 passed, including the existing required subsets plus all package contracts.
 - Autodiscovery integration contracts: 5 passed, including XML structure, settings/ports, POX address echo without an idempotency header, unknown domain, local-part independence, discovery-only limiting, and trusted-proxy IP partitioning. Repeated non-discovery OpenAPI requests remain unaffected by the discovery limiter.
 - MTA-STS integration contracts: 4 passed, including exact response bytes for testing/enforce, Host routing, none/unknown 404, and policy-ID rotation on policy update.
 - Mobileconfig integration contracts: 3 passed, including missing identity, no password/current address, and cross-tenant rejection.
+- Static frontend integration contract: discovery routes continue to controllers with webmail hosting enabled; root and deep SPA routes, `/admin/`, asset delivery and static security headers are preserved.
 - Migration integration contract: 1 passed; migration reapplication is a no-op and new domains retain `none` / `604800`.
 - Throwaway PostgreSQL database `miautrix_test_autodisc_mig_c5098` was migrated from the immediately preceding migration. A pre-existing domain row received `none` / `604800`; applying the latest migration a second time left one migration-history entry and succeeded.
 - Admin suite: 20 passed, including mode selection/max-age and DNS suggestions; admin production build passed.
 - Webmail suite: 17 passed, including the iPhone/Mac setup link.
-- Full IntegrationTests: 107 passed and 16 failed out of 123. The 16 failures match the repository's documented pre-existing failures; no additional failures were observed.
+- Full IntegrationTests: 108 passed and 16 failed out of 124. The 16 failures match the repository's documented pre-existing failures; no additional failures were observed.
 - Admin production build: passed (Vite emitted its existing large-chunk advisory).
 
 ## Deferred and limitations

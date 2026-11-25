@@ -12,8 +12,8 @@ namespace Miautrix.Mail.Web.Controllers;
 [ApiController]
 public sealed class AutodiscoveryController(AppDbContext db, IConfiguration configuration, IRequestContextAccessor context, IHttpContextAccessor httpContextAccessor) : ControllerBase
 {
-    [HttpGet("/.well-known/autoconfig/mail/config-v1.1.xml")]
-    [HttpGet("/mail/config-v1.1.xml")]
+    [HttpGet(DiscoveryRoutes.WellKnownAutoconfig)]
+    [HttpGet(DiscoveryRoutes.MailAutoconfig)]
     [EnableRateLimiting("discovery")]
     public async Task<IActionResult> Autoconfig([FromQuery] string? emailaddress, CancellationToken ct)
     {
@@ -30,8 +30,8 @@ public sealed class AutodiscoveryController(AppDbContext db, IConfiguration conf
         return Content(doc.ToString(SaveOptions.DisableFormatting), "application/xml", Encoding.UTF8);
     }
 
-    [HttpGet("/autodiscover/autodiscover.xml")]
-    [HttpPost("/autodiscover/autodiscover.xml")]
+    [HttpGet(DiscoveryRoutes.OutlookAutodiscover)]
+    [HttpPost(DiscoveryRoutes.OutlookAutodiscover)]
     [EnableRateLimiting("discovery")]
     public async Task<IActionResult> Outlook(CancellationToken ct)
     {
@@ -60,7 +60,7 @@ public sealed class AutodiscoveryController(AppDbContext db, IConfiguration conf
         return Content(response.ToString(SaveOptions.DisableFormatting), "text/xml", Encoding.UTF8);
     }
 
-    [HttpGet("/.well-known/mta-sts.txt")]
+    [HttpGet(DiscoveryRoutes.MtaStsPolicy)]
     [EnableRateLimiting("discovery")]
     public async Task<IActionResult> MtaSts(CancellationToken ct)
     {

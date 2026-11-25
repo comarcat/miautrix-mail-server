@@ -39,6 +39,7 @@ public sealed class MobileConfigTests : IClassFixture<WebApplicationFactory<Miau
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("application/x-apple-aspen-config", response.Content.Headers.ContentType!.MediaType);
         var profileBytes = await response.Content.ReadAsByteArrayAsync();
+        Assert.Contains("<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">", System.Text.Encoding.UTF8.GetString(profileBytes));
         var profile = ParseProfile(profileBytes);
         var profileDictionary = profile.Root!.Element("dict")!;
         Assert.Equal("Configuration", PlistValue(profileDictionary, "PayloadType")!.Value);

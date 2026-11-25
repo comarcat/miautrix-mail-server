@@ -180,8 +180,8 @@ public class Program
             app.UseHsts();
         }
 
-        var adminDirectory = StaticFrontendHosting.ValidateOptionalDirectory("MIAUTRIX_ADMIN_DIR");
-        var webmailDirectory = StaticFrontendHosting.ValidateOptionalDirectory("MIAUTRIX_WEBMAIL_DIR");
+        var adminDirectory = StaticFrontendHosting.ValidateOptionalDirectory("MIAUTRIX_ADMIN_DIR", builder.Configuration["MIAUTRIX_ADMIN_DIR"]);
+        var webmailDirectory = StaticFrontendHosting.ValidateOptionalDirectory("MIAUTRIX_WEBMAIL_DIR", builder.Configuration["MIAUTRIX_WEBMAIL_DIR"]);
         StaticFrontendHosting.Configure(app, adminDirectory, webmailDirectory);
 
         app.UseRouting();
