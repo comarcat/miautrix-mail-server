@@ -62,6 +62,7 @@ export interface CreateDomainRequest {
   mta_sts_mode?: 'none' | 'testing' | 'enforce';
   mta_sts_max_age?: number;
   tls_report_rua?: string | null;
+  mta_sts_mx?: string | null;
 }
 
 export interface UpdateDomainRequest {
