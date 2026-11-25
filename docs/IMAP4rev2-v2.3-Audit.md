@@ -2,7 +2,7 @@
 
 **Scope:** normative paragraphs in RFC 9051 §§2–7. One row represents one paragraph containing server-applicable normative statements. Quote excerpts are limited to 15 words. Paragraph indices are local normative-paragraph ordinals within each section because RFC 9051 does not number prose paragraphs.
 
-**Rows:** 59. **Status:** Implemented 16, Implemented-untested 0, Not applicable 5, Missing 0, Partial 38. **Level:** MUST 27, MUST NOT 10, REQUIRED 1, SHALL 0, SHALL NOT 0, SHOULD 12, SHOULD NOT 7, RECOMMENDED 2.
+**Rows:** 67. **Status:** Implemented 16, Implemented-untested 0, Not applicable 6, Missing 0, Partial 45. **Level:** MUST 32, MUST NOT 11, REQUIRED 1, SHALL 0, SHALL NOT 0, SHOULD 14, SHOULD NOT 7, RECOMMENDED 2.
 
 **Advertisement gate: NOT READY** — applicable Partial MUST-level rows remain, including UID invariants, framing/state, LIST, STATUS, SEARCH, BINARY, and response-code placement.
 
@@ -87,3 +87,11 @@ Known exclusions include client-only requirements and cleartext STARTTLS (the li
 | §3 para 26 | “message for a failing LOGIN command SHOULD NOT specify that the user name, as opposed” | SHOULD NOT | Partial | `ImapStateMachine.IsAllowed / ImapSession.ExecuteCommandAsync` | Partial: all state-transition and command-legality combinations. |
 | §3 para 27 | “A server SHOULD have mechanisms in place to limit or delay failed AUTHENTICATE/LOGIN attempts” | SHOULD | Partial | `ImapStateMachine.IsAllowed / ImapSession.ExecuteCommandAsync` | Partial: all state-transition and command-legality combinations. |
 | §3 para 28 | “A server SHOULD report any authentication failure and analyze such authentication failure attempts with regard” | SHOULD | Partial | `ImapStateMachine.IsAllowed / ImapSession.ExecuteCommandAsync` | Partial: all state-transition and command-legality combinations. |
+| §4 para 1 | “texts (all BODY[...] fetch data items) MUST never change. This does not include message numbers” | MUST | Partial | `ImapCommandTokenizer.Tokenize / ImapListenerService.HandleClientAsync` | Partial: complete data-format grammar and literal boundary cases. |
+| §4.3 para 1 | “from client to server, the client MUST wait to receive a command continuation request (described” | MUST | Partial | `ImapCommandTokenizer.Tokenize / ImapListenerService.HandleClientAsync` | Partial: complete data-format grammar and literal boundary cases. |
+| §4.3 para 2 | “is permitted. The non-synchronizing literal form MUST NOT be sent from server to client. The” | MUST NOT | Partial | `ImapCommandTokenizer.Tokenize / ImapListenerService.HandleClientAsync` | Partial: complete data-format grammar and literal boundary cases. |
+| §4.3 para 3 | “a client transmitting a synchronizing literal MUST wait to receive a command continuation request” | MUST | Not applicable | `—` | Client-only normative clause; the server has no corresponding obligation. |
+| §4.3.1 para 1 | “or multi-octet characters in literals but SHOULD do so only when the [CHARSET] is identified” | SHOULD | Partial | `ImapCommandTokenizer.Tokenize / ImapListenerService.HandleClientAsync` | Partial: complete data-format grammar and literal boundary cases. |
+| §4.3.1 para 2 | “content is UTF-8 [UTF-8]. IMAP4rev2 implementations MUST accept and MAY transmit [UTF-8] text in quoted-strings” | MUST | Partial | `ImapCommandTokenizer.Tokenize / ImapListenerService.HandleClientAsync` | Partial: complete data-format grammar and literal boundary cases. |
+| §4.3.1 para 3 | “BINARY.PEEK[...]/BINARY[...] FETCH, client and server implementations MUST encode binary data into a textual form, such” | MUST | Partial | `ImapCommandTokenizer.Tokenize / ImapListenerService.HandleClientAsync` | Partial: complete data-format grammar and literal boundary cases. |
+| §4 para 2 | “case. In all cases, the client SHOULD continue to read response data from the server” | SHOULD | Partial | `ImapCommandTokenizer.Tokenize / ImapListenerService.HandleClientAsync` | Partial: complete data-format grammar and literal boundary cases. |
