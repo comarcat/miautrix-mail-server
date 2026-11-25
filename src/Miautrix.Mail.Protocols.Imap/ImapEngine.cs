@@ -482,7 +482,9 @@ public sealed partial class ImapSession
         if (response.Trim() == "*") return new ImapCommandResult(tag, "BAD", "AUTHENTICATE cancelled", Array.Empty<string>());
         try
         {
-            var fields = Encoding.UTF8.GetString(Convert.FromBase64String(response.Trim())).Split('\0');
+            var initialResponse = response.Trim();
+            var decodedResponse = initialResponse == "=" ? Array.Empty<byte>() : Convert.FromBase64String(initialResponse);
+            var fields = Encoding.UTF8.GetString(decodedResponse).Split('\0');
             if (fields.Length != 3) return new ImapCommandResult(tag, "NO", "[AUTHENTICATIONFAILED] Authentication failed", Array.Empty<string>());
             var auth = await _authenticator.AuthenticateAsync(fields[1], fields[2], ct);
             if (!auth.IsSuccess) return new ImapCommandResult(tag, "NO", "[AUTHENTICATIONFAILED] Authentication failed", Array.Empty<string>());

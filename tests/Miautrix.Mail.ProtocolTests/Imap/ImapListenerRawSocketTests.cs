@@ -174,6 +174,7 @@ public sealed class ImapListenerRawSocketTests
             var mismatchedAuthz = Convert.ToBase64String(Encoding.UTF8.GetBytes($"other@invalid\0{address}\0test-password"));
             Assert.Equal("A0d NO [AUTHORIZATIONFAILED] Cannot act as the requested authorization identity\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, $"A0d AUTHENTICATE PLAIN {mismatchedAuthz}", "A0d", stopping.Token)));
             Assert.Equal("A0d1 BAD Invalid AUTHENTICATE base64 data\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A0d1 AUTHENTICATE PLAIN !!!", "A0d1", stopping.Token)));
+            Assert.Equal("A0d2 NO [AUTHENTICATIONFAILED] Authentication failed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A0d2 AUTHENTICATE PLAIN =", "A0d2", stopping.Token)));
             await tls.WriteAsync("A0e AUTHENTICATE PLAIN\r\n"u8.ToArray(), stopping.Token);
             Assert.Equal("+", Encoding.ASCII.GetString(await reader.ReadLineAsync(stopping.Token) ?? []));
             await tls.WriteAsync("*\r\n"u8.ToArray(), stopping.Token);
@@ -882,7 +883,11 @@ public sealed class ImapListenerRawSocketTests
                 await rev2Tls.AuthenticateAsClientAsync(new SslClientAuthenticationOptions { TargetHost = "localhost" }, stopping.Token);
                 var rev2Reader = new ImapConnectionReader(rev2Tls);
                 await rev2Reader.ReadLineAsync(stopping.Token);
-                await SendAndReadAsync(rev2Tls, rev2Reader, $"R4 LOGIN {address} test-password", "R4", stopping.Token);
+                await rev2Tls.WriteAsync("R4 AUTHENTICATE PLAIN\r\n"u8.ToArray(), stopping.Token);
+                Assert.Equal("+", Encoding.ASCII.GetString(await rev2Reader.ReadLineAsync(stopping.Token) ?? []));
+                var continuationSasl = Convert.ToBase64String(Encoding.UTF8.GetBytes($"\0{address}\0test-password"));
+                await rev2Tls.WriteAsync(Encoding.ASCII.GetBytes(continuationSasl + "\r\n"), stopping.Token);
+                Assert.Equal("R4 OK AUTHENTICATE completed\r\n", Encoding.UTF8.GetString(await ReadResponseAsync(rev2Reader, "R4", stopping.Token)));
                 Assert.Equal("* ENABLED IMAP4REV2\r\nR5 OK ENABLE completed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R5 ENABLE IMAP4rev2", "R5", stopping.Token)));
                 Assert.Equal(capabilityText.Replace("A0", "R5b"), Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R5b CAPABILITY", "R5b", stopping.Token)));
                 Assert.Equal("* ENABLED\r\nR5a OK ENABLE completed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R5a ENABLE X-UNSUPPORTED", "R5a", stopping.Token)));
