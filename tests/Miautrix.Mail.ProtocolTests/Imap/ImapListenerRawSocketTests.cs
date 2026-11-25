@@ -936,8 +936,16 @@ public sealed class ImapListenerRawSocketTests
                 Assert.Contains("BINARY[1] {", binaryFetch);
                 Assert.Contains("BINARY.SIZE[1] ", binaryFetch);
                 Assert.Contains("BINARY[1] {", binaryFetch);
+                var binarySize = System.Text.RegularExpressions.Regex.Match(binaryFetch, @"BINARY\.SIZE\[1\] (\d+)");
+                var binaryLiteral = System.Text.RegularExpressions.Regex.Match(binaryFetch, @"BINARY\[1\] \{(\d+)\}");
+                Assert.True(binarySize.Success, binaryFetch);
+                Assert.True(binaryLiteral.Success, binaryFetch);
+                Assert.Equal(binarySize.Groups[1].Value, binaryLiteral.Groups[1].Value);
                 var binaryPartial = Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R24a FETCH 1 (BINARY[1]<1.2>)", "R24a", stopping.Token));
                 Assert.Contains("BINARY[1]<1> {2}", binaryPartial);
+                var binarySizePartial = Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R24aa FETCH 1 (BINARY[1]<0.2> BINARY.SIZE[1])", "R24aa", stopping.Token));
+                Assert.Contains("BINARY[1]<0> {2}", binarySizePartial);
+                Assert.Contains("BINARY.SIZE[1] ", binarySizePartial);
                 var emptyBinary = Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R24b FETCH 1 (BINARY[])", "R24b", stopping.Token));
                 Assert.Contains("BINARY[] {", emptyBinary);
                 Assert.Contains("R24b OK FETCH completed", emptyBinary);
