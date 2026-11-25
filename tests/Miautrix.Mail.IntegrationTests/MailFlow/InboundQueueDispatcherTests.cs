@@ -125,7 +125,7 @@ public sealed class InboundQueueDispatcherTests
             var mailboxId = await SeedDomainAndMailboxAsync(tenantId, $"user@{TestDomain}");
             await SeedFolderAsync(tenantId, mailboxId, "Inbox", "inbox");
             var queueItemId = await SeedQueueItemAsync(tenantId, $"user@{TestDomain}",
-                "From: sender@example.test\r\nSubject: DMARC quarantine\r\nAuthentication-Results: mx; dmarc=fail header.from=example.test policy.dmarc=quarantine\r\n\r\nbody");
+                "From: sender@example.test\r\nSubject: DMARC quarantine\r\nAuthentication-Results: localhost; dmarc=fail header.from=example.test policy.dmarc=quarantine\r\n\r\nbody");
             await RunOnePassAsync(inboundAuthenticationOptions: new InboundAuthenticationOptions { Mode = AuthenticationMode.Enforce });
 
             await using var context = CreateContext();
@@ -150,12 +150,33 @@ public sealed class InboundQueueDispatcherTests
             await SeedFolderAsync(tenantId, mailboxId, "Inbox", "inbox");
             await SeedFolderAsync(tenantId, mailboxId, "Junk", "junk");
             await SeedQueueItemAsync(tenantId, $"user@{TestDomain}",
-                "From: sender@example.test\r\nSubject: DMARC quarantine\r\nAuthentication-Results: mx; dmarc=fail header.from=example.test policy.dmarc=quarantine\r\n\r\nbody");
+                "From: sender@example.test\r\nSubject: DMARC quarantine\r\nAuthentication-Results: localhost; dmarc=fail header.from=example.test policy.dmarc=quarantine\r\n\r\nbody");
             await RunOnePassAsync(inboundAuthenticationOptions: new InboundAuthenticationOptions { Mode = AuthenticationMode.Enforce });
 
             await using var verify = CreateContext();
             var message = await verify.Messages.AsNoTracking().FirstAsync(m => m.MailboxId == mailboxId);
             Assert.Equal("junk", (await verify.Folders.AsNoTracking().FirstAsync(f => f.Id == message.FolderId)).Role);
+            Assert.DoesNotContain("\\Flagged", message.Flags);
+        }
+        finally { await CleanupAsync(tenantId); }
+    }
+
+    [Theory]
+    [InlineData("body", "From: sender@example.test\r\nSubject: body spoof\r\n\r\nThe literal text dmarc=fail policy.dmarc=quarantine is not a verdict.")]
+    [InlineData("foreign-header", "From: sender@example.test\r\nSubject: forwarded spoof\r\nAuthentication-Results: forwarder.example; dmarc=fail header.from=example.test policy.dmarc=quarantine\r\n\r\nbody")]
+    public async Task Foreign_or_body_dmarc_text_does_not_trigger_quarantine(string _, string rawMessage)
+    {
+        var tenantId = await SeedTenantAsync();
+        try
+        {
+            var mailboxId = await SeedDomainAndMailboxAsync(tenantId, $"user@{TestDomain}");
+            await SeedFolderAsync(tenantId, mailboxId, "Junk", "junk");
+            await SeedQueueItemAsync(tenantId, $"user@{TestDomain}", rawMessage);
+            await RunOnePassAsync(inboundAuthenticationOptions: new InboundAuthenticationOptions { Mode = AuthenticationMode.Enforce, AuthservId = "localhost" });
+
+            await using var context = CreateContext();
+            var message = await context.Messages.AsNoTracking().FirstAsync(m => m.MailboxId == mailboxId);
+            Assert.Equal("inbox", (await context.Folders.AsNoTracking().FirstAsync(f => f.Id == message.FolderId)).Role);
             Assert.DoesNotContain("\\Flagged", message.Flags);
         }
         finally { await CleanupAsync(tenantId); }

@@ -249,8 +249,7 @@ public sealed class InboundQueueDispatcher : BackgroundService
         }
 
         var dmarcQuarantine = _inboundAuthenticationOptions?.Mode == AuthenticationMode.Enforce &&
-            item.RawMessage.Contains("dmarc=fail", StringComparison.OrdinalIgnoreCase) &&
-            item.RawMessage.Contains("policy.dmarc=quarantine", StringComparison.OrdinalIgnoreCase);
+            InboundAuthenticationHeaderParser.IsOwnDmarcQuarantine(item.RawMessage, _inboundAuthenticationOptions.AuthservId);
         var deliveredRole = dmarcQuarantine ? "junk" : result.Score >= junkThreshold ? "junk" : "inbox";
         var _ = result; // keep result in scope for the following role decision
 
