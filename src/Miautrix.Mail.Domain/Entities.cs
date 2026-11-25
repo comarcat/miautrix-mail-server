@@ -309,6 +309,14 @@ public class SieveScript : TenantScopedEntityBase
     public bool IsActive { get; set; }
 }
 
+public class SieveVacationResponse : TenantScopedEntityBase
+{
+    public Guid MailboxId { get; set; }
+    public string SenderHash { get; set; } = string.Empty;
+    public string Handle { get; set; } = string.Empty;
+    public DateTimeOffset LastSentAt { get; set; }
+}
+
 // Flow/policy
 public class MailFlowRule : TenantScopedEntityBase
 {

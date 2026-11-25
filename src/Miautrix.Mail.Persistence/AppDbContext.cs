@@ -47,6 +47,7 @@ public class AppDbContext : DbContext
     public DbSet<Group> Groups => Set<Group>();
     public DbSet<GroupMember> GroupMembers => Set<GroupMember>();
     public DbSet<SieveScript> SieveScripts => Set<SieveScript>();
+    public DbSet<SieveVacationResponse> SieveVacationResponses => Set<SieveVacationResponse>();
 
     public DbSet<MailFlowRule> MailFlowRules => Set<MailFlowRule>();
     public DbSet<SmtpQueueItem> SmtpQueue => Set<SmtpQueueItem>();
@@ -430,6 +431,22 @@ public class AppDbContext : DbContext
             entity.Property(e => e.Name).HasColumnName("name").IsRequired();
             entity.Property(e => e.Content).HasColumnName("content").IsRequired();
             entity.Property(e => e.IsActive).HasColumnName("is_active");
+            entity.HasIndex(e => e.MailboxId)
+                .IsUnique()
+                .HasFilter("is_active = TRUE")
+                .HasDatabaseName("uq_sieve_scripts_active_mailbox_id");
+        });
+
+        ConfigureTenantScoped<SieveVacationResponse>(modelBuilder, "sieve_vacation_responses");
+        modelBuilder.Entity<SieveVacationResponse>(entity =>
+        {
+            entity.Property(e => e.MailboxId).HasColumnName("mailbox_id");
+            entity.Property(e => e.SenderHash).HasColumnName("sender_hash").HasMaxLength(64).IsRequired();
+            entity.Property(e => e.Handle).HasColumnName("handle").HasMaxLength(255).IsRequired();
+            entity.Property(e => e.LastSentAt).HasColumnName("last_sent_at");
+            entity.HasIndex(e => new { e.MailboxId, e.SenderHash, e.Handle })
+                .IsUnique()
+                .HasDatabaseName("uq_sieve_vacation_responses_mailbox_sender_handle");
         });
 
         ConfigureTenantScoped<MailFlowRule>(modelBuilder, "mail_flow_rules");
