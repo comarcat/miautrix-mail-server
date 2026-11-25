@@ -6,7 +6,7 @@ namespace Miautrix.Mail.Protocols.Sieve;
 
 public sealed record SieveValue(string? Text = null, long? Number = null, IReadOnlyList<SieveValue>? Items = null)
 {
-    public IReadOnlyList<string> Strings => Items is not null ? Items.SelectMany(x => x.Strings).ToArray() : Text is not null ? [Text] : [];
+    public IReadOnlyList<string> Strings => Items is not null ? Items.SelectMany(x => x.Strings).ToArray() : Text is not null ? [Text] : Number is not null ? [Number.Value.ToString(CultureInfo.InvariantCulture)] : [];
 }
 
 public sealed record SieveTest(string Name, IReadOnlyList<SieveValue> Arguments, IReadOnlyList<string> Tags, IReadOnlyList<SieveTest>? Children = null);
@@ -26,14 +26,10 @@ public sealed class SieveCompiler
     {
         "fileinto", "envelope", "imap4flags", "vacation", "reject", "ereject", "copy", "mailbox"
     };
-    private readonly SieveParser _validator;
-
-    public SieveCompiler(SieveParser? validator = null) => _validator = validator ?? new SieveParser();
+    public SieveCompiler(SieveParser? validator = null) { }
 
     public SieveCompileResult Compile(string source)
     {
-        var valid = _validator.Validate(source);
-        if (!valid.Success) return new SieveCompileResult(null, valid);
         try
         {
             var parser = new Parser(source);
@@ -95,6 +91,8 @@ public sealed class SieveCompiler
                 if (Is("if")) { result.Add(ParseConditional()); continue; }
                 var name = Take();
                 if (name.Kind != TokenKind.Word) throw new ParseException("Expected a command.", name);
+                if (!new[] { "fileinto", "redirect", "keep", "discard", "stop", "setflag", "addflag", "removeflag", "vacation", "reject", "ereject" }.Contains(name.Value, StringComparer.OrdinalIgnoreCase))
+                    throw new ParseException($"Unknown Sieve command '{name.Value}'.", name);
                 var (args, tags) = ReadArguments(until: ";");
                 Expect(";");
                 result.Add(new SieveAction(name.Value.ToLowerInvariant(), args, tags));
@@ -131,6 +129,8 @@ public sealed class SieveCompiler
             }
             var testName = Take();
             if (testName.Kind != TokenKind.Word) throw new ParseException("Expected a test.", testName);
+            if (!new[] { "header", "address", "envelope", "exists", "size", "true", "false", "mailboxexists" }.Contains(testName.Value, StringComparer.OrdinalIgnoreCase))
+                throw new ParseException($"Unknown or unsupported Sieve test '{testName.Value}'.", testName);
             var (args, tags) = ReadArguments(until: "{", stopAtComma: true, stopAtParen: true);
             return new SieveTest(testName.Value.ToLowerInvariant(), args, tags);
         }

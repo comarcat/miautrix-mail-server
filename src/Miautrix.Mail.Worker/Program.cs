@@ -12,6 +12,7 @@ using Miautrix.Mail.Security;
 using Miautrix.Mail.Application.Mail;
 using Miautrix.Mail.Protocols.Smtp;
 using Miautrix.Mail.Protocols.Imap;
+using Miautrix.Mail.Protocols.Sieve;
 using Miautrix.Mail.Queue;
 using Miautrix.Mail.Storage;
 using Miautrix.Mail.Application.Mail.Mime;
@@ -167,6 +168,9 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddScoped<IMessageService, MessageService>();
         services.AddScoped<ISenderAuthorizationService, SenderAuthorizationService>();
         services.AddScoped<IMessageUidAllocator, MessageUidAllocator>();
+        services.AddScoped<SieveCompiler>();
+        services.AddScoped<SieveInterpreter>();
+        services.AddScoped<ISieveDeliveryService, SieveDeliveryService>();
 
         // Identity
         services.AddSingleton<IPasswordHasher, Argon2idPasswordHasher>();

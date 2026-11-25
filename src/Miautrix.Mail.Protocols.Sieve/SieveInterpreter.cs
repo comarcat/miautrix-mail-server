@@ -11,7 +11,7 @@ public sealed record SieveMessageContext(
     string? BodyText = null,
     IReadOnlySet<string>? ExistingMailboxes = null);
 
-public sealed record SieveEffect(string Name, IReadOnlyList<string> Values, IReadOnlyList<string> Flags, IReadOnlyList<string> Tags);
+public sealed record SieveEffect(string Name, IReadOnlyList<string> Values, IReadOnlyList<string> Flags, IReadOnlyList<string> Tags, IReadOnlyList<IReadOnlyList<string>>? ArgumentGroups = null);
 public sealed record SieveExecutionResult(IReadOnlyList<SieveEffect> Effects, bool RuntimeError, bool TimedOut, int Steps);
 
 /// <summary>Evaluates compiled Sieve syntax with bounded steps and wall time.</summary>
@@ -35,7 +35,7 @@ public sealed class SieveInterpreter
         catch (LimitException ex) { timedOut = ex.TimedOut; failed = true; }
         catch (Exception) { failed = true; }
         if (failed) return new SieveExecutionResult([new SieveEffect("keep", [], [], [])], true, timedOut, _steps);
-        if (!_effects.Any(x => x.Name is "keep" or "fileinto" or "redirect" or "discard" or "reject" or "ereject" or "vacation"))
+        if (!_effects.Any(x => x.Name is "keep" or "fileinto" or "redirect" or "discard" or "reject" or "ereject"))
             _effects.Add(new SieveEffect("keep", [], [], []));
         return new SieveExecutionResult(_effects.ToArray(), false, false, _steps);
     }
@@ -111,17 +111,21 @@ public sealed class SieveInterpreter
     private void ExecuteAction(SieveAction action)
     {
         if (action.Name == "stop") return;
-        var values = action.Arguments.SelectMany(x => x.Strings).ToArray();
-        var flags = action.Tags.Contains(":flags") ? values.Take(1).ToArray() : [];
-        var payload = flags.Length == 0 ? values : values.Skip(1).ToArray();
+        var groups = action.Arguments.Select(x => x.Strings).ToArray();
+        var values = groups.SelectMany(x => x).ToArray();
+        var flags = action.Tags.Contains(":flags") && groups.Length > 0 ? groups[0].ToArray() : [];
+        var payload = flags.Length == 0 ? values : groups.Skip(1).SelectMany(x => x).ToArray();
         if (action.Name is "setflag" or "addflag" or "removeflag")
         {
-            _effects.Add(new SieveEffect(action.Name, [], values, action.Tags)); return;
+            _effects.Add(new SieveEffect(action.Name, [], values, action.Tags, action.Arguments.Select(x => x.Strings).ToArray())); return;
         }
         if (action.Name is "keep" or "fileinto" or "redirect" or "discard" or "reject" or "ereject" or "vacation")
         {
             if (action.Name == "discard" || action.Name == "keep") payload = [];
-            _effects.Add(new SieveEffect(action.Name, payload, flags, action.Tags)); return;
+            _effects.Add(new SieveEffect(action.Name, payload, flags, action.Tags, action.Arguments.Select(x => x.Strings).ToArray()));
+            if (action.Tags.Contains(":copy") && action.Name is "fileinto" or "redirect")
+                _effects.Add(new SieveEffect("keep", [], [], []));
+            return;
         }
         throw new InvalidOperationException("Unsupported action.");
     }
