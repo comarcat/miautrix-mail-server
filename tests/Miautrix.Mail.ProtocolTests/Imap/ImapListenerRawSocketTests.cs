@@ -176,6 +176,7 @@ public sealed class ImapListenerRawSocketTests
             var sasl = Convert.ToBase64String(Encoding.UTF8.GetBytes($"\0{address}\0test-password"));
             var authResult = await SendAndReadAsync(tls, reader, $"A1 AUTHENTICATE PLAIN {sasl}", "A1", stopping.Token);
             Assert.Contains("A1 OK", Encoding.UTF8.GetString(authResult));
+            Assert.Equal(capabilityText.Replace("A0", "A1aCAP"), Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A1aCAP CAPABILITY", "A1aCAP", stopping.Token)));
             Assert.Equal("A1a0 NO [NONEXISTENT] Mailbox does not exist\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A1a0 DELETE MissingFolder", "A1a0", stopping.Token)));
             Assert.Equal("A1a1 NO [NONEXISTENT] Mailbox does not exist\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A1a1 RENAME MissingFolder OtherFolder", "A1a1", stopping.Token)));
             var namespaceResponse = await SendAndReadAsync(tls, reader, "A1aa NAMESPACE", "A1aa", stopping.Token);
@@ -874,6 +875,7 @@ public sealed class ImapListenerRawSocketTests
                 await rev2Reader.ReadLineAsync(stopping.Token);
                 await SendAndReadAsync(rev2Tls, rev2Reader, $"R4 LOGIN {address} test-password", "R4", stopping.Token);
                 Assert.Equal("* ENABLED IMAP4REV2\r\nR5 OK ENABLE completed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R5 ENABLE IMAP4rev2", "R5", stopping.Token)));
+                Assert.Equal(capabilityText.Replace("A0", "R5b"), Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R5b CAPABILITY", "R5b", stopping.Token)));
                 Assert.Equal("* ENABLED\r\nR5a OK ENABLE completed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R5a ENABLE X-UNSUPPORTED", "R5a", stopping.Token)));
                 List<uint> renamedInboxUids;
                 await using (var rev2Db = new AppDbContext(dbOptions))
