@@ -2294,5 +2294,5 @@ public sealed class AdminService : IAdminService
         d.MtaStsMode,
         d.MtaStsMaxAge,
         d.TlsReportRua,
-        d.UpdatedAt.ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture));
+        d.UpdatedAt.UtcTicks.ToString(System.Globalization.CultureInfo.InvariantCulture));
 }
