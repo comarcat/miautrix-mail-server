@@ -56,12 +56,23 @@ public sealed class DirectSmtpOptions
 
     public static DirectSmtpOptions FromEnvironment()
     {
-        var name = Environment.GetEnvironmentVariable("OUTBOUND_EHLO_NAME");
+        // Falls back to MIAUTRIX_HOSTNAME (already mandatory for the Worker), so existing
+        // deployments start without a new .env entry. A value that is set must be valid.
+        var name = ResolveEhloName();
         if (string.IsNullOrWhiteSpace(name) || !Uri.CheckHostName(name).Equals(UriHostNameType.Dns))
-            throw new InvalidOperationException("OUTBOUND_EHLO_NAME must be a valid DNS hostname.");
+            throw new InvalidOperationException("OUTBOUND_EHLO_NAME (or MIAUTRIX_HOSTNAME) must be a valid DNS hostname.");
         var connect = ReadTimeout("OUTBOUND_SMTP_CONNECT_TIMEOUT_SECONDS", 20);
         var command = ReadTimeout("OUTBOUND_SMTP_COMMAND_TIMEOUT_SECONDS", 30);
         return new DirectSmtpOptions { EhloName = name, ConnectTimeoutSeconds = connect, CommandTimeoutSeconds = command };
+    }
+
+    /// <summary>OUTBOUND_EHLO_NAME when set, otherwise MIAUTRIX_HOSTNAME.</summary>
+    public static string? ResolveEhloName()
+    {
+        var explicitName = Environment.GetEnvironmentVariable("OUTBOUND_EHLO_NAME");
+        return string.IsNullOrWhiteSpace(explicitName)
+            ? Environment.GetEnvironmentVariable("MIAUTRIX_HOSTNAME")?.Trim()
+            : explicitName.Trim();
     }
 
     private static int ReadTimeout(string key, int fallback)

@@ -300,7 +300,7 @@ public sealed class OutboundQueueDispatcher : BackgroundService
         var status = expired ? "4.4.7" : "5.0.0";
         var code = expired ? "451" : "550";
         var raw = BuildDeliveryStatusNotification(sender, original.Recipient, status, code,
-            Environment.GetEnvironmentVariable("OUTBOUND_EHLO_NAME") ?? "localhost", original.CreatedAt);
+            DirectSmtpOptions.ResolveEhloName() ?? "localhost", original.CreatedAt);
         // Empty envelope sender is the RFC null reverse-path. InboundQueueDispatcher will deliver
         // this locally; external delivery is never invoked for this inbound queue row.
         await queueManager.EnqueueAsync(original.TenantId, string.Empty, sender, raw, QueueDirection.Inbound,
