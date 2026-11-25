@@ -877,6 +877,10 @@ public sealed class ImapListenerRawSocketTests
                 Assert.Equal("* ENABLED IMAP4REV2\r\nR5 OK ENABLE completed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R5 ENABLE IMAP4rev2", "R5", stopping.Token)));
                 Assert.Equal(capabilityText.Replace("A0", "R5b"), Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R5b CAPABILITY", "R5b", stopping.Token)));
                 Assert.Equal("* ENABLED\r\nR5a OK ENABLE completed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R5a ENABLE X-UNSUPPORTED", "R5a", stopping.Token)));
+                Assert.Contains("R5c OK CREATE completed", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R5c CREATE \"Rev2 Cafe\u0301\"", "R5c", stopping.Token)));
+                Assert.Equal("R5d NO Invalid Net-Unicode mailbox name\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R5d CREATE \"bad\uFDD0name\"", "R5d", stopping.Token)));
+                var normalizedSelect = Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R5e SELECT \"Rev2 Café\"", "R5e", stopping.Token));
+                Assert.Contains("* LIST (\\HasNoChildren) \"/\" \"Rev2 Café\"", normalizedSelect);
                 List<uint> renamedInboxUids;
                 await using (var rev2Db = new AppDbContext(dbOptions))
                 {

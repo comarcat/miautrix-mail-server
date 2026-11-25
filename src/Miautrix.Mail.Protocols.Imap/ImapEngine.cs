@@ -427,7 +427,9 @@ public sealed partial class ImapSession
         State = ImapState.LoggedOut;
     }
 
-    private string DecodeMailboxPath(string path) => _utf8AcceptEnabled ? path : ImapMailboxNameCodec.Decode(path);
+    private string DecodeMailboxPath(string path) => _utf8AcceptEnabled
+        ? path.Normalize(NormalizationForm.FormC)
+        : ImapMailboxNameCodec.Decode(path);
     private string EncodeMailboxPath(string path) => _utf8AcceptEnabled ? path : ImapMailboxNameCodec.Encode(path);
 
     private async Task<ImapCommandResult> HandleNoopAsync(string tag, CancellationToken ct)
@@ -757,6 +759,8 @@ public sealed partial class ImapSession
     {
         var name = args.LastOrDefault(t => t.Kind is ImapTokenKind.Atom or ImapTokenKind.QuotedString)?.Text;
         if (name is null || TenantId is null || MailboxId is null || _userId is null || _mailboxService is null) return new ImapCommandResult(tag, "NO", "CREATE unavailable", Array.Empty<string>());
+        if (_imap4Rev2Enabled && !IsValidNetUnicode(name))
+            return new ImapCommandResult(tag, "NO", "Invalid Net-Unicode mailbox name", Array.Empty<string>());
         name = DecodeMailboxPath(name);
         Guid? namespaceMailboxId = null;
         string[] segments;
@@ -789,6 +793,21 @@ public sealed partial class ImapSession
         try { await _mailboxService.CreateFolderAsync(TenantId.Value, _userId.Value, createMailboxId.Value, new CreateFolderRequest(segments[^1], parent?.Id), ct); return new ImapCommandResult(tag, "OK", "CREATE completed", Array.Empty<string>()); }
         catch (InvalidOperationException ex) when (ex.Message.Contains("already exists", StringComparison.OrdinalIgnoreCase)) { return new ImapCommandResult(tag, "NO", "[ALREADYEXISTS] Folder collision", Array.Empty<string>()); }
         catch (Exception ex) when (ex is ArgumentException or ResourceNotFoundException or InvalidOperationException) { return new ImapCommandResult(tag, "NO", "CREATE failed", Array.Empty<string>()); }
+    }
+
+    private static bool IsValidNetUnicode(string value)
+    {
+        if (value.Contains('\uFFFD')) return false;
+        foreach (var rune in value.EnumerateRunes())
+        {
+            var category = System.Text.Rune.GetUnicodeCategory(rune);
+            if (category is System.Globalization.UnicodeCategory.Control or System.Globalization.UnicodeCategory.Surrogate or
+                System.Globalization.UnicodeCategory.PrivateUse or System.Globalization.UnicodeCategory.OtherNotAssigned)
+                return false;
+            if (rune.Value is >= 0xFDD0 and <= 0xFDEF || (rune.Value & 0xFFFE) == 0xFFFE)
+                return false;
+        }
+        return true;
     }
 
     private async Task<ImapCommandResult> HandleDeleteFolderAsync(string tag, IReadOnlyList<ImapToken> args, CancellationToken ct)
