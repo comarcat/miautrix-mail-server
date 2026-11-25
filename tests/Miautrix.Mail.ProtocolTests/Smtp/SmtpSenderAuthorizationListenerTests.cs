@@ -45,7 +45,7 @@ public sealed class SmtpSenderAuthorizationListenerTests
             var item = new SmtpQueueItem { Id = Guid.NewGuid(), TenantId = tenantId, Direction = direction, Sender = sender, Recipient = recipient, RawMessage = rawMessage, Status = "Pending" };
             Items.Add(item); return Task.FromResult(item);
         }
-        public Task<SmtpDeliveryAttempt> RecordDeliveryAttemptAsync(Guid queueItemId, bool success, string? errorMessage = null, int? responseCode = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<SmtpDeliveryAttempt> RecordDeliveryAttemptAsync(Guid queueItemId, bool success, string? errorMessage = null, int? responseCode = null, CancellationToken cancellationToken = default, bool permanentFailure = false) => throw new NotSupportedException();
     }
 
     [Fact]

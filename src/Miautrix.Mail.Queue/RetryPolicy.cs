@@ -1,5 +1,21 @@
 namespace Miautrix.Mail.Queue;
 
+public sealed class QueueRetryOptions
+{
+    public TimeSpan Lifetime { get; init; } = TimeSpan.FromDays(5);
+
+    public static QueueRetryOptions FromEnvironment()
+    {
+        var raw = Environment.GetEnvironmentVariable("OUTBOUND_RETRY_LIFETIME_DAYS");
+        if (raw is null) return new QueueRetryOptions();
+        if (!int.TryParse(raw, out var days) || days is < 1 or > 30)
+            throw new InvalidOperationException("OUTBOUND_RETRY_LIFETIME_DAYS must be between 1 and 30.");
+        return new QueueRetryOptions { Lifetime = TimeSpan.FromDays(days) };
+    }
+
+    public bool IsExpired(DateTimeOffset createdAt, DateTimeOffset now) => now >= createdAt + Lifetime;
+}
+
 public interface IRetryPolicy
 {
     TimeSpan GetNextRetryDelay(int attemptNumber, Random? random = null);

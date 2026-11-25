@@ -20,7 +20,8 @@ public interface ISmtpQueueManager
         bool success,
         string? errorMessage = null,
         int? responseCode = null,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        bool permanentFailure = false);
 }
 
 public sealed class SmtpQueueManager : ISmtpQueueManager
@@ -28,15 +29,21 @@ public sealed class SmtpQueueManager : ISmtpQueueManager
     private readonly AppDbContext _context;
     private readonly IRetryPolicy _retryPolicy;
     private readonly int _maxAttempts;
+    private readonly QueueRetryOptions _retryOptions;
+    private readonly TimeProvider _clock;
 
     public SmtpQueueManager(
         AppDbContext context,
         IRetryPolicy retryPolicy,
-        int maxAttempts = 10)
+        int maxAttempts = int.MaxValue,
+        QueueRetryOptions? retryOptions = null,
+        TimeProvider? clock = null)
     {
         _context = context;
         _retryPolicy = retryPolicy;
         _maxAttempts = maxAttempts;
+        _retryOptions = retryOptions ?? new QueueRetryOptions();
+        _clock = clock ?? TimeProvider.System;
     }
 
     public async Task<SmtpQueueItem> EnqueueAsync(
@@ -48,6 +55,7 @@ public sealed class SmtpQueueManager : ISmtpQueueManager
         string? subject = null,
         CancellationToken cancellationToken = default)
     {
+        var now = _clock.GetUtcNow();
         var item = new SmtpQueueItem
         {
             Id = Guid.NewGuid(),
@@ -59,9 +67,9 @@ public sealed class SmtpQueueManager : ISmtpQueueManager
             RawMessage = rawMessage,
             Status = "Pending",
             Attempts = 0,
-            NextAttemptAt = DateTimeOffset.UtcNow,
-            CreatedAt = DateTimeOffset.UtcNow,
-            UpdatedAt = DateTimeOffset.UtcNow
+            NextAttemptAt = now,
+            CreatedAt = now,
+            UpdatedAt = now
         };
 
         _context.SmtpQueue.Add(item);
@@ -75,7 +83,8 @@ public sealed class SmtpQueueManager : ISmtpQueueManager
         bool success,
         string? errorMessage = null,
         int? responseCode = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool permanentFailure = false)
     {
         var queueItem = await _context.SmtpQueue
             .FirstOrDefaultAsync(q => q.Id == queueItemId, cancellationToken);
@@ -86,6 +95,7 @@ public sealed class SmtpQueueManager : ISmtpQueueManager
         }
 
         int attemptNumber = queueItem.Attempts + 1;
+        var now = _clock.GetUtcNow();
         var retryDelay = _retryPolicy.GetNextRetryDelay(attemptNumber);
 
         var attempt = new SmtpDeliveryAttempt
@@ -94,21 +104,21 @@ public sealed class SmtpQueueManager : ISmtpQueueManager
             TenantId = queueItem.TenantId,
             QueueItemId = queueItemId,
             AttemptNumber = attemptNumber,
-            AttemptedAt = DateTimeOffset.UtcNow,
+            AttemptedAt = now,
             Success = success,
             ErrorMessage = errorMessage,
             ResponseCode = responseCode,
             NextRetryDelaySeconds = success ? null : retryDelay.TotalSeconds,
-            CreatedAt = DateTimeOffset.UtcNow,
-            UpdatedAt = DateTimeOffset.UtcNow
+            CreatedAt = now,
+            UpdatedAt = now
         };
 
         _context.SmtpDeliveryAttempts.Add(attempt);
 
         queueItem.Attempts = attemptNumber;
-        queueItem.LastAttemptAt = DateTimeOffset.UtcNow;
+        queueItem.LastAttemptAt = now;
         queueItem.LastError = errorMessage;
-        queueItem.UpdatedAt = DateTimeOffset.UtcNow;
+        queueItem.UpdatedAt = now;
 
         if (success)
         {
@@ -116,14 +126,14 @@ public sealed class SmtpQueueManager : ISmtpQueueManager
         }
         else
         {
-            if (attemptNumber >= _maxAttempts)
+            if (permanentFailure || attemptNumber >= _maxAttempts || _retryOptions.IsExpired(queueItem.CreatedAt, now))
             {
                 queueItem.Status = "DeadLetter";
             }
             else
             {
                 queueItem.Status = "Failed";
-                queueItem.NextAttemptAt = DateTimeOffset.UtcNow.Add(retryDelay);
+                queueItem.NextAttemptAt = Min(now.Add(retryDelay), queueItem.CreatedAt + _retryOptions.Lifetime);
             }
         }
 
@@ -131,4 +141,6 @@ public sealed class SmtpQueueManager : ISmtpQueueManager
 
         return attempt;
     }
+
+    private static DateTimeOffset Min(DateTimeOffset left, DateTimeOffset right) => left < right ? left : right;
 }

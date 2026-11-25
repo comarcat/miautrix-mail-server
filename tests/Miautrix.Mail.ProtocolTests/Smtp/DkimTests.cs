@@ -7,6 +7,21 @@ namespace Miautrix.Mail.ProtocolTests.Smtp;
 public class DkimTests
 {
     [Fact]
+    public void Existing_signature_is_not_signed_twice()
+    {
+        var dkim = new DkimService();
+        var key = dkim.GenerateKeyPair();
+        var raw = "From: alice@example.test\r\nSubject: signed\r\n\r\nbody\r\n";
+        var signed = dkim.SignMessage(raw, "example.test", "test", key.PrivateKeyPem);
+
+        var again = dkim.SignMessage(signed, "example.test", "test", key.PrivateKeyPem);
+
+        Assert.Equal(signed, again);
+        Assert.Equal(1, again.Split("DKIM-Signature:", StringSplitOptions.None).Length - 1);
+        Assert.True(dkim.VerifyMessage(again, key.PublicKeyBase64));
+    }
+
+    [Fact]
     public void When_outbound_message_leaves_domain_with_dkim_key_attaches_signature_that_verifies_against_public_key()
     {
         // ARRANGE

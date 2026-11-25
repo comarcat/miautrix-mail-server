@@ -54,7 +54,8 @@ public class Domain : TenantScopedEntityBase
     /// <summary>
     /// How this domain's SMTP traffic is relayed. <c>local</c> means the domain publishes its own
     /// MX and TXT records and we bind the mail ports; <c>cloudflare</c> means Cloudflare relays
-    /// inbound and outbound SMTP through a Worker and manages the DNS records for us.
+    /// inbound and outbound SMTP through a Worker; <c>direct</c> means outbound delivery connects
+    /// to the recipient's MX servers. The setting is selected by the sending domain.
     /// Cloudflare has no IMAP/POP3 product, so mailbox access stays local in both modes.
     /// </summary>
     public string TransportMode { get; set; } = DomainTransportModes.Local;
@@ -78,8 +79,11 @@ public static class DomainTransportModes
     /// <summary>Cloudflare relays SMTP via a Worker; verification checks the Worker instead of DNS.</summary>
     public const string Cloudflare = "cloudflare";
 
+    /// <summary>Deliver directly to recipient MX hosts.</summary>
+    public const string Direct = "direct";
+
     public static bool IsKnown(string? mode) =>
-        mode is Local or Cloudflare;
+        mode is Local or Cloudflare or Direct;
 }
 public class User : TenantScopedEntityBase
 {

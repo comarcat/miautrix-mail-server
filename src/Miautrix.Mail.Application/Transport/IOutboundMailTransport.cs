@@ -27,7 +27,7 @@ public sealed record OutboundMessage(
 /// <c>ISmtpQueueManager.RecordDeliveryAttemptAsync</c> directly so retry counting, backoff and the
 /// dead-letter transition stay in one place.
 /// </summary>
-public sealed record TransportSendResult(bool IsSuccess, int? ResponseCode, string? ErrorMessage)
+public sealed record TransportSendResult(bool IsSuccess, int? ResponseCode, string? ErrorMessage, bool IsPermanentFailure = false)
 {
     public static TransportSendResult Ok(int? responseCode = null) => new(true, responseCode, null);
 
@@ -35,7 +35,7 @@ public sealed record TransportSendResult(bool IsSuccess, int? ResponseCode, stri
     /// <paramref name="error"/> is persisted to <c>smtp_queue.last_error</c> and shown in the queue
     /// screen, so it must never carry message content, credentials or tokens.
     /// </summary>
-    public static TransportSendResult Fail(string error, int? responseCode = null) => new(false, responseCode, error);
+    public static TransportSendResult Fail(string error, int? responseCode = null, bool permanent = false) => new(false, responseCode, error, permanent);
 }
 
 /// <summary>

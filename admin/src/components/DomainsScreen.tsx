@@ -367,10 +367,12 @@ export const DomainsScreen: React.FC<DomainsScreenProps> = ({ client = defaultCl
                   >
                     <option value="local">Local — MX points at this server (ports 25/465/587/993)</option>
                     <option value="cloudflare">Cloudflare — routing and DNS handled by a Cloudflare Worker</option>
+                    <option value="direct">Direct — this server delivers to recipient MX hosts</option>
                   </select>
                   <p className="cell-dim" style={{ fontSize: '11px', marginTop: '4px' }}>
                     This is an additional option, not a replacement: IMAP on 993 stays local either way.
                     {formTransportMode === 'cloudflare' && ' Cloudflare covers SMTP only.'}
+                    {formTransportMode === 'direct' && ' Requires outbound port 25, working PTR/rDNS, SPF and DKIM records.'}
                   </p>
                 </div>
 
@@ -464,6 +466,7 @@ export const DomainsScreen: React.FC<DomainsScreenProps> = ({ client = defaultCl
                   >
                     <option value="local">Local — MX points at this server (ports 25/465/587/993)</option>
                     <option value="cloudflare">Cloudflare — routing and DNS handled by a Cloudflare Worker</option>
+                    <option value="direct">Direct — this server delivers to recipient MX hosts</option>
                   </select>
                   {formTransportMode !== (editingDomain.transport_mode || 'local') && (
                     <p className="cell-dim" style={{ fontSize: '11px', marginTop: '4px' }}>
