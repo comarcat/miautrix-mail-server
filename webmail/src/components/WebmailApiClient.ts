@@ -11,17 +11,20 @@ const normalizeEmailAttachment = (a: any): EmailAttachment => ({
 export interface WebmailLoginResult {
   data: any;
   token: string;
+  refresh_token?: string;
 }
 
 export class WebmailApiClient {
   private baseUrl: string;
   private token: string | null;
+  private refreshToken: string | null;
   private tenantId: string | null;
   private userId: string | null;
 
   constructor(baseUrl: string = '/api/v1') {
     this.baseUrl = baseUrl;
     this.token = typeof window !== 'undefined' ? localStorage.getItem('miautrix_webmail_token') : null;
+    this.refreshToken = typeof window !== 'undefined' ? localStorage.getItem('miautrix_webmail_refresh_token') : null;
     this.tenantId = typeof window !== 'undefined' ? localStorage.getItem('miautrix_webmail_tenant_id') : null;
     this.userId = typeof window !== 'undefined' ? localStorage.getItem('miautrix_webmail_user_id') : null;
   }
@@ -34,6 +37,14 @@ export class WebmailApiClient {
       } else {
         localStorage.removeItem('miautrix_webmail_token');
       }
+    }
+  }
+
+  private setRefreshToken(token: string | null) {
+    this.refreshToken = token;
+    if (typeof window !== 'undefined') {
+      if (token) localStorage.setItem('miautrix_webmail_refresh_token', token);
+      else localStorage.removeItem('miautrix_webmail_refresh_token');
     }
   }
 
@@ -83,15 +94,41 @@ export class WebmailApiClient {
       headers['Authorization'] = `Bearer ${this.token}`;
     }
 
-    if (this.tenantId) {
-      headers['X-Tenant-Id'] = this.tenantId;
-    }
-
-    if (this.userId) {
-      headers['X-User-Id'] = this.userId;
-    }
-
     return headers;
+  }
+
+  private async refreshAccessToken(): Promise<boolean> {
+    if (!this.refreshToken) return false;
+    try {
+      const response = await fetch(`${this.baseUrl}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ refresh_token: this.refreshToken }),
+      });
+      if (!response.ok) return false;
+      const result = await response.json();
+      if (!result.token || !result.refresh_token) return false;
+      this.setToken(result.token);
+      this.setRefreshToken(result.refresh_token);
+      return true;
+    } catch { return false; }
+  }
+
+  private async fetchWithRefresh(url: string, init: RequestInit): Promise<Response> {
+    const headers = init.headers as Record<string, string>;
+    let response = await fetch(url, init);
+    if (response.status === 401 && await this.refreshAccessToken()) {
+      const retryHeaders = { ...headers, Authorization: `Bearer ${this.token}` };
+      response = await fetch(url, { ...init, headers: retryHeaders });
+    }
+    if (response.status === 401) {
+      this.setToken(null);
+      this.setRefreshToken(null);
+      this.setTenantId(null);
+      this.setUserId(null);
+      if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('miautrix:auth:expired'));
+    }
+    return response;
   }
 
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -110,13 +147,9 @@ export class WebmailApiClient {
     }
 
     const url = `${this.baseUrl}${path.startsWith('/') ? path : `/${path}`}`;
-    const res = await fetch(url, { ...options, headers });
+    const res = await this.fetchWithRefresh(url, { ...options, headers });
 
     if (res.status === 401) {
-      this.setToken(null);
-      this.setTenantId(null);
-      this.setUserId(null);
-      window.dispatchEvent(new CustomEvent('miautrix:auth:expired'));
       throw new Error('Unauthorized');
     }
 
@@ -136,6 +169,7 @@ export class WebmailApiClient {
     this.setToken(null);
     this.setTenantId(null);
     this.setUserId(null);
+    this.setRefreshToken(null);
 
     const idempotencyKey = typeof crypto !== 'undefined' && crypto.randomUUID
       ? crypto.randomUUID()
@@ -161,6 +195,7 @@ export class WebmailApiClient {
     if (result.token) {
       this.setToken(result.token);
     }
+    this.setRefreshToken(result.refresh_token ?? result.refreshToken ?? null);
     const tenantId = loginData?.tenantId ?? loginData?.tenant_id;
     if (tenantId) {
       this.setTenantId(tenantId);
@@ -172,12 +207,11 @@ export class WebmailApiClient {
   }
 
   async downloadAttachment(downloadPath: string, fileName: string): Promise<void> {
-    const headers = this.getDefaultHeaders();
-
     // downloadPath is expected to be a relative API path like `/api/v1/messages/.../attachments/...`.
     const url = downloadPath.startsWith('/') ? downloadPath : `/${downloadPath}`;
 
-    const res = await fetch(url, {
+    const headers = this.getDefaultHeaders();
+    const res = await this.fetchWithRefresh(url, {
       method: 'GET',
       headers,
     });
@@ -210,6 +244,7 @@ export class WebmailApiClient {
       // Ignore errors on logout
     } finally {
       this.setToken(null);
+      this.setRefreshToken(null);
       this.setTenantId(null);
       this.setUserId(null);
     }

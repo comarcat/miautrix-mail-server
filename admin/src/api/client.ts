@@ -42,12 +42,14 @@ const normalizeGuid = (value: string | null): string | null => {
 export class AdminApiClient {
   private baseUrl: string;
   private token: string | null;
+  private refreshToken: string | null;
   private tenantId: string | null;
   private userId: string | null;
 
   constructor(baseUrl: string = '/api/v1') {
     this.baseUrl = baseUrl;
     this.token = typeof window !== 'undefined' ? localStorage.getItem('miautrix_admin_token') : null;
+    this.refreshToken = typeof window !== 'undefined' ? localStorage.getItem('miautrix_admin_refresh_token') : null;
     this.tenantId = typeof window !== 'undefined' ? normalizeGuid(localStorage.getItem('miautrix_admin_tenant_id')) : null;
     this.userId = typeof window !== 'undefined' ? normalizeGuid(localStorage.getItem('miautrix_admin_user_id')) : null;
   }
@@ -60,6 +62,14 @@ export class AdminApiClient {
       } else {
         localStorage.removeItem('miautrix_admin_token');
       }
+    }
+  }
+
+  private setRefreshToken(token: string | null) {
+    this.refreshToken = token;
+    if (typeof window !== 'undefined') {
+      if (token) localStorage.setItem('miautrix_admin_refresh_token', token);
+      else localStorage.removeItem('miautrix_admin_refresh_token');
     }
   }
 
@@ -97,6 +107,40 @@ export class AdminApiClient {
     return this.userId;
   }
 
+  private async refreshAccessToken(): Promise<boolean> {
+    if (!this.refreshToken) return false;
+    try {
+      const response = await fetch(`${this.baseUrl}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ refresh_token: this.refreshToken }),
+      });
+      if (!response.ok) return false;
+      const result = await response.json();
+      if (!result.token || !result.refresh_token) return false;
+      this.setToken(result.token);
+      this.setRefreshToken(result.refresh_token);
+      return true;
+    } catch { return false; }
+  }
+
+  private async fetchWithRefresh(url: string, init: RequestInit): Promise<Response> {
+    const headers = init.headers as Record<string, string>;
+    let response = await fetch(url, init);
+    if (response.status === 401 && await this.refreshAccessToken()) {
+      const retryHeaders = { ...headers, Authorization: `Bearer ${this.token}` };
+      response = await fetch(url, { ...init, headers: retryHeaders });
+    }
+    if (response.status === 401) {
+      this.setToken(null);
+      this.setRefreshToken(null);
+      this.setTenantId(null);
+      this.setUserId(null);
+      if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('miautrix:auth:expired'));
+    }
+    return response;
+  }
+
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const headers: Record<string, string> = {
       'Accept': 'application/json',
@@ -107,17 +151,6 @@ export class AdminApiClient {
       headers['Authorization'] = `Bearer ${this.token}`;
     }
 
-    const tenantId = normalizeGuid(this.tenantId);
-    const userId = normalizeGuid(this.userId);
-
-    if (tenantId) {
-      headers['X-Tenant-Id'] = tenantId;
-    }
-
-    if (userId) {
-      headers['X-User-Id'] = userId;
-    }
-
     const method = options.method?.toUpperCase() || 'GET';
     if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) && !headers['Idempotency-Key']) {
       headers['Idempotency-Key'] = typeof crypto !== 'undefined' && crypto.randomUUID
@@ -126,18 +159,12 @@ export class AdminApiClient {
     }
 
     const url = `${this.baseUrl}${path.startsWith('/') ? path : `/${path}`}`;
-    const res = await fetch(url, {
+    const res = await this.fetchWithRefresh(url, {
       ...options,
       headers,
     });
 
     if (res.status === 401) {
-      this.setToken(null);
-      this.setTenantId(null);
-      this.setUserId(null);
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('miautrix:auth:expired'));
-      }
       throw new Error('Unauthorized');
     }
 
@@ -154,7 +181,7 @@ export class AdminApiClient {
   }
 
   // Authentication
-  async login(emailOrUsername: string, password: string, totpCode?: string): Promise<{ data: any; token: string }> {
+  async login(emailOrUsername: string, password: string, totpCode?: string): Promise<{ data: any; token: string; refresh_token?: string }> {
     const idempotencyKey = typeof crypto !== 'undefined' && crypto.randomUUID
       ? crypto.randomUUID()
       : `idemp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -182,6 +209,7 @@ export class AdminApiClient {
     if (result.token) {
       this.setToken(result.token);
     }
+    this.setRefreshToken(result.refresh_token ?? result.refreshToken ?? null);
     if (result.data?.tenantId) {
       this.setTenantId(result.data.tenantId);
     }
@@ -198,6 +226,7 @@ export class AdminApiClient {
       // Ignore errors on logout
     } finally {
       this.setToken(null);
+      this.setRefreshToken(null);
       this.setTenantId(null);
       this.setUserId(null);
     }
@@ -367,12 +396,8 @@ export class AdminApiClient {
   async exportMailbox(id: string): Promise<Blob> {
     const headers: Record<string, string> = { Accept: 'application/zip' };
     if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
-    const tenantId = normalizeGuid(this.tenantId);
-    const userId = normalizeGuid(this.userId);
-    if (tenantId) headers['X-Tenant-Id'] = tenantId;
-    if (userId) headers['X-User-Id'] = userId;
 
-    const res = await fetch(`${this.baseUrl}/mailboxes/${id}/export`, { headers });
+    const res = await this.fetchWithRefresh(`${this.baseUrl}/mailboxes/${id}/export`, { headers });
     if (!res.ok) {
       const body = await res.json().catch(() => null);
       throw new Error(body?.error?.message || `Export failed (${res.status})`);
