@@ -76,36 +76,38 @@ public sealed class MimeKitImapMimeFormatter : IImapMimeFormatter
     }
 
     public bool TryGetBinarySection(byte[] rawMessage, string section, out byte[] bytes)
+        => GetBinarySection(rawMessage, section, out bytes) == ImapBinarySectionStatus.Success;
+
+    public ImapBinarySectionStatus GetBinarySection(byte[] rawMessage, string section, out byte[] bytes)
     {
         try
         {
             var entity = GetPart(Load(rawMessage).Body, section.Trim());
-            if (entity is MimePart part && part.Content is not null)
-            {
+            if (entity is not MimePart part || part.Content is null ||
+                part.ContentType.MediaType.Equals("multipart", StringComparison.OrdinalIgnoreCase))
+            { bytes = Array.Empty<byte>(); return ImapBinarySectionStatus.NotLeafBodyPart; }
                 var transferEncoding = part.Headers[HeaderId.ContentTransferEncoding]?.Trim().ToLowerInvariant();
                 if (!string.IsNullOrWhiteSpace(transferEncoding) && transferEncoding is not "7bit" and not "8bit" and not "binary" and not "base64" and not "quoted-printable")
-                { bytes = Array.Empty<byte>(); return false; }
+                { bytes = Array.Empty<byte>(); return ImapBinarySectionStatus.UnknownContentTransferEncoding; }
                 using var output = new MemoryStream();
                 try { part.Content.DecodeTo(output); }
-                catch (NotSupportedException) { bytes = Array.Empty<byte>(); return false; }
+                catch (NotSupportedException) { bytes = Array.Empty<byte>(); return ImapBinarySectionStatus.UnknownContentTransferEncoding; }
                 bytes = output.ToArray();
-                return true;
-            }
-            if (entity is MessagePart messagePart && messagePart.Message is not null)
-            {
-                using var nested = new MemoryStream();
-                messagePart.Message.WriteTo(nested);
-                bytes = nested.ToArray();
-                return true;
-            }
-            bytes = Array.Empty<byte>();
-            return true;
+                if (part.ContentType.MediaType.Equals("text", StringComparison.OrdinalIgnoreCase))
+                    bytes = NormalizeTextLineEndings(bytes);
+                return ImapBinarySectionStatus.Success;
         }
         catch
         {
             bytes = Array.Empty<byte>();
-            return true;
+            return ImapBinarySectionStatus.NotLeafBodyPart;
         }
+    }
+
+    private static byte[] NormalizeTextLineEndings(byte[] bytes)
+    {
+        var text = Encoding.Latin1.GetString(bytes).Replace("\r\n", "\n").Replace('\r', '\n').Replace("\n", "\r\n");
+        return Encoding.Latin1.GetBytes(text);
     }
 
     private static MimeMessage Load(byte[] raw)

@@ -50,6 +50,8 @@ public static class ImapFetchItemParser
                     : raw.StartsWith("BINARY", StringComparison.OrdinalIgnoreCase) ? (peek ? "BINARY.PEEK" : "BINARY")
                     : peek ? "BODY.PEEK" : "BODY";
                 section = raw[(sectionStart + 1)..^1].Trim();
+                if (name == "BINARY.SIZE" && partialStart is not null)
+                    throw new FormatException("BINARY.SIZE does not accept a partial range.");
             }
             else
             {

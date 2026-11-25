@@ -1,4 +1,5 @@
 using Miautrix.Mail.Infrastructure.Mail;
+using Miautrix.Mail.Application.Mail.Mime;
 using System.Text;
 
 namespace Miautrix.Mail.UnitTests.Imap;
@@ -48,5 +49,17 @@ public sealed class ImapMimeFormatterTests
         Assert.True(formatter.TryGetBinarySection(encoded, "1", out var decoded));
         Assert.Equal("Hello binary", Encoding.ASCII.GetString(decoded).Trim());
         Assert.False(formatter.TryGetBinarySection(unknown, "1", out _));
+    }
+
+    [Fact]
+    public void Binary_sections_require_leaf_parts_and_normalize_text_line_endings()
+    {
+        var formatter = new MimeKitImapMimeFormatter();
+        var multipart = Encoding.ASCII.GetBytes("Content-Type: multipart/mixed; boundary=x\r\n\r\n--x\r\nContent-Type: text/plain\r\n\r\nA\nB\r\n--x--\r\n");
+        var text = Encoding.ASCII.GetBytes("Content-Type: text/plain\r\n\r\nA\nB\r");
+
+        Assert.Equal(ImapBinarySectionStatus.NotLeafBodyPart, formatter.GetBinarySection(multipart, "", out _));
+        Assert.Equal(ImapBinarySectionStatus.Success, formatter.GetBinarySection(text, "1", out var decoded));
+        Assert.Equal("A\r\nB\r\n", Encoding.ASCII.GetString(decoded));
     }
 }
