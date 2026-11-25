@@ -7,6 +7,7 @@ using Miautrix.Mail.Application.Transport;
 using Miautrix.Mail.Domain;
 using Miautrix.Mail.Persistence;
 using Miautrix.Mail.Queue;
+using Miautrix.Mail.Protocols.Smtp;
 using Miautrix.Mail.Worker;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,6 +28,7 @@ public sealed class OutboundQueueDispatcherTests
 {
     private const string CloudflareDomain = "dispatch-cf.test";
     private const string LocalDomain = "dispatch-local.test";
+    private const string DirectDomain = "dispatch-direct.test";
 
     // ------------------------------------------------------------------
     // Routing
@@ -39,7 +41,7 @@ public sealed class OutboundQueueDispatcherTests
         try
         {
             await SeedDomainAsync(tenantId, CloudflareDomain, "cloudflare", "https://worker.example.workers.dev");
-            var queueItemId = await SeedQueueItemAsync(tenantId, $"user@{CloudflareDomain}");
+            var queueItemId = await SeedQueueItemAsync(tenantId, $"user@{CloudflareDomain}", $"sender@{CloudflareDomain}");
 
             var transport = new RecordingTransport();
             await RunOnePassAsync(transport);
@@ -66,13 +68,33 @@ public sealed class OutboundQueueDispatcherTests
     }
 
     [Fact]
+    public async Task A_direct_sending_domain_is_handed_to_the_direct_transport()
+    {
+        var tenantId = await SeedTenantAsync();
+        try
+        {
+            await SeedDomainAsync(tenantId, DirectDomain, "direct", workerUrl: null);
+            var queueItemId = await SeedQueueItemAsync(tenantId, "recipient@outside.test", $"sender@{DirectDomain}");
+            var transport = new RecordingTransport(DomainTransportModes.Direct);
+
+            await RunOnePassAsync(transport);
+
+            Assert.Single(transport.Sent);
+            await using var context = CreateContext();
+            var item = await context.SmtpQueue.AsNoTracking().SingleAsync(q => q.Id == queueItemId);
+            Assert.Equal("Delivered", item.Status);
+        }
+        finally { await CleanupAsync(tenantId); }
+    }
+
+    [Fact]
     public async Task A_failed_send_is_recorded_so_the_row_retries_instead_of_looping_forever()
     {
         var tenantId = await SeedTenantAsync();
         try
         {
             await SeedDomainAsync(tenantId, CloudflareDomain, "cloudflare", "https://worker.example.workers.dev");
-            var queueItemId = await SeedQueueItemAsync(tenantId, $"user@{CloudflareDomain}");
+            var queueItemId = await SeedQueueItemAsync(tenantId, $"user@{CloudflareDomain}", $"sender@{CloudflareDomain}");
 
             var transport = new RecordingTransport
             {
@@ -96,6 +118,132 @@ public sealed class OutboundQueueDispatcherTests
     }
 
     [Fact]
+    public async Task Cloudflare_transport_preserves_raw_message_even_when_a_dkim_key_exists()
+    {
+        var tenantId = await SeedTenantAsync();
+        try
+        {
+            const string selector = "outbound-test";
+            var domain = "dispatch-cf.test";
+            var dkim = new DkimService();
+            var key = dkim.GenerateKeyPair();
+            await SeedDomainAsync(tenantId, domain, "cloudflare", "https://worker.example.workers.dev", selector);
+            await SeedDkimKeyAsync(tenantId, domain, selector, key.PrivateKeyPem, key.PublicKeyPem);
+            var rawMessage = $"From: sender@{domain}\r\nSubject: queued\r\n\r\nBody.";
+            await SeedQueueItemAsync(tenantId, $"user@{domain}", $"sender@{domain}");
+
+            var transport = new RecordingTransport();
+            await RunOnePassAsync(transport);
+
+            var sent = Assert.Single(transport.Sent);
+            Assert.Equal(rawMessage, sent.RawMessage);
+            Assert.DoesNotContain("DKIM-Signature:", sent.RawMessage, StringComparison.OrdinalIgnoreCase);
+        }
+        finally { await CleanupAsync(tenantId); }
+    }
+
+    [Fact]
+    public async Task Direct_transport_signs_with_the_configured_publicly_verifiable_key()
+    {
+        var tenantId = await SeedTenantAsync();
+        try
+        {
+            const string selector = "outbound-test";
+            var domain = DirectDomain;
+            var dkim = new DkimService();
+            var key = dkim.GenerateKeyPair();
+            await SeedDomainAsync(tenantId, domain, "direct", workerUrl: null, selector: selector);
+            await SeedDkimKeyAsync(tenantId, domain, selector, key.PrivateKeyPem, key.PublicKeyPem);
+            await SeedQueueItemAsync(tenantId, "user@recipient.test", $"sender@{domain}");
+
+            var transport = new RecordingTransport(DomainTransportModes.Direct);
+            await RunOnePassAsync(transport);
+
+            var sent = Assert.Single(transport.Sent);
+            Assert.True(dkim.VerifyMessage(sent.RawMessage, key.PublicKeyBase64));
+        }
+        finally { await CleanupAsync(tenantId); }
+    }
+
+    [Fact]
+    public async Task Permanent_failure_enqueues_a_null_reverse_path_delivery_status_report_to_local_sender()
+    {
+        var tenantId = await SeedTenantAsync();
+        try
+        {
+            await SeedDomainAsync(tenantId, CloudflareDomain, "cloudflare", "https://worker.example.workers.dev");
+            await SeedMailboxAsync(tenantId, CloudflareDomain, $"sender@{CloudflareDomain}");
+            var queueId = await SeedQueueItemAsync(tenantId, $"outside@remote.test", $"sender@{CloudflareDomain}");
+            var transport = new RecordingTransport
+            {
+                Result = TransportSendResult.Fail("recipient rejected", 550, permanent: true)
+            };
+
+            await RunOnePassAsync(transport);
+
+            await using var context = CreateContext();
+            var original = await context.SmtpQueue.SingleAsync(q => q.Id == queueId);
+            var dsn = await context.SmtpQueue.SingleAsync(q => q.TenantId == tenantId && q.Direction == QueueDirection.Inbound);
+            Assert.Equal("DeadLetter", original.Status);
+            Assert.Equal(string.Empty, dsn.Sender);
+            Assert.Equal($"sender@{CloudflareDomain}", dsn.Recipient);
+            Assert.Contains("multipart/report; report-type=delivery-status", dsn.RawMessage);
+            Assert.Contains("Content-Type: message/delivery-status", dsn.RawMessage);
+            Assert.Contains("Final-Recipient: rfc822; outside@remote.test", dsn.RawMessage);
+            Assert.Contains("Action: failed", dsn.RawMessage);
+            Assert.Contains("Status: 5.0.0", dsn.RawMessage);
+            Assert.DoesNotContain("recipient rejected", dsn.RawMessage);
+        }
+        finally { await CleanupAsync(tenantId); }
+    }
+
+    [Fact]
+    public async Task Permanent_failure_suppresses_dsn_for_null_reverse_path_and_external_sender()
+    {
+        var tenantId = await SeedTenantAsync();
+        try
+        {
+            await SeedDomainAsync(tenantId, CloudflareDomain, "cloudflare", "https://worker.example.workers.dev", isPrimary: true);
+            await SeedQueueItemAsync(tenantId, "one@remote.test", "<>");
+            await SeedQueueItemAsync(tenantId, "two@remote.test", "sender@external.test");
+            var transport = new RecordingTransport
+            {
+                Result = TransportSendResult.Fail("recipient rejected", 550, permanent: true)
+            };
+
+            await RunOnePassAsync(transport);
+
+            await using var context = CreateContext();
+            Assert.Equal(2, transport.Sent.Count);
+            Assert.Empty(await context.SmtpQueue.Where(q => q.TenantId == tenantId && q.Direction == QueueDirection.Inbound).ToListAsync());
+        }
+        finally { await CleanupAsync(tenantId); }
+    }
+
+    [Fact]
+    public async Task Expired_outbound_message_enqueues_a_delivery_status_notification()
+    {
+        var tenantId = await SeedTenantAsync();
+        try
+        {
+            await SeedDomainAsync(tenantId, CloudflareDomain, "cloudflare", "https://worker.example.workers.dev");
+            await SeedMailboxAsync(tenantId, CloudflareDomain, $"sender@{CloudflareDomain}");
+            var queueId = await SeedQueueItemAsync(tenantId, "outside@remote.test", $"sender@{CloudflareDomain}",
+                createdAt: DateTimeOffset.UtcNow.AddDays(-6));
+
+            await RunOnePassAsync(new RecordingTransport());
+
+            await using var context = CreateContext();
+            var original = await context.SmtpQueue.SingleAsync(q => q.Id == queueId);
+            var dsn = await context.SmtpQueue.SingleAsync(q => q.TenantId == tenantId && q.Direction == QueueDirection.Inbound);
+            Assert.Equal("DeadLetter", original.Status);
+            Assert.Equal(string.Empty, dsn.Sender);
+            Assert.Contains("Status: 4.4.7", dsn.RawMessage);
+        }
+        finally { await CleanupAsync(tenantId); }
+    }
+
+    [Fact]
     public async Task Local_mode_mail_is_left_pending_and_never_touches_the_cloudflare_transport()
     {
         var tenantId = await SeedTenantAsync();
@@ -104,7 +252,7 @@ public sealed class OutboundQueueDispatcherTests
             // No Cloudflare domain exists for this tenant at all. The dispatcher must not invent a
             // route for a domain nobody opted in.
             await SeedDomainAsync(tenantId, LocalDomain, "local", workerUrl: null);
-            var queueItemId = await SeedQueueItemAsync(tenantId, $"user@{LocalDomain}");
+            var queueItemId = await SeedQueueItemAsync(tenantId, $"user@{LocalDomain}", $"sender@{LocalDomain}");
 
             var transport = new RecordingTransport();
             await RunOnePassAsync(transport);
@@ -131,7 +279,7 @@ public sealed class OutboundQueueDispatcherTests
         try
         {
             await SeedDomainAsync(tenantId, CloudflareDomain, "cloudflare", "https://worker.example.workers.dev");
-            var queueItemId = await SeedQueueItemAsync(tenantId, $"user@{CloudflareDomain}");
+            var queueItemId = await SeedQueueItemAsync(tenantId, $"user@{CloudflareDomain}", $"sender@{CloudflareDomain}");
 
             await RunOnePassAsync(new ThrowingTransport());
 
@@ -167,6 +315,8 @@ public sealed class OutboundQueueDispatcherTests
             provider.GetRequiredService<IServiceScopeFactory>(),
             [transport],
             new CloudflareEmailOptions { ApiToken = "test-token" },
+            new DkimService(),
+            new QueueRetryOptions(),
             NullLogger<OutboundQueueDispatcher>.Instance);
 
         await dispatcher.DispatchBatchAsync(CancellationToken.None);
@@ -174,7 +324,9 @@ public sealed class OutboundQueueDispatcherTests
 
     private sealed class RecordingTransport : IOutboundMailTransport
     {
-        public string Mode => DomainTransportModes.Cloudflare;
+        private readonly string _mode;
+        public RecordingTransport(string mode = DomainTransportModes.Cloudflare) => _mode = mode;
+        public string Mode => _mode;
 
         public List<OutboundMessage> Sent { get; } = [];
 
@@ -227,7 +379,7 @@ public sealed class OutboundQueueDispatcherTests
         return tenantId;
     }
 
-    private static async Task SeedDomainAsync(Guid tenantId, string name, string transportMode, string? workerUrl)
+    private static async Task SeedDomainAsync(Guid tenantId, string name, string transportMode, string? workerUrl, string? selector = null, bool isPrimary = false)
     {
         var now = DateTimeOffset.UtcNow;
 
@@ -239,6 +391,8 @@ public sealed class OutboundQueueDispatcherTests
             Name = name,
             IsVerified = true,
             TransportMode = transportMode,
+            DkimSelector = selector,
+            IsPrimary = isPrimary,
             CloudflareWorkerUrl = workerUrl,
             CreatedAt = now,
             UpdatedAt = now
@@ -246,10 +400,34 @@ public sealed class OutboundQueueDispatcherTests
         await context.SaveChangesAsync();
     }
 
-    private static async Task<Guid> SeedQueueItemAsync(Guid tenantId, string recipient)
+    private static async Task SeedMailboxAsync(Guid tenantId, string domainName, string address)
+    {
+        await using var context = CreateContext();
+        var domain = await context.Domains.SingleAsync(d => d.TenantId == tenantId && d.Name == domainName);
+        context.Mailboxes.Add(new Mailbox
+        {
+            Id = Guid.NewGuid(), TenantId = tenantId, DomainId = domain.Id, Address = address,
+            Name = "Outbound DSN target", IsActive = true, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow
+        });
+        await context.SaveChangesAsync();
+    }
+
+    private static async Task SeedDkimKeyAsync(Guid tenantId, string domain, string selector, string privateKey, string publicKey)
+    {
+        var now = DateTimeOffset.UtcNow;
+        await using var context = CreateContext();
+        context.DkimKeys.Add(new DkimKey
+        {
+            Id = Guid.NewGuid(), TenantId = tenantId, DomainName = domain, Selector = selector,
+            PrivateKeyPem = privateKey, PublicKeyPem = publicKey, CreatedAt = now, UpdatedAt = now
+        });
+        await context.SaveChangesAsync();
+    }
+
+    private static async Task<Guid> SeedQueueItemAsync(Guid tenantId, string recipient, string sender, DateTimeOffset? createdAt = null)
     {
         var id = Guid.NewGuid();
-        var now = DateTimeOffset.UtcNow;
+        var now = createdAt ?? DateTimeOffset.UtcNow;
 
         await using var context = CreateContext();
         context.SmtpQueue.Add(new SmtpQueueItem
@@ -257,10 +435,10 @@ public sealed class OutboundQueueDispatcherTests
             Id = id,
             TenantId = tenantId,
             Direction = QueueDirection.Outbound,
-            Sender = "sender@example.com",
+            Sender = sender,
             Recipient = recipient,
             Subject = "queued before the dispatcher existed",
-            RawMessage = "From: sender@example.com\r\nSubject: queued\r\n\r\nBody.",
+            RawMessage = $"From: {sender}\r\nSubject: queued\r\n\r\nBody.",
             Status = "Pending",
             Attempts = 0,
             NextAttemptAt = now.AddSeconds(-1),

@@ -73,6 +73,7 @@ public class Program
         // The inbound webhook feeds the same handler chain the SMTP listeners use, so a
         // Cloudflare-relayed message is validated, queued and stored identically.
         builder.Services.AddSingleton<IRetryPolicy, ExponentialBackoffWithJitterRetryPolicy>();
+        builder.Services.AddSingleton(QueueRetryOptions.FromEnvironment());
         builder.Services.AddScoped<ISmtpQueueManager, SmtpQueueManager>();
         builder.Services.AddScoped<ISmtpDomainValidator, SmtpDomainValidator>();
         builder.Services.AddScoped<ISmtpInboundHandler, SmtpInboundHandler>();

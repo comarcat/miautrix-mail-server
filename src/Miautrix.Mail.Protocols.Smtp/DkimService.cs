@@ -24,6 +24,9 @@ public sealed partial class DkimService : IDkimService
     [GeneratedRegex(@"DKIM-Signature:[ \t]*", RegexOptions.IgnoreCase | RegexOptions.Compiled)]
     private static partial Regex DkimSignatureHeaderRegex();
 
+    [GeneratedRegex(@"(?im)^DKIM-Signature[ \t]*:", RegexOptions.Compiled)]
+    private static partial Regex ExistingSignatureHeaderRegex();
+
     public DkimKeyPair GenerateKeyPair(int keySize = 2048)
     {
         using var rsa = RSA.Create(keySize);
@@ -39,6 +42,14 @@ public sealed partial class DkimService : IDkimService
 
     public string SignMessage(string rawMessage, string domain, string selector, string privateKeyPem)
     {
+        var headerEnd = rawMessage.IndexOf("\r\n\r\n", StringComparison.Ordinal);
+        if (headerEnd < 0) headerEnd = rawMessage.IndexOf("\n\n", StringComparison.Ordinal);
+        var headerBlock = headerEnd < 0 ? rawMessage : rawMessage[..headerEnd];
+        if (ExistingSignatureHeaderRegex().IsMatch(headerBlock))
+        {
+            return rawMessage;
+        }
+
         var (headers, body) = SplitMessage(rawMessage);
         var canonicalBody = CanonicalizeBodyRelaxed(body);
         var bodyHashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(canonicalBody));

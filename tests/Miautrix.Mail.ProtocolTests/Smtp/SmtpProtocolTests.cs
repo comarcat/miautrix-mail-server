@@ -51,7 +51,8 @@ public class SmtpProtocolTests
             bool success,
             string? errorMessage = null,
             int? responseCode = null,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            bool permanentFailure = false)
         {
             var attempt = new SmtpDeliveryAttempt
             {

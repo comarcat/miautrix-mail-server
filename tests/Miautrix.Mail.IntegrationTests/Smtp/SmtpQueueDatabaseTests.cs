@@ -9,6 +9,36 @@ namespace Miautrix.Mail.IntegrationTests.Smtp;
 [Trait("Category", "Smtp")]
 public class SmtpQueueDatabaseTests
 {
+    [Fact]
+    public async Task Permanent_failure_dead_letters_immediately_and_retry_lifetime_uses_injected_clock()
+    {
+        var tenantId = Guid.NewGuid();
+        var start = DateTimeOffset.Parse("2026-01-01T00:00:00Z");
+        var clock = new TestTimeProvider(start);
+        var context = CreateContext();
+        context.Tenants.Add(new Tenant { Id = tenantId, Slug = $"retry-{Guid.NewGuid():N}" });
+        await context.SaveChangesAsync();
+        var manager = new SmtpQueueManager(context, new ExponentialBackoffWithJitterRetryPolicy(),
+            retryOptions: new QueueRetryOptions(), clock: clock);
+        var permanent = await manager.EnqueueAsync(tenantId, "sender@local.test", "one@remote.test", "raw", QueueDirection.Outbound);
+        await manager.RecordDeliveryAttemptAsync(permanent.Id, false, "550 rejected", 550, permanentFailure: true);
+        Assert.Equal("DeadLetter", permanent.Status);
+
+        var expiring = await manager.EnqueueAsync(tenantId, "sender@local.test", "two@remote.test", "raw", QueueDirection.Outbound);
+        clock.Advance(TimeSpan.FromDays(5));
+        await manager.RecordDeliveryAttemptAsync(expiring.Id, false, "451 temporary", 451);
+        Assert.Equal("DeadLetter", expiring.Status);
+
+        var attempts = await context.SmtpDeliveryAttempts.Where(a => a.TenantId == tenantId).ToListAsync();
+        context.SmtpDeliveryAttempts.RemoveRange(attempts);
+        var items = await context.SmtpQueue.Where(q => q.TenantId == tenantId).ToListAsync();
+        context.SmtpQueue.RemoveRange(items);
+        var tenant = await context.Tenants.SingleAsync(t => t.Id == tenantId);
+        context.Tenants.Remove(tenant);
+        await context.SaveChangesAsync();
+        await context.DisposeAsync();
+    }
+
     private static string GetConnectionString()
     {
         var conn = Environment.GetEnvironmentVariable("MIAUTRIX_DB_CONNECTION");
@@ -26,6 +56,13 @@ public class SmtpQueueDatabaseTests
             .Options;
 
         return new AppDbContext(options);
+    }
+
+    private sealed class TestTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        private DateTimeOffset _now = now;
+        public override DateTimeOffset GetUtcNow() => _now;
+        public void Advance(TimeSpan duration) => _now += duration;
     }
 
     [Fact]

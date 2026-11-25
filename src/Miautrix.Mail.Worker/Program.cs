@@ -125,6 +125,7 @@ var host = Host.CreateDefaultBuilder(args)
 
         // Queue + retry policy
         services.AddSingleton<IRetryPolicy, ExponentialBackoffWithJitterRetryPolicy>();
+        services.AddSingleton(QueueRetryOptions.FromEnvironment());
         services.AddScoped<ISmtpQueueManager, SmtpQueueManager>();
 
         // Inbound filtering
@@ -133,9 +134,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddScoped<ISpamProvider, RuleBasedSpamProvider>();
         services.AddScoped<IQuarantineService, QuarantineService>();
 
-        // Outbound transports. Registered as a set and selected by Mode, so adding a provider is a
-        // registration rather than a branch inside the dispatcher. Only "cloudflare" is present:
-        // "local" has no delivery path yet, and its queued mail must keep behaving as it does today.
+        // Outbound transports, selected per sending domain.
         services.AddHttpClient(nameof(CloudflareApiMailTransport), client =>
         {
             client.Timeout = TimeSpan.FromSeconds(30);
@@ -148,6 +147,13 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<CloudflareApiMailTransport>();
         services.AddSingleton<IOutboundMailTransport>(
             sp => sp.GetRequiredService<CloudflareApiMailTransport>());
+        services.AddSingleton(DirectSmtpOptions.FromEnvironment());
+        services.AddSingleton<IDnsResolver, DnsClientResolver>();
+        services.AddHttpClient(nameof(MtaStsPolicyFetcher), client => client.Timeout = TimeSpan.FromSeconds(10));
+        services.AddSingleton<IMtaStsPolicyFetcher, MtaStsPolicyFetcher>();
+        services.AddSingleton<IMtaStsPolicyProvider, CachedMtaStsPolicyProvider>();
+        services.AddSingleton<DirectSmtpMailTransport>();
+        services.AddSingleton<IOutboundMailTransport>(sp => sp.GetRequiredService<DirectSmtpMailTransport>());
 
         // Protocol infrastructure (backed by the DB)
         services.AddScoped<ISmtpDomainValidator, SmtpDomainValidator>();
@@ -164,6 +170,7 @@ var host = Host.CreateDefaultBuilder(args)
 
         // Identity
         services.AddSingleton<IPasswordHasher, Argon2idPasswordHasher>();
+        services.AddSingleton<IDkimService, DkimService>();
 
         // Shared options
         services.AddSingleton(new WorkerHostOptions { Hostname = hostname, Smtp = smtpListenerOptions });

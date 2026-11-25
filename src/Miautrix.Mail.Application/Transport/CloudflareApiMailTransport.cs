@@ -127,7 +127,8 @@ public sealed class CloudflareApiMailTransport : IOutboundMailTransport, ICloudf
                 : $"returned HTTP {responseCode} with content type {contentType ?? "unknown"}";
             return TransportSendResult.Fail(
                 $"Cloudflare Worker {reason}; message was not confirmed as accepted.",
-                responseCode);
+                responseCode,
+                permanent: responseCode is >= 400 and < 500 && responseCode is not (408 or 429) || responseCode is >= 300 and < 400);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {

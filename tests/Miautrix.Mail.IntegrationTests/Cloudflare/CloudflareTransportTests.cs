@@ -130,7 +130,7 @@ public sealed class CloudflareTransportTests : IClassFixture<WebApplicationFacto
                 new { transport_mode = "aws-ses" }, "Idempotency-Key");
             var response = await _factory.CreateClient().SendAsync(request);
 
-            // A caller-supplied value that is not one of the two known modes is a bad request. It
+            // A caller-supplied value that is not one of the supported modes is a bad request. It
             // must not surface as a 500, which would hide the reason in the server log.
             Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
@@ -167,6 +167,44 @@ public sealed class CloudflareTransportTests : IClassFixture<WebApplicationFacto
         finally
         {
             await CleanupTenantAsync(tenant.TenantId);
+        }
+    }
+
+    [Fact]
+    public async Task Direct_mode_is_accepted_by_the_existing_domain_settings_api()
+    {
+        var tenant = await SeedTenantAsync();
+        try
+        {
+            var domainId = await SeedDomainAsync(tenant, LocalDomain, "local", isVerified: true);
+            await PutJsonAsync(tenant, $"/api/v1/domains/{domainId}", new { transport_mode = "direct" });
+
+            await using var context = CreateContext();
+            var domain = await context.Domains.AsNoTracking().FirstAsync(d => d.Id == domainId);
+            Assert.Equal("direct", domain.TransportMode);
+            Assert.False(domain.IsVerified);
+        }
+        finally { await CleanupTenantAsync(tenant.TenantId); }
+    }
+
+    [Fact]
+    public async Task Domain_settings_for_another_tenant_return_404()
+    {
+        var owner = await SeedTenantAsync();
+        var outsider = await SeedTenantAsync();
+        try
+        {
+            var domainId = await SeedDomainAsync(owner, LocalDomain, "local", isVerified: true);
+            using var request = BuildRequest(outsider, HttpMethod.Put, $"/api/v1/domains/{domainId}",
+                new { transport_mode = "direct" }, "Idempotency-Key");
+            var response = await _factory.CreateClient().SendAsync(request);
+
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        }
+        finally
+        {
+            await CleanupTenantAsync(owner.TenantId);
+            await CleanupTenantAsync(outsider.TenantId);
         }
     }
 
