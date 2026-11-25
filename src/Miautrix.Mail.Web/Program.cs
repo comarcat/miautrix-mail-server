@@ -105,7 +105,9 @@ public class Program
         });
         builder.Services.AddScoped<ICalendarService, CalendarService>();
         builder.Services.AddScoped<ISieveRuleService, SieveRuleService>();
+        builder.Services.AddScoped<ISieveScriptApiService, SieveScriptApiService>();
         builder.Services.AddScoped<SieveParser>();
+        builder.Services.AddScoped<SieveCompiler>();
         builder.Services.AddScoped<SieveScriptService>();
         builder.Services.AddScoped<IAuthService, AuthService>();
         builder.Services.AddScoped<IAdminService, AdminService>();
