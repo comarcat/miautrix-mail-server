@@ -46,7 +46,7 @@ public sealed class MimeKitMimeMessageParser : IMimeMessageParser
             headers,
             message.Subject,
             message.Date == DateTimeOffset.MinValue ? null : message.Date.ToUniversalTime(),
-            message.From.ToString(), message.To.ToString(), message.Cc.ToString(), message.MessageId,
+            message.From.ToString(), message.To.ToString(), message.Cc.ToString(), message.Bcc.ToString(), message.MessageId,
             message.TextBody, message.HtmlBody, attachments);
     }
 
@@ -57,7 +57,7 @@ public sealed class MimeKitMimeMessageParser : IMimeMessageParser
         var headers = split < 0 ? normalized : normalized[..split];
         var subject = headers.Split('\n').FirstOrDefault(x => x.StartsWith("Subject:", StringComparison.OrdinalIgnoreCase))?
             .Split(':', 2).Skip(1).FirstOrDefault()?.Trim();
-        return new ParsedMailMessage(headers, subject, null, null, null, null, null,
+        return new ParsedMailMessage(headers, subject, null, null, null, null, null, null,
             split < 0 ? null : normalized[(split + 2)..], null, Array.Empty<ParsedMailAttachment>());
     }
 }

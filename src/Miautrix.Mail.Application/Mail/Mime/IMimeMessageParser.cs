@@ -19,6 +19,7 @@ public sealed record ParsedMailMessage(
     string? From,
     string? To,
     string? Cc,
+    string? Bcc,
     string? MessageId,
     string? BodyText,
     string? BodyHtml,

@@ -5,6 +5,7 @@ using Miautrix.Mail.Persistence;
 using Miautrix.Mail.Protocols.Imap;
 using Miautrix.Mail.Security;
 using Miautrix.Mail.Storage;
+using Miautrix.Mail.Infrastructure.Mail;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -40,7 +41,9 @@ public sealed class ImapUidStabilityTests
             await db.SaveChangesAsync();
             var allocator = new InMemoryUidAllocator(db);
             var senderAuthorization = new SenderAuthorizationService(db);
-            var service = new MessageService(db, new AllowAuthorization(), null!, allocator, new FileSystemMailStorage(storagePath), NullLogger<MessageService>.Instance, senderAuthorization);
+            var storage = new FileSystemMailStorage(storagePath);
+            var parser = new MimeKitMimeMessageParser();
+            var service = new MessageService(db, new AllowAuthorization(), null!, allocator, storage, NullLogger<MessageService>.Instance, senderAuthorization, parser);
 
             var send = await service.SendMessageAsync(tenantId, userId, mailboxId,
                 new SendMessageRequest(address, new[] { address }, null, null, "Local send", "body", null));
@@ -50,18 +53,52 @@ public sealed class ImapUidStabilityTests
             Assert.True(sentMessage.Uid > 0);
             Assert.True(deliveredMessage.Uid > 0);
 
-            var draft = await service.UpsertDraftAsync(tenantId, Guid.NewGuid(), mailboxId,
-                new DraftMessageRequest(null, address, Array.Empty<string>(), null, null, "Draft", "draft body", null));
+            var draftRequest = new DraftMessageRequest(null, address, Array.Empty<string>(), null, null, "Draft", "draft body", null);
+            var draft = await service.UpsertDraftAsync(tenantId, userId, mailboxId, draftRequest);
             Assert.True(draft.Success);
             var draftMessage = await db.Messages.SingleAsync(m => m.FolderId == draftsId);
             Assert.True(draftMessage.Uid > 0);
+            var originalUid = draftMessage.Uid;
+            await using (var rawStream = await storage.OpenReadAsync(draftMessage.ContentHash))
+            using (var reader = new StreamReader(rawStream!))
+                Assert.Contains("draft body", await reader.ReadToEndAsync());
+            var unchanged = await service.UpsertDraftAsync(tenantId, userId, mailboxId, draftRequest with { DraftId = draft.DraftId });
+            Assert.True(unchanged.Success);
+            Assert.Equal(originalUid, (await db.Messages.SingleAsync(m => m.Id == draft.DraftId)).Uid);
+            var edited = await service.UpsertDraftAsync(tenantId, userId, mailboxId,
+                draftRequest with { DraftId = draft.DraftId, Subject = "Edited", BodyText = "edited body" });
+            Assert.True(edited.Success);
+            Assert.Equal(draft.DraftId, edited.DraftId);
+            var savedDraft = await db.Messages.SingleAsync(m => m.FolderId == draftsId);
+            Assert.NotEqual(originalUid, savedDraft.Uid);
+            Assert.Equal("edited body", parser.Parse(await ReadStoredAsync(storage, savedDraft.ContentHash)).BodyText?.TrimEnd());
+            var secondAutosave = await service.UpsertDraftAsync(tenantId, userId, mailboxId,
+                draftRequest with { DraftId = draft.DraftId, Subject = "Edited", BodyText = "edited body" });
+            Assert.Equal(draft.DraftId, secondAutosave.DraftId);
+            Assert.Single(await db.Messages.Where(m => m.FolderId == draftsId).ToListAsync());
+            Assert.Equal(savedDraft.Uid, (await db.Messages.SingleAsync(m => m.Id == draft.DraftId)).Uid);
+            var imap = NewSession(db, storage, tenantId, mailboxId, userId, service, allocator);
+            Assert.Equal("OK", (await imap.ExecuteCommandAsync($"A1 LOGIN \"{address}\" secret")).Status);
+            Assert.Equal("OK", (await imap.ExecuteCommandAsync("A2 SELECT Drafts")).Status);
+            var oldUid = await imap.ExecuteCommandAsync($"A3 UID FETCH {originalUid} (BODY.PEEK[])");
+            Assert.DoesNotContain(oldUid.ResponseSegments, segment => Encoding.UTF8.GetString(segment.Bytes).Contains("draft body", StringComparison.Ordinal));
+            var fetched = await imap.ExecuteCommandAsync($"A4 UID FETCH {savedDraft.Uid} (BODY.PEEK[])");
+            Assert.Contains(fetched.ResponseSegments, segment => Encoding.UTF8.GetString(segment.Bytes).Contains("edited body", StringComparison.Ordinal));
             Assert.Equal(2u, (await db.Folders.SingleAsync(f => f.Id == sentId)).UidNext);
             Assert.Equal(2u, (await db.Folders.SingleAsync(f => f.Id == inboxId)).UidNext);
-            Assert.Equal(2u, (await db.Folders.SingleAsync(f => f.Id == draftsId)).UidNext);
+            Assert.Equal(3u, (await db.Folders.SingleAsync(f => f.Id == draftsId)).UidNext);
         }
+
         finally
         {
             if (Directory.Exists(storagePath)) Directory.Delete(storagePath, recursive: true);
+        }
+
+        static async Task<string> ReadStoredAsync(IMailStorage storage, string hash)
+        {
+            await using var stream = await storage.OpenReadAsync(hash);
+            using var reader = new StreamReader(stream!);
+            return await reader.ReadToEndAsync();
         }
     }
 
@@ -99,7 +136,7 @@ public sealed class ImapUidStabilityTests
             await db.SaveChangesAsync();
 
             var allocator = new InMemoryUidAllocator(db);
-            var service = new MessageService(db, new AllowAuthorization(), null!, allocator, storage, NullLogger<MessageService>.Instance);
+            var service = new MessageService(db, new AllowAuthorization(), null!, allocator, storage, NullLogger<MessageService>.Instance, mimeParser: new MimeKitMimeMessageParser());
             var session = NewSession(db, storage, tenantId, mailboxId, userId, service, allocator);
             Assert.Equal("OK", (await session.ExecuteCommandAsync($"A1 LOGIN \"{address}\" secret")).Status);
             var selected = await session.ExecuteCommandAsync("A2 SELECT INBOX");

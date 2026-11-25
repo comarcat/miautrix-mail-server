@@ -89,6 +89,10 @@ public interface IMessageService
         DraftMessageRequest request,
         CancellationToken cancellationToken = default);
 
+    Task<uint> AppendStoredMessageAsync(Guid tenantId, Guid userId, Guid mailboxId, Guid folderId,
+        Miautrix.Mail.Storage.StorageWriteResult stored, DateTimeOffset internalDate, string flags,
+        CancellationToken cancellationToken = default);
+
     Task<SendMessageResult> SendDraftAsync(
         Guid tenantId,
         Guid userId,

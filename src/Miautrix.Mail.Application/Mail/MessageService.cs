@@ -28,6 +28,7 @@ public sealed class MessageService : IMessageService
     private readonly IMailStorage _storage;
     private readonly ILogger<MessageService> _logger;
     private readonly ISenderAuthorizationService? _senderAuthorization;
+    private readonly IMimeMessageParser? _mimeParser;
 
     public MessageService(
         AppDbContext db,
@@ -36,7 +37,8 @@ public sealed class MessageService : IMessageService
         IMessageUidAllocator uidAllocator,
         IMailStorage storage,
         ILogger<MessageService> logger,
-        ISenderAuthorizationService? senderAuthorization = null)
+        ISenderAuthorizationService? senderAuthorization = null,
+        IMimeMessageParser? mimeParser = null)
     {
         _db = db;
         _auth = auth;
@@ -45,6 +47,50 @@ public sealed class MessageService : IMessageService
         _storage = storage;
         _logger = logger;
         _senderAuthorization = senderAuthorization;
+        _mimeParser = mimeParser;
+    }
+
+    public async Task<uint> AppendStoredMessageAsync(Guid tenantId, Guid userId, Guid mailboxId, Guid folderId,
+        StorageWriteResult stored, DateTimeOffset internalDate, string flags, CancellationToken cancellationToken = default)
+    {
+        var mailbox = await _db.Mailboxes.FirstOrDefaultAsync(m => m.TenantId == tenantId && m.Id == mailboxId, cancellationToken);
+        _auth.AssertMailboxAccess(tenantId, userId, mailbox, requireWrite: true);
+        if (_mimeParser is null) throw new InvalidOperationException("MIME message parser is unavailable.");
+        await using var stream = await _storage.OpenReadAsync(stored.ContentHash, cancellationToken)
+            ?? throw new InvalidOperationException("Stored APPEND content is unavailable.");
+        using var buffer = new MemoryStream();
+        await stream.CopyToAsync(buffer, cancellationToken);
+        var parsed = _mimeParser.Parse(Encoding.UTF8.GetString(buffer.ToArray()));
+        var uid = await _uidAllocator.AllocateAsync(tenantId, folderId, cancellationToken: cancellationToken);
+        var now = DateTimeOffset.UtcNow;
+        var messageId = Guid.NewGuid();
+        _db.Messages.Add(new Miautrix.Mail.Domain.Message
+        {
+            Id = messageId, TenantId = tenantId, MailboxId = mailboxId, FolderId = folderId,
+            Sender = parsed.From ?? string.Empty, Recipient = parsed.To ?? string.Empty,
+            Subject = parsed.Subject ?? "(No Subject)", Date = parsed.Date ?? internalDate,
+            ContentHash = stored.ContentHash, StoragePath = stored.StoragePath, SizeBytes = stored.SizeBytes,
+            RawHeaders = parsed.RawHeaders, BodyText = parsed.BodyText, BodyHtml = parsed.BodyHtml,
+            Flags = flags, Uid = uid, IsRead = flags.Contains("\\Seen", StringComparison.OrdinalIgnoreCase),
+            CreatedAt = now, UpdatedAt = now
+        });
+        foreach (var (addresses, type) in new[] { (parsed.To, "to"), (parsed.Cc, "cc"), (parsed.Bcc, "bcc") })
+        {
+            if (string.IsNullOrWhiteSpace(addresses)) continue;
+            foreach (var address in addresses.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+                _db.MessageRecipients.Add(new MessageRecipient { Id = Guid.NewGuid(), TenantId = tenantId, MessageId = messageId, Type = type, Address = address, CreatedAt = now, UpdatedAt = now });
+        }
+        foreach (var attachment in parsed.Attachments)
+        {
+            await using var attachmentStream = new MemoryStream(attachment.Content, writable: false);
+            var storedAttachment = await _storage.StoreAsync(attachmentStream, cancellationToken);
+            _db.Attachments.Add(new Attachment { Id = Guid.NewGuid(), TenantId = tenantId, MessageId = messageId,
+                FileName = attachment.FileName ?? "attachment", ContentType = attachment.ContentType,
+                SizeBytes = attachment.Content.LongLength, ContentHash = storedAttachment.ContentHash,
+                StoragePath = storedAttachment.StoragePath, CreatedAt = now, UpdatedAt = now });
+        }
+        await _db.SaveChangesAsync(cancellationToken);
+        return uid;
     }
 
     public async Task<MessageListPage> ListMessagesAsync(
@@ -1113,6 +1159,29 @@ public sealed class MessageService : IMessageService
         var draftsFolder = await GetOrCreateDraftsFolderAsync(tenantId, mailboxId, cancellationToken);
         var now = DateTimeOffset.UtcNow;
         var recipients = request.To is { Count: > 0 } ? string.Join(", ", request.To) : string.Empty;
+        Message? draft = null;
+        if (request.DraftId.HasValue)
+        {
+            draft = await _db.Messages.FirstOrDefaultAsync(m =>
+                m.TenantId == tenantId && m.MailboxId == mailboxId && m.FolderId == draftsFolder.Id &&
+                m.Id == request.DraftId.Value, cancellationToken);
+        }
+
+        if (draft is not null && draft.Sender == request.From && draft.Recipient == recipients &&
+            draft.Subject == (string.IsNullOrWhiteSpace(request.Subject) ? "(No Subject)" : request.Subject) &&
+            draft.BodyText == request.BodyText && draft.BodyHtml == request.BodyHtml)
+        {
+            var currentRecipients = await _db.MessageRecipients.Where(r => r.TenantId == tenantId && r.MessageId == draft.Id).ToListAsync(cancellationToken);
+            var expectedRecipients = (request.To ?? Array.Empty<string>()).Select(a => ("to", a))
+                .Concat((request.Cc ?? Array.Empty<string>()).Select(a => ("cc", a)))
+                .Concat((request.Bcc ?? Array.Empty<string>()).Select(a => ("bcc", a))).ToHashSet();
+            if (currentRecipients.Select(r => (r.Type, r.Address)).ToHashSet().SetEquals(expectedRecipients))
+                return new DraftMessageResult(true, draft.Id, "Draft unchanged.");
+        }
+
+        var existingAttachments = draft is null
+            ? Array.Empty<MimeAttachment>()
+            : (await LoadMimeAttachmentsAsync(await LoadAttachmentsForMessageAsync(tenantId, draft.Id, cancellationToken), cancellationToken)).ToArray();
         var built = MimeMessageBuilder.Build(new MimeMessageRequest(
             request.From,
             request.To ?? Array.Empty<string>(),
@@ -1121,21 +1190,12 @@ public sealed class MessageService : IMessageService
             request.Subject,
             request.BodyText,
             request.BodyHtml,
-            Array.Empty<MimeAttachment>(),
-            now));
-        var sizeBytes = built.SizeBytes;
-        var contentHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(built.RawMessage))).ToLowerInvariant();
-
-        Message? draft = null;
-        if (request.DraftId.HasValue)
-        {
-            draft = await _db.Messages.FirstOrDefaultAsync(m =>
-                m.TenantId == tenantId &&
-                m.MailboxId == mailboxId &&
-                m.FolderId == draftsFolder.Id &&
-                m.Id == request.DraftId.Value,
-                cancellationToken);
-        }
+            existingAttachments,
+            now,
+            IncludeBccHeader: true));
+        await using var rawStream = new MemoryStream(Encoding.UTF8.GetBytes(built.RawMessage), writable: false);
+        var stored = await _storage.StoreAsync(rawStream, cancellationToken);
+        var existingContentHash = draft?.ContentHash;
 
         if (draft is null)
         {
@@ -1156,11 +1216,11 @@ public sealed class MessageService : IMessageService
         draft.Recipient = recipients;
         draft.Subject = string.IsNullOrWhiteSpace(request.Subject) ? "(No Subject)" : request.Subject;
         draft.Date = now;
-        draft.ContentHash = contentHash;
-        draft.StoragePath = $"/storage/mail/{tenantId}/{mailboxId}/{draft.Id}.eml";
-        if (draft.Id != request.DraftId) {
-            draft.SizeBytes = sizeBytes;
-        }
+        draft.ContentHash = stored.ContentHash;
+        draft.StoragePath = stored.StoragePath;
+        draft.SizeBytes = stored.SizeBytes;
+        if (existingContentHash is not null && !existingContentHash.Equals(stored.ContentHash, StringComparison.Ordinal))
+            draft.Uid = await _uidAllocator.AllocateAsync(tenantId, draftsFolder.Id, cancellationToken: cancellationToken);
         draft.Flags = "\\Draft";
         draft.IsRead = true;
         draft.BodyText = request.BodyText;

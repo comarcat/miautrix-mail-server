@@ -139,6 +139,7 @@ public sealed class ImapListenerRawSocketTests
         services.AddScoped<IPermissionRepository, EfPermissionRepository>();
         services.AddScoped<IMailboxService, MailboxService>();
         services.AddScoped<IMessageService, MessageService>();
+        services.AddSingleton<Miautrix.Mail.Application.Mail.Mime.IMimeMessageParser, Miautrix.Mail.Infrastructure.Mail.MimeKitMimeMessageParser>();
         services.AddScoped<Miautrix.Mail.Application.Mail.IMessageUidAllocator, Miautrix.Mail.Application.Mail.MessageUidAllocator>();
         services.AddSingleton<IMailStorage>(storage);
         services.AddSingleton<Miautrix.Mail.Application.Mail.Mime.IImapMimeFormatter, MimeKitImapMimeFormatter>();
