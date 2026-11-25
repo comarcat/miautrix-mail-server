@@ -346,16 +346,6 @@ export const DomainsScreen: React.FC<DomainsScreenProps> = ({ client = defaultCl
             <form onSubmit={handleAddSubmit}>
               <div className="modal-body">
                 <div className="form-group">
-                  <label className="form-label" htmlFor="mta-sts-mode">MTA-STS policy</label>
-                  <select id="mta-sts-mode" className="input-text w-full" defaultValue={editingDomain?.mta_sts_mode || 'none'}>
-                    <option value="none">Disabled</option><option value="testing">Testing</option><option value="enforce">Enforce</option>
-                  </select>
-                  <label className="form-label" htmlFor="mta-sts-max-age">Policy max_age (seconds)</label>
-                  <input id="mta-sts-max-age" className="input-text w-full" type="number" min="1" max="31557600" defaultValue={editingDomain?.mta_sts_max_age || 604800} />
-                  <label className="form-label" htmlFor="tls-report-rua">TLS-RPT report address</label>
-                  <input id="tls-report-rua" className="input-text w-full" defaultValue={editingDomain?.tls_report_rua || `mailto:tls-reports@${editingDomain?.name}`} />
-                </div>
-                <div className="form-group">
                   <label className="form-label">Domain Name (FQDN)</label>
                   <input
                     type="text"
@@ -454,6 +444,16 @@ export const DomainsScreen: React.FC<DomainsScreenProps> = ({ client = defaultCl
             </div>
             <form onSubmit={handleEditSubmit}>
               <div className="modal-body">
+                <div className="form-group">
+                  <label className="form-label" htmlFor="mta-sts-mode">MTA-STS policy</label>
+                  <select id="mta-sts-mode" className="input-text w-full" defaultValue={editingDomain.mta_sts_mode || 'none'}>
+                    <option value="none">Disabled</option><option value="testing">Testing</option><option value="enforce">Enforce</option>
+                  </select>
+                  <label className="form-label" htmlFor="mta-sts-max-age">Policy max_age (seconds)</label>
+                  <input id="mta-sts-max-age" className="input-text w-full" type="number" min="1" max="31557600" defaultValue={editingDomain.mta_sts_max_age || 604800} />
+                  <label className="form-label" htmlFor="tls-report-rua">TLS-RPT report address</label>
+                  <input id="tls-report-rua" className="input-text w-full" defaultValue={editingDomain.tls_report_rua || `mailto:tls-reports@${editingDomain.name}`} />
+                </div>
                 <div className="form-group">
                   <label className="form-label">Domain Name (FQDN)</label>
                   <input

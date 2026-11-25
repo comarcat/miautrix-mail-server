@@ -213,6 +213,7 @@ describe('Webmail SPA UI Flow', () => {
 
       expect(screen.getByRole('heading', { level: 1, name: /managesieve filter rules/i })).toBeInTheDocument();
       expect(screen.getAllByText('Move Jira Notifications')[0]).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: /set up on iphone\/mac/i })).toHaveAttribute('href', '/api/v1/webmail/mobileconfig');
     });
 
     it('switches calendar month, week, and day layouts', async () => {
