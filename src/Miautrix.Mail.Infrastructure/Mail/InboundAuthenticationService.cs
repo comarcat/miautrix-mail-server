@@ -7,9 +7,22 @@ using Miautrix.Mail.Application.Transport;
 namespace Miautrix.Mail.Infrastructure.Mail;
 
 /// <summary>Inbound authentication implementation; all DNS access is through the injectable resolver.</summary>
-public sealed class InboundAuthenticationService(IDnsResolver dns, InboundAuthenticationOptions options) : IInboundAuthenticationService
+public sealed class InboundAuthenticationService : IInboundAuthenticationService
 {
-    private readonly SpfEvaluator _spfEvaluator = new(dns);
+    private readonly IDnsResolver dns;
+    private readonly InboundAuthenticationOptions options;
+    private readonly PublicSuffixList suffixList;
+    private readonly Func<int> pctRoll;
+    private readonly SpfEvaluator _spfEvaluator;
+
+    public InboundAuthenticationService(IDnsResolver dns, InboundAuthenticationOptions options, PublicSuffixList? suffixList = null, Func<int>? pctRoll = null)
+    {
+        this.dns = dns;
+        this.options = options;
+        this.suffixList = suffixList ?? new PublicSuffixList();
+        this.pctRoll = pctRoll ?? (() => Random.Shared.Next(100));
+        _spfEvaluator = new SpfEvaluator(dns);
+    }
     public async Task<InboundAuthenticationResult> EvaluateAsync(InboundAuthenticationInput input, CancellationToken cancellationToken = default)
     {
         if (options.Mode == AuthenticationMode.Off)
@@ -21,35 +34,62 @@ public sealed class InboundAuthenticationService(IDnsResolver dns, InboundAuthen
         var dkim = await EvaluateDkim(input.RawMessage, budget.Token);
         var message = MimeMessage.Load(new MemoryStream(Encoding.UTF8.GetBytes(input.RawMessage)));
         var fromDomains = message.From.Mailboxes.Select(m => m.Domain.ToLowerInvariant()).Distinct().ToArray();
-        DmarcAuthenticationResult dmarc;
-        if (fromDomains.Length != 1)
-        {
-            dmarc = new("permerror", null, null, "none", []);
-        }
-        else
-        {
-            var domain = fromDomains[0];
-            var records = await dns.GetTxtAsync("_dmarc." + domain, budget.Token);
-            var record = records.SingleOrDefault(value => value.StartsWith("v=DMARC1", StringComparison.OrdinalIgnoreCase));
-            if (record is null) dmarc = new("none", domain, null, "none", []);
-            else
-            {
-                var tags = record.Split(';').Select(x => x.Trim()).Where(x => x.Contains('=')).Select(x => x.Split('=', 2)).ToDictionary(x => x[0], x => x[1], StringComparer.OrdinalIgnoreCase);
-                var policy = tags.GetValueOrDefault("p", "none").ToLowerInvariant();
-                var aligned = dkim.Where(x => x.Result == "pass" && x.Domain is not null && Align(domain, x.Domain, tags.GetValueOrDefault("adkim", "r"))).Select(x => x.Domain!).ToArray();
-                if (aligned.Length > 0) dmarc = new("pass", domain, policy, "none", aligned);
-                else
-                {
-                    var pct = int.TryParse(tags.GetValueOrDefault("pct", "100"), out var parsedPct) ? Math.Clamp(parsedPct, 0, 100) : 100;
-                    var disposition = policy == "reject" && Random.Shared.Next(100) < pct ? "reject" : policy == "quarantine" && Random.Shared.Next(100) < pct ? "quarantine" : "none";
-                    dmarc = new("fail", domain, policy, disposition, []);
-                }
-            }
-        }
+        var dmarc = await EvaluateDmarc(fromDomains, spf, dkim, budget.Token);
         var auth = $"{options.AuthservId}; spf={spf.Result} smtp.mailfrom={(spf.Domain ?? "unknown")}; " +
                    (dkim.Count == 0 ? "dkim=none" : string.Join("; ", dkim.Select(x => $"dkim={x.Result} header.d={x.Domain ?? "unknown"}"))) +
                    $"; dmarc={dmarc.Result} header.from={dmarc.Domain ?? "unknown"}";
         return new(spf, dkim, dmarc, auth);
+    }
+
+    private async Task<DmarcAuthenticationResult> EvaluateDmarc(string[] fromDomains, SpfAuthenticationResult spf, IReadOnlyList<DkimAuthenticationResult> dkim, CancellationToken ct)
+    {
+        if (fromDomains.Length != 1) return new("fail", null, null, "none", []);
+        var from = fromDomains[0];
+        string? record = await FindDmarcRecord(from, ct);
+        string? policyDomain = from;
+        if (record is null)
+        {
+            var org = suffixList.GetOrganizationalDomain(from);
+            if (org is not null && !org.Equals(from, StringComparison.OrdinalIgnoreCase))
+            {
+                policyDomain = org;
+                record = await FindDmarcRecord(org, ct);
+            }
+        }
+        if (record is null) return new("none", from, null, "none", []);
+        Dictionary<string, string> tags;
+        try
+        {
+            tags = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var item in record.Split(';').Select(x => x.Trim()).Where(x => x.Contains('=')))
+            {
+                var pair = item.Split('=', 2);
+                if (!tags.TryAdd(pair[0].Trim(), pair[1].Trim())) return new("permerror", from, null, "none", []);
+            }
+            if (!tags.TryGetValue("p", out var policy) || policy is not ("none" or "quarantine" or "reject")) return new("permerror", from, null, "none", []);
+            if (tags.GetValueOrDefault("v")?.Equals("DMARC1", StringComparison.OrdinalIgnoreCase) != true) return new("permerror", from, null, "none", []);
+        }
+        catch { return new("permerror", from, null, "none", []); }
+
+        var p = tags.GetValueOrDefault("p", "none").ToLowerInvariant();
+        var spPolicy = tags.GetValueOrDefault("sp", p).ToLowerInvariant();
+        var appliedPolicy = !from.Equals(policyDomain, StringComparison.OrdinalIgnoreCase) ? spPolicy : p;
+        var pct = int.TryParse(tags.GetValueOrDefault("pct", "100"), out var value) && value is >= 0 and <= 100 ? value : 100;
+        var aligned = new List<string>();
+        if (spf.Result == "pass" && spf.Domain is not null && IsAligned(from, spf.Domain, tags.GetValueOrDefault("aspf", "r"))) aligned.Add("spf:" + spf.Domain);
+        foreach (var signature in dkim.Where(x => x.Result == "pass" && x.Domain is not null))
+            if (IsAligned(from, signature.Domain!, tags.GetValueOrDefault("adkim", "r"))) aligned.Add("dkim:" + signature.Domain);
+        if (aligned.Count > 0) return new("pass", from, p, "none", aligned, spPolicy, pct);
+        var apply = pct == 100 || (pct > 0 && pctRoll() < pct);
+        var disposition = apply && (appliedPolicy is "reject" or "quarantine") ? appliedPolicy : "none";
+        return new("fail", from, p, disposition, aligned, spPolicy, pct);
+    }
+
+    private async Task<string?> FindDmarcRecord(string domain, CancellationToken ct)
+    {
+        var txt = await dns.GetTxtAsync("_dmarc." + domain, ct);
+        var records = txt.Where(x => x.StartsWith("v=DMARC1", StringComparison.OrdinalIgnoreCase)).ToArray();
+        return records.Length == 1 ? records[0] : null;
     }
 
     private async Task<IReadOnlyList<DkimAuthenticationResult>> EvaluateDkim(string raw, CancellationToken ct)
@@ -76,7 +116,13 @@ public sealed class InboundAuthenticationService(IDnsResolver dns, InboundAuthen
         return result;
     }
 
-    private static bool Align(string from, string signer, string mode) => mode.Equals("s", StringComparison.OrdinalIgnoreCase) ? from.Equals(signer, StringComparison.OrdinalIgnoreCase) : from.Equals(signer, StringComparison.OrdinalIgnoreCase) || from.EndsWith("." + signer, StringComparison.OrdinalIgnoreCase) || signer.EndsWith("." + from, StringComparison.OrdinalIgnoreCase);
+    private bool IsAligned(string from, string identifier, string mode)
+    {
+        if (mode.Equals("s", StringComparison.OrdinalIgnoreCase)) return from.Equals(identifier, StringComparison.OrdinalIgnoreCase);
+        var fromOrg = suffixList.GetOrganizationalDomain(from) ?? from;
+        var identifierOrg = suffixList.GetOrganizationalDomain(identifier) ?? identifier;
+        return fromOrg.Equals(identifierOrg, StringComparison.OrdinalIgnoreCase);
+    }
     private sealed class DnsDkimLocator(IDnsResolver dns) : DkimPublicKeyLocatorBase
     {
         public override Org.BouncyCastle.Crypto.AsymmetricKeyParameter LocatePublicKey(string methods, string domain, string selector, CancellationToken cancellationToken = default)
