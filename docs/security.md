@@ -11,6 +11,8 @@ The Admin Security page now shows real identity/security invariants where they e
 - Session lifetime is read from the session manager.
 - Lockout threshold/duration is centralized in `LockoutOptions`.
 - Domain MFA enforcement is persisted on the `domains.mfa_enforced` column.
+- **SMTP transport (v2.1):** TLS 1.2+ on ports 25, 465 and 587; STARTTLS on 25; AUTH only after TLS; bounded command/DATA lines, message size, recipients and timeouts (TROUBLESHOOTING §16).
+- **DKIM (v2.1):** the server signs only for domains in `direct` transport mode. Cloudflare-mode domains are left byte-identical, as Cloudflare signs them. DANE is not implemented.
 - **Sender authorization (v2.0.0):** SMTP submission and webmail share one policy, `ISenderAuthorizationService`.
   - Allowed: the user's own address and aliases, plus shared mailboxes where the delegate has Send As (`can_send_as`) or Send on Behalf (`can_send_on_behalf`, server-set `Sender:`).
   - Everything else is rejected with `550 5.7.1` and audited as `sender.authorization.denied` (domain and reason only).

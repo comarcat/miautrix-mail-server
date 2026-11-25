@@ -6,8 +6,9 @@ Self-hosted, multi-tenant mail platform designed as a modular monolith in .NET 1
 
 - **Architecture Diagram:** [`architecture.html`](architecture.html) (interactive diagram with showcase quality profile)
 - **Architecture Blueprint:** [`blueprints/miautrix-mail-server/blueprint.md`](blueprints/miautrix-mail-server/blueprint.md)
-- **Charter & Plan:** [`PMI_Project_Charter_and_Plan.md`](PMI_Project_Charter_and_Plan.md) — Version 1.0 complete (2026-10-03); **Version 2.0.0 released 2026-11-24** (M5 closed)
-- **Handoff (v2.0.0 release):** [`docs/HANDOFF-v2.0.0-release.md`](docs/HANDOFF-v2.0.0-release.md) — **start here to catch up**. Full history: [`docs/HANDOFF-v2.0.md`](docs/HANDOFF-v2.0.md)
+- **Charter & Plan:** [`PMI_Project_Charter_and_Plan.md`](PMI_Project_Charter_and_Plan.md) — Version 1.0 complete (2026-10-03); **Version 2.0.0 released 2026-11-24** (M5 closed); **v2.1 deployed 2026-11-25**
+- **Handoff (v2.1):** [`docs/HANDOFF-v2.1.md`](docs/HANDOFF-v2.1.md) — **start here to catch up**: deploy, reparse, test checklist. Previous: [`docs/HANDOFF-v2.0.0-release.md`](docs/HANDOFF-v2.0.0-release.md). Full history: [`docs/HANDOFF-v2.0.md`](docs/HANDOFF-v2.0.md)
+- **Protocols (v2.1):** compliance audit [`docs/v2.1-Protocol-Compliance-Audit.md`](docs/v2.1-Protocol-Compliance-Audit.md); SMTP [`docs/SMTP-v2.1-Report.md`](docs/SMTP-v2.1-Report.md); outbound/direct MX [`docs/Outbound-v2.1-Report.md`](docs/Outbound-v2.1-Report.md); IMAP phase 2 [`docs/IMAP-Phase2-Report.md`](docs/IMAP-Phase2-Report.md)
 - **IMAP:** [`docs/IMAP.md`](docs/IMAP.md) — capabilities, `Shared/` namespace, client setup; Send As model: [`docs/SMTP-SendAs-Report.md`](docs/SMTP-SendAs-Report.md)
 - **Deployment:** [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — versioned deploy, storage preflight, rollback and cleanup
 - **Troubleshooting:** [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) — deployment, service, mail and IMAP diagnostics
@@ -18,7 +19,9 @@ Self-hosted, multi-tenant mail platform designed as a modular monolith in .NET 1
 
 ## 🚀 Project Status
 
-**Version 2.0.0 is released and running in production (2026-11-24).** It brings .NET 10, MIME parsing and backfill, webmail isolation, full IMAP4rev1 with shared mailboxes, Send As / Send on Behalf, and versioned deployment with rollback. Next: IMAP4rev2 (phase 2).
+**Version 2.0.0 is released and running in production (2026-11-24).** It brings .NET 10, MIME parsing and backfill, webmail isolation, full IMAP4rev1 with shared mailboxes, Send As / Send on Behalf, and versioned deployment with rollback.
+
+**Version 2.1 is deployed (2026-11-25)** and in owner validation. It fixes SMTP multi-recipient delivery and unbounded input, adds STARTTLS on port 25 with TLS 1.2+, per-domain direct MX delivery (Cloudflare stays the default), retries with bounces, IMAP NAMESPACE/MOVE/IDLE, and makes drafts saved by IMAP clients editable in webmail. IMAP4rev2 is implemented as a session mode but not yet advertised. Next: finish the IMAP4rev2 MUST rows, inbound SPF/DKIM/DMARC, Sieve on delivery.
 
 Build and run with the .NET 10 SDK (`global.json` pins 10.0.403). The `messages reparse` command can backfill stored messages after deployment. Without `--user`, it trusts the local host operator, matching the existing CLI local-access model.
 

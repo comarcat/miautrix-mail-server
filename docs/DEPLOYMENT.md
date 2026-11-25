@@ -39,6 +39,23 @@ On a switch or verification failure the client attempts automatic rollback and e
 
 Cleanup runs only after a successful verification marker. `cleanup --keep 2` retains exactly the current and previous release and the two newest manifest-associated database/config backup sets. It checks resolved release paths before deletion and never removes paths outside `releases/` and `backups/`. `cleanup --keep 2 --dry-run` reports candidates without deleting them. Use `-SkipCleanup` to retain older releases for investigation.
 
+## v2.1 upgrade notes
+
+- **No migrations** since v2.0.0: deploy without `-RunMigrations`.
+- **No required `.env` changes.** New optional settings, validated at boot (an invalid value stops the service with `FATAL`):
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `MIAUTRIX_SMTP_MAX_RECIPIENTS` | 100 | RCPT limit per message (`452 4.5.3`) |
+| `MIAUTRIX_SMTP_MAX_MESSAGE_SIZE` | 26214400 | SIZE limit (`552 5.3.4`) |
+| `MIAUTRIX_SMTP_IDLE_TIMEOUT_SECONDS` / `MIAUTRIX_SMTP_DATA_TIMEOUT_SECONDS` | 300 | Listener timeouts |
+| `OUTBOUND_EHLO_NAME` | `MIAUTRIX_HOSTNAME` | EHLO name for `direct` delivery and DSNs |
+| `OUTBOUND_SMTP_CONNECT_TIMEOUT_SECONDS` / `OUTBOUND_SMTP_COMMAND_TIMEOUT_SECONDS` | 20 / 30 | Direct MX timeouts |
+| `OUTBOUND_RETRY_LIFETIME_DAYS` | 5 (1–30) | Give up and bounce after this |
+
+- **After deploy:** run `messages reparse --tenant all` (dry run first) with `.env` loaded in a subshell; see `docs/HANDOFF-v2.1.md` and TROUBLESHOOTING §18.
+- **Before switching a domain to `direct`:** outbound port 25 reachable, PTR matches the EHLO name, SPF includes the server IP, DKIM TXT published (TROUBLESHOOTING §17).
+
 ## Security notes
 
 The old root `deploy.ps1` is retired. `scripts/deploy-compile-upload.ps1` is deprecated and refuses its destructive wipe unless `-IUnderstandNoBackup` is supplied; use it only for a separately reviewed recovery case. A production database credential was present in tracked files and remains in repository history; the owner must rotate it. History rewriting is optional and requires owner review. No deploy or database command has been run by the authoring session.

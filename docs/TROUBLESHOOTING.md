@@ -515,8 +515,10 @@ WHERE direction = 'Outbound' AND status <> 'Delivered' ORDER BY created_at DESC 
 **Fix.** For drafts saved by IMAP clients **before** v2.1, run once on the server after the deploy, loading `/opt/miautrix-mail/.env` as in §7:
 
 ```bash
-/opt/miautrix-mail/cli/Miautrix.Mail.Cli messages reparse --tenant all --dry-run   # review the updated/failed counts
-/opt/miautrix-mail/cli/Miautrix.Mail.Cli messages reparse --tenant all
+# Dry run first: review the updated/failed counts
+( while IFS= read -r l; do [[ -z $l || $l == \#* ]] && continue; k=${l%%=*}; v=${l#*=}; v=${v#\"}; v=${v%\"}; export "$k=$v"; done < /opt/miautrix-mail/.env; /opt/miautrix-mail/cli/Miautrix.Mail.Cli messages reparse --tenant all --dry-run )
+# Then apply
+( while IFS= read -r l; do [[ -z $l || $l == \#* ]] && continue; k=${l%%=*}; v=${l#*=}; v=${v#\"}; v=${v%\"}; export "$k=$v"; done < /opt/miautrix-mail/.env; /opt/miautrix-mail/cli/Miautrix.Mail.Cli messages reparse --tenant all )
 ```
 
 Reparse never changes the stored bytes or UIDs.
