@@ -76,7 +76,7 @@ public sealed class InboundAuthenticationService : IInboundAuthenticationService
 
     private DmarcAuthenticationResult ApplyTrustedDmarcResult(DmarcAuthenticationResult local, TrustedAuthenticationResults? trusted)
     {
-        if (trusted?.DmarcResult is null) return local;
+        if (trusted?.DmarcResult is null || local.Domain is null) return local;
         if (trusted.DmarcResult == "pass")
             return local with
             {

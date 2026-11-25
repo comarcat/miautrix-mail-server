@@ -85,6 +85,20 @@ public sealed class DmarcEvaluationTests
         Assert.Contains("policy.dmarc=none", result.AuthenticationResults);
     }
 
+    [Fact]
+    public async Task Trusted_cloudflare_dmarc_does_not_override_multiple_from_failure()
+    {
+        var trustedAuthservs = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "mx.cloudflare.net" };
+        var service = new InboundAuthenticationService(new FakeDnsResolver(),
+            new InboundAuthenticationOptions { AuthservId = "mx.example.test", TrustedAuthservIds = trustedAuthservs });
+        var result = await service.EvaluateAsync(new(null, null, "sender@remote.test",
+            "From: a@example.test, b@other.test\r\n\r\nbody\r\n", InboundMailPath.CloudflareWebhook,
+            "mx.cloudflare.net; spf=pass smtp.mailfrom=example.test; dmarc=pass header.from=example.test"));
+        Assert.Equal("fail", result.Dmarc.Result);
+        Assert.Null(result.Dmarc.Domain);
+        Assert.Equal("none", result.Dmarc.Disposition);
+    }
+
     private static FakeDnsResolver DnsWithDmarc(string record)
     {
         var dns = new FakeDnsResolver(); dns.Txt["_dmarc." + FromDomain] = [record]; return dns;
