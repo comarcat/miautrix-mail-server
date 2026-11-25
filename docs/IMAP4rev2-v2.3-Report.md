@@ -30,3 +30,9 @@ Additional requested work remains: complete APPENDUID/COPYUID failure placement,
 ## Troubleshooting draft
 
 IMAP4rev2 is not yet advertised. Existing clients continue to use IMAP4rev1; do not enable or advertise IMAP4rev2 until the remaining audit matrix and protocol tests are complete.
+
+## Continuation checkpoint
+
+Further implementation in this checkpoint adds command-boundary unsolicited mailbox updates and prevents those polls from displacing the command's authorization response; it also rejects extra arguments to selected no-argument commands. LIST recursive parent attributes and CHILDINFO behavior, OLDNAME as LIST extended data, and raw assertions for selection, pipelining, and updates were extended. A build of the protocol test project succeeds with zero warnings; the current raw-socket test is still failing, so this is not a green protocol checkpoint.
+
+The advertisement gate remains blocked by concrete, applicable normative rows that are not yet completely implemented or audited: RFC 9051 §§7.1–7.2 response grammar and response-code placement; §6.3.9 complete LIST-EXTENDED selection/RETURN combinations; §6.4.4 SEARCH/UID SEARCH result combinations with ESEARCH and SEARCHRES; §§2.3 and 3–5 sequence, state, framing, mailbox-name and unsolicited-update invariants; and Appendix E.1–E.21 item-by-item compliance mapping. Their requirement-level dispositions, code locations and test names are not enumerated completely here. Do not advertise IMAP4rev2 until these rows are individually audited and every applicable MUST is implemented and verified.

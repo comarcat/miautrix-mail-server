@@ -180,6 +180,12 @@ public sealed class ImapListenerService : BackgroundService
                     async (_, token) => await WriteAsciiAsync(ssl, "+ Ready for literal data\r\n", token),
                     maxLiteral, ct, literalMinusEnabled: session.IsImap4Rev2Enabled);
                 parsed = ImapCommandTokenizer.Parse(collected.Text, collected.Literals);
+                if (session.SelectedFolder is not null)
+                {
+                    var pendingUpdates = await session.PollIdleChangesAsync(ct);
+                    if (pendingUpdates.ResponseSegments.Count > 0)
+                        await ImapResponseWriter.WriteAsync(ssl, pendingUpdates, ct);
+                }
                 result = await session.ExecuteCommandAsync(parsed, ct);
             }
             catch (ImapLiteralTooLargeException ex)

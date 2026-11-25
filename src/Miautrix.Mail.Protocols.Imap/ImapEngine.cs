@@ -151,6 +151,9 @@ public sealed partial class ImapSession
         if (!ImapStateMachine.IsAllowed(State, commandName))
             return new ImapCommandResult(tag, "BAD", $"{commandName} is not valid in the {State} state", Array.Empty<string>());
 
+        if (commandName is "CAPABILITY" or "NOOP" or "LOGOUT" or "STARTTLS" or "NAMESPACE" or "CHECK" or "CLOSE" or "UNSELECT" or "EXPUNGE" or "IDLE" && args.Count != 0)
+            return new ImapCommandResult(tag, "BAD", $"{commandName} does not take arguments", Array.Empty<string>());
+
         if (State is ImapState.Authenticated or ImapState.Selected && commandName is not "LOGIN" and not "CAPABILITY" and not "LOGOUT")
         {
             var operation = commandName == "UID" && args.Count > 0 ? args[0].Text.ToUpperInvariant() : commandName;
@@ -391,11 +394,13 @@ public sealed partial class ImapSession
 
     public async Task<ImapCommandResult> PollIdleChangesAsync(CancellationToken cancellationToken = default)
     {
-        if (!IsIdling || SelectedFolder is null || TenantId is null)
+        if (SelectedFolder is null || TenantId is null)
             return new ImapCommandResult("*", "CONTINUE", string.Empty, Array.Empty<string>());
         var selected = SelectedFolder;
         if (!await AuthorizeMailboxAsync(selected.MailboxId, write: false, cancellationToken))
         {
+            if (!IsIdling)
+                return new ImapCommandResult("*", "CONTINUE", string.Empty, Array.Empty<string>());
             _idleTag = null;
             SelectedFolder = null;
             SelectedReadOnly = false;
@@ -637,6 +642,7 @@ public sealed partial class ImapSession
             else flags.ExceptWith(incoming);
             if (flags.SetEquals(ParseFlags(message.Flags)) && flags.Contains("\\Seen") == message.IsRead) continue;
             if (!await _messageService.SetImapFlagsAsync(TenantId.Value, _userId.Value, SelectedFolder.MailboxId, message.Id, flags.ToArray(), ct)) continue;
+            _selectedFlagsSnapshot[message.Uid] = $"{string.Join(' ', flags.Distinct(StringComparer.OrdinalIgnoreCase))}|{flags.Contains("\\Seen", StringComparer.OrdinalIgnoreCase)}";
             if (!silent)
             {
                 var sequence = (uint)(messages.IndexOf(message) + 1);
@@ -834,7 +840,10 @@ public sealed partial class ImapSession
             if (!string.Equals(requestedName, normalizedName, StringComparison.Ordinal))
             {
                 static string QuoteMailbox(string value) => "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
-                return new ImapCommandResult(tag, "OK", $"[OLDNAME {QuoteMailbox(EncodeMailboxPath(requestedName))} {QuoteMailbox(EncodeMailboxPath(normalizedName))}] CREATE completed", Array.Empty<string>());
+                var supplied = QuoteMailbox(EncodeMailboxPath(requestedName));
+                var normalized = QuoteMailbox(EncodeMailboxPath(normalizedName));
+                var list = $"* LIST (\\Subscribed) \"/\" {normalized} (\"OLDNAME\" ({supplied}))";
+                return new ImapCommandResult(tag, "OK", "CREATE completed", new[] { list });
             }
             return new ImapCommandResult(tag, "OK", "CREATE completed", Array.Empty<string>());
         }
@@ -1250,7 +1259,7 @@ public sealed partial class ImapSession
                         var parent = folders.FirstOrDefault(candidate => candidate.Id == parentId);
                         if (parent is null) break;
                         var parentName = FullName(parent);
-                        if (!visibleNames.Contains(parentName)) childInfoNames.Add(parentName);
+                        if (!Regex.IsMatch(FullName(folder), regex, RegexOptions.IgnoreCase)) childInfoNames.Add(parentName);
                         visibleNames.Add(parentName);
                         cursor = parent;
                     }
@@ -1275,9 +1284,7 @@ public sealed partial class ImapSession
             var isRecursiveParent = recursiveMatch && childInfoNames.Contains(pair.Name);
             var attributes = pair.Folder is null
                 ? new List<string> { "\\Noselect", "\\HasChildren" }
-                : (subscribed || isRecursiveParent) && !pair.IsSubscribed
-                    ? new List<string> { "\\Noselect", hasChildren ? "\\HasChildren" : "\\HasNoChildren" }
-                    : new List<string> { hasChildren ? "\\HasChildren" : "\\HasNoChildren" };
+                : new List<string> { hasChildren ? "\\HasChildren" : "\\HasNoChildren" };
             var special = pair.Folder?.Role.ToLowerInvariant() switch
             {
                 "sent" => "\\Sent", "drafts" => "\\Drafts", "trash" => "\\Trash", "junk" => "\\Junk", "archive" => "\\Archive", _ => null
@@ -1838,11 +1845,13 @@ public sealed partial class ImapSession
                 {
                     var mailboxId = SelectedFolder.MailboxId;
                     await _messageService.SetImapFlagsAsync(tenantId, userId, mailboxId, message.Id, seenFlags, cancellationToken);
+                    _selectedFlagsSnapshot[message.Uid] = $"{string.Join(' ', seenFlags.Distinct(StringComparer.OrdinalIgnoreCase))}|true";
                 }
                 else
                 {
                     await _dbContext.Messages.Where(m => m.TenantId == TenantId && m.MailboxId == SelectedFolder!.MailboxId && m.Id == message.Id)
                         .ExecuteUpdateAsync(update => update.SetProperty(m => m.IsRead, true).SetProperty(m => m.Flags, string.Join(' ', seenFlags)), cancellationToken);
+                    _selectedFlagsSnapshot[message.Uid] = $"{string.Join(' ', seenFlags.Distinct(StringComparer.OrdinalIgnoreCase))}|true";
                 }
                 if (!values.Any(v => v.Name == "FLAGS")) values.Add(("FLAGS", null, $"({string.Join(' ', seenFlags)})", null));
             }
