@@ -344,7 +344,7 @@
       "id": "webmail-to-api",
       "from": "webmail",
       "to": "api_core",
-      "label": "JMAP / REST"
+      "label": "REST"
     },
     {
       "id": "api-to-auth",

@@ -980,3 +980,37 @@ The root `deploy.ps1` previously included a hardcoded production database passwo
 - **Deployed** 2026-11-24 from `76c8e7c` with `-RunMigrations`. The pre-check found all 5 delegates at `access_level = write`. The owner validated imaplib, Himalaya, Thunderbird (`Shared/sales`) and SMTP Send As / rejection: all working.
 - **Schema converged (post-deploy fingerprint):** production matches a fresh install apart from the legacy `AddSmtpQueueDirection` history row, and dev is identical to production. This closes the drift in §13.10 and §13.11.
 - **Lesson:** worker-reported "green" was not enough. Coordinator review caught three defects that every test passed with: subscriptions defaulting to off, all stored mail marked `\Recent`, and send-only delegates able to modify mailboxes. Review migrations and defaults against existing production data, not only fresh databases.
+
+### 13.14 Fixed in v2.1 (not yet deployed): SMTP delivered a multi-recipient message to the last recipient only (2026-11-24, Critical)
+
+- **Found by:** the v2.1 protocol audit (`docs/v2.1-Protocol-Compliance-Audit.md`), confirmed by the coordinator in code.
+- **Cause:** `SmtpListenerService` kept one `rcptTo` string that each `RCPT TO` overwrote. Submission (for example Thunderbird sending to three people) and inbound mail to several local users reached only the last address. Inbound recipients in different tenants also overwrote `tenantId`.
+- **Fix (WP1):**
+  - a recipient list, with one queue item per recipient routed to its own tenant;
+  - a 100-recipient ceiling (`452 4.5.3`).
+- **Tests:** real-socket tests cover three-recipient submission and inbound delivery to two tenants with no leakage.
+
+### 13.15 Fixed in v2.1 (not yet deployed): unbounded SMTP input allowed memory exhaustion (2026-11-24, Critical)
+
+- **Cause:** `ReadLineAsync` and the DATA `StringBuilder` had no limits, and the advertised `SIZE 26214400` was not enforced. Any client on port 25 could make the Worker allocate without bound.
+- **Fix:** 512-octet command lines and 1000-octet DATA lines (`500 5.5.2`), SIZE enforced including the `SIZE=` parameter (`552 5.3.4`), idle and DATA timeouts, and nothing queued on EOF mid-DATA. The new limits are optional settings with defaults (TROUBLESHOOTING §16).
+
+### 13.16 Fixed in v2.1 (not yet deployed): WEBMAIL-001 — drafts saved by IMAP clients open empty in webmail (2026-11-24, High)
+
+- **Report:** the owner saved a 536-byte draft with a 270-character body from an IMAP client to `Shared/sales@…/Drafts` (UID 2). IMAP returned it completely; the webmail editor showed it empty.
+- **Cause:** `ImapEngine.HandleAppendAsync` stored the raw bytes but filled only From, To and Subject with a hand-rolled line scan. It never set `BodyText`/`BodyHtml`, Cc, Bcc or attachments, which are the fields the editor and `UpsertDraftAsync` use. Personal drafts were affected the same way.
+- **Fix:**
+  - APPEND goes through `MessageService.AppendStoredMessageAsync` and the shared MimeKit parser, and the stored bytes stay unchanged.
+  - Webmail saves write full RFC 5322 bytes, and an unchanged autosave does nothing.
+  - A changed draft keeps its webmail ID and gets a new IMAP UID, which IMAP clients see as an expunge plus an append.
+  - NOOP now reports EXISTS when any UID is new, even if the message count didn't change.
+- **Existing drafts:** run `messages reparse --tenant all` after the deploy (TROUBLESHOOTING §18).
+- **Tests:** an end-to-end check over IMAP and the real HTTP endpoints for personal and shared Drafts (APPEND, then GET, PUT, then FETCH), with no duplicates and a second session seeing the change.
+
+### 13.17 Caught in coordinator review before merge (v2.1, 2026-11-24)
+
+- **DKIM on Cloudflare domains:** WP2 signed every outbound message, including Cloudflare-mode domains. Cloudflare publishes and signs their DKIM, so a key in our database whose public part isn't in DNS would have added a failing `d=miautrix.tech` signature to all production mail. Now only `direct` domains are signed, and a regression test checks that Cloudflare messages stay byte-identical.
+- **Worker boot crash:** `OUTBOUND_EHLO_NAME` was required at startup, so the existing production `.env` would have crashed the Worker on deploy. It now falls back to `MIAUTRIX_HOSTNAME`, with 3 unit tests.
+- **A test with a fixed expectation:** the RENAME INBOX test assumed exactly one INBOX message after the new MOVE steps; it now counts first.
+- **Lost manual section:** TROUBLESHOOTING §15 (Send As), written for v2.0.0, had been placed below the appendix marker, so the bundle generator removed it. It is restored above the marker, together with the new §16–§18.
+

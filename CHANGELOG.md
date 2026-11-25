@@ -2,7 +2,29 @@
 
 All notable changes to this project are documented here.
 
-## [2.0.0] - 2026-11-24
+## [2.1.0] - Unreleased (branch `release/v2.1`)
+
+**Deploy:** no new migrations, so deploy without `-RunMigrations`. No `.env` changes are required. After the deploy, run `messages reparse --tenant all` (dry run first) for drafts that IMAP clients saved before v2.1. Handoff: `docs/HANDOFF-v2.1.md`.
+
+### Added
+- **IMAP:** NAMESPACE, MOVE / UID MOVE, IDLE; an IMAP4rev2 session mode after `ENABLE IMAP4rev2` (ESEARCH, SEARCHRES, LIST-EXTENDED, LIST-STATUS, STATUS=SIZE, LITERAL-, BINARY, no `\Recent`). `IMAP4rev2` is advertised only once every RFC 9051 MUST passes (`docs/IMAP-Phase2-Report.md`).
+- **Outbound:** a per-domain `direct` transport mode (MX lookup with A/AAAA fallback, null MX, opportunistic STARTTLS with TLS 1.2+, MTA-STS); DKIM signing for `direct` domains (Cloudflare domains stay unsigned by us, as Cloudflare signs); exponential retry for up to 5 days (`OUTBOUND_RETRY_LIFETIME_DAYS`); RFC 3464 bounces to local senders (`docs/Outbound-v2.1-Report.md`).
+- **SMTP listener:**
+  - STARTTLS on port 25 and TLS 1.2+ on all SMTP ports;
+  - a strict RFC 5321 state machine;
+  - VRFY/EXPN `252`, HELP `214`, enhanced status codes and exact EHLO lists;
+  - strict SASL PLAIN/LOGIN, and `Date`/`Message-ID` added on submission;
+  - optional limits `MIAUTRIX_SMTP_MAX_RECIPIENTS`, `MIAUTRIX_SMTP_MAX_MESSAGE_SIZE`, `MIAUTRIX_SMTP_IDLE_TIMEOUT_SECONDS` and `MIAUTRIX_SMTP_DATA_TIMEOUT_SECONDS`.
+
+  See `docs/SMTP-v2.1-Report.md`.
+- **Audit:** `docs/v2.1-Protocol-Compliance-Audit.md` covers every non-IMAP protocol.
+
+### Fixed
+- **SMTP: only the last recipient received a message** with several recipients. This affected Thunderbird sends and inbound mail to several local users. Each recipient now gets its own queue item, routed to its own tenant.
+- **SMTP: unbounded command and DATA input** let any client exhaust Worker memory. Line, message-size, recipient and time limits are now enforced, and a connection dropped mid-DATA queues nothing.
+- **WEBMAIL-001: drafts saved by IMAP clients opened empty in webmail.** APPEND now parses through the shared MimeKit parser. Webmail saves write full RFC 5322 messages, and an unchanged autosave does nothing.
+- **Deploy safety:** the new `OUTBOUND_EHLO_NAME` falls back to `MIAUTRIX_HOSTNAME`, so the existing production `.env` still boots.
+
 
 **Released:** deployed to production on 2026-11-24 from commit `76c8e7c` and validated by the owner (imaplib, Himalaya, Thunderbird and SMTP Send As). Handoff: `docs/HANDOFF-v2.0.0-release.md`.
 

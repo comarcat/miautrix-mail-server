@@ -1,4 +1,4 @@
-# Troubleshooting — Miautrix Mail Server v2.0
+# Troubleshooting — Miautrix Mail Server v2.1
 
 This manual is for the owner-operator running PowerShell on Windows and administering the Debian LXC app server as root over SSH. The app server runs self-contained .NET; PostgreSQL 18.6 is on a separate server. Replace placeholders such as `<tenant-guid>` and `<db-name>` before use; never paste secrets into a command.
 
@@ -425,6 +425,105 @@ Remove-Item Env:MIAUTRIX_TEST_SERVER_CONNECTION, Env:MIAUTRIX_DB_CONNECTION
 **Verify.** All three runs report `Failed: 0`. On the server, `sudo -u postgres psql -Atc "SELECT datname FROM pg_database WHERE datname LIKE 'uidtest_%'"` returns nothing after the run.
 
 **Rollback/escalate.** If a run is interrupted, drop leftover `uidtest_*` databases as the test role. Never point either variable at the production database or the production role.
+
+## 15. Sending as a shared mailbox (Send As / Send on Behalf)
+
+**Symptom.** Sending fails with `550 5.7.1`, or webmail says "Sender address is not authorized"; or the recipient sees "on behalf of" when they shouldn't, or the reverse.
+
+**Diagnose.** The single policy is `ISenderAuthorizationService`, used by both SMTP submission and webmail:
+
+| From address | Allowed when |
+|---|---|
+| The user's own address or one of their aliases | Always |
+| A shared mailbox | The delegate has `can_send_as`. The message goes out as-is, with no `Sender:` header |
+| A shared mailbox | The delegate has only `can_send_on_behalf`. The server sets `Sender:` to the user, and the envelope `MAIL FROM` must be the user's own address |
+| Anything else (other users, other tenants, external domains, `<>`, a forged header `From`) | Never: `550 5.7.1` |
+
+Full Access (`access_level = write`) does **not** imply Send As. Denials are audited without bodies or secrets:
+
+```sql
+SELECT created_at, actor_id, details_json FROM audit_logs
+WHERE action = 'sender.authorization.denied' ORDER BY created_at DESC LIMIT 20;
+```
+
+Use the delegate query in §9 to see the user's flags.
+
+**Fix.** Grant **Send As** or **Send on Behalf** on the shared mailbox's delegate in admin. Send As wins if both are set. For SMTP, make sure the client authenticates as the user and uses the shared address only in `From:`.
+
+**Verify.** Run the manual SMTP checks in `docs/SMTP-SendAs-Report.md`: a granted send is accepted, and an ungranted or foreign address gets `550 5.7.1`. In the received message, check `From:` and `Sender:`.
+
+**Rollback/escalate.** If a legitimate sender is rejected after the grant, collect the audit `details_json` (domain and reason only) and escalate. Never work around it by granting a broader role. SMTP AUTH is never offered without TLS (`538 5.7.11`), by design.
+
+## 16. SMTP listener limits, TLS and replies (v2.1)
+
+**Symptom.** A client or remote server gets a reply it didn't before v2.1, for example `452 4.5.3`, `552 5.3.4`, `500 5.5.2` or `503 5.5.1`; a TLS handshake fails; or a message to several recipients reached only some of them.
+
+**Diagnose.** These replies are the RFC 5321 limits v2.1 enforces. Before v2.1 there were no limits, and only the **last** recipient of a message received it.
+
+| Reply | Meaning | Default and setting |
+|---|---|---|
+| `452 4.5.3` | Too many recipients in one message | 100, `MIAUTRIX_SMTP_MAX_RECIPIENTS` |
+| `552 5.3.4` | Message, or a `MAIL FROM ... SIZE=`, larger than the limit (SIZE in EHLO) | 26214400 bytes, `MIAUTRIX_SMTP_MAX_MESSAGE_SIZE` |
+| `500 5.5.2` | A command line over 512 octets, or a DATA line over 1000 octets | Fixed (RFC 5321 §4.5.3.1) |
+| `503 5.5.1` | A command out of order, for example RCPT before MAIL, or DATA without RCPT | — |
+| `421` / timeout | The client went idle, or DATA stalled | 300 s each, `MIAUTRIX_SMTP_IDLE_TIMEOUT_SECONDS`, `MIAUTRIX_SMTP_DATA_TIMEOUT_SECONDS` |
+
+All settings are optional; an invalid value stops the Worker at boot with a `FATAL` message. A connection that drops in the middle of DATA queues nothing, by design.
+
+TLS 1.2 or newer is required on 25, 465 and 587. Port 25 now offers STARTTLS (opportunistic), and after STARTTLS the client must send EHLO again. VRFY and EXPN answer `252` without confirming addresses; HELP answers `214`.
+
+**Fix.** Raise a limit only on purpose and only in `/opt/miautrix-mail/.env`, then restart the Worker. A sender on TLS 1.0 or 1.1 must upgrade: RFC 8996 deprecates those versions. Check the exact EHLO list per port in `docs/SMTP-v2.1-Report.md`.
+
+**Verify.** `openssl s_client -starttls smtp -connect 127.0.0.1:25 -tls1_2` succeeds on the server, and `-tls1_1` is refused. Send one test message to two local recipients and confirm both receive it.
+
+**Rollback/escalate.** If legitimate mail is rejected by a limit, collect the reply line and the sender domain (no message bodies) and escalate. Never remove a limit entirely.
+
+## 17. Outbound delivery: Cloudflare or direct MX, retries and bounces (v2.1)
+
+**Symptom.** Mail from a domain isn't delivered, is delayed, or the sender receives a "Delivery Status Notification" bounce.
+
+**Diagnose.** Each sending domain has a **transport mode** in admin → Domains:
+
+| Mode | Delivery | DKIM |
+|---|---|---|
+| `cloudflare` (the default; used by miautrix.tech) | Cloudflare Worker API | Cloudflare signs; the server leaves the message untouched |
+| `direct` | The server connects to the recipient's MX hosts: preference order, falling back to A/AAAA, opportunistic STARTTLS with TLS 1.2+, MTA-STS enforced when the recipient publishes `enforce` | The server signs with the domain's selector and key |
+
+Temporary failures (4xx, network, Cloudflare 408/429/5xx) retry with exponential backoff for up to 5 days (`OUTBOUND_RETRY_LIFETIME_DAYS`, 1–30). Permanent failures (5xx, null MX) fail at once. Either way, the local sender gets an RFC 3464 bounce. The server never bounces a bounce, and never bounces to external senders.
+
+```sql
+SELECT status, attempts, next_attempt_at, last_error FROM smtp_queue
+WHERE direction = 'Outbound' AND status <> 'Delivered' ORDER BY created_at DESC LIMIT 20;
+```
+
+**Fix.**
+- **Before switching a domain to `direct`:** confirm the server can reach port 25 outbound (many providers block it), that PTR/rDNS matches `OUTBOUND_EHLO_NAME` (default `MIAUTRIX_HOSTNAME`), and that SPF includes the server's IP and the DKIM TXT record `<selector>._domainkey.<domain>` is published. Details are in `docs/Outbound-v2.1-Report.md`.
+- **To go back,** set the domain to `cloudflare` again.
+
+**Verify.** Send a test message to an external mailbox and check its `Authentication-Results`: SPF and DKIM should pass and be aligned.
+
+**Rollback/escalate.** DANE (RFC 7672) isn't implemented. If a recipient requires it, use `cloudflare` mode for that domain.
+
+## 18. Drafts created by IMAP clients (v2.1, WEBMAIL-001)
+
+**Symptom.** A draft saved by Thunderbird or Himalaya opens empty in webmail, or a draft edited in webmail looks old in the IMAP client.
+
+**Diagnose.** Before v2.1, IMAP APPEND stored the raw message but didn't fill in the body fields the webmail editor reads.
+- **Since v2.1:** APPEND parses with the shared MimeKit parser. A webmail save writes a full RFC 5322 message; an unchanged autosave does nothing.
+- **When a draft changes:** it keeps its webmail ID and gets a **new IMAP UID**. IMAP clients see the old UID expunged and a new message added.
+
+**Fix.** For drafts saved by IMAP clients **before** v2.1, run once on the server after the deploy, loading `/opt/miautrix-mail/.env` as in §7:
+
+```bash
+/opt/miautrix-mail/cli/Miautrix.Mail.Cli messages reparse --tenant all --dry-run   # review the updated/failed counts
+/opt/miautrix-mail/cli/Miautrix.Mail.Cli messages reparse --tenant all
+```
+
+Reparse never changes the stored bytes or UIDs.
+
+**Verify.** Open the draft in webmail and check its subject, recipients and body. Edit it and save. In the IMAP client, refresh: the draft shows the edit, and there is only one copy.
+
+**Rollback/escalate.** If a draft still opens empty after reparse, escalate with its folder and UID (not its content).
 <!-- APPENDIX:BEGIN (generated by scripts/build-troubleshooting-bundle.ps1; do not edit below) -->
 ## Appendix A — Script reference
 
@@ -1448,7 +1547,7 @@ SELECT line FROM (
 
 ### `scripts/imap-external-validation.py`
 
-SHA-256: `eea509b3c72acc4312efd5e16aa099c6f6002feeb3d7621f9d2a5cb1b264abcf`
+SHA-256: `e385e6a36ba8ebfe3ce5985397dfd75fb9f507a1ca8c2534d4ef091b73063955`
 
 ``python
 #!/usr/bin/env python3
@@ -1494,6 +1593,14 @@ with imaplib.IMAP4_SSL(host, 993, ssl_context=context) as client:
 
     status, _ = client.login(username, password)
     check("LOGIN", status == "OK")
+
+    status, namespaces = client.namespace()
+    personal, other_users, shared = namespaces if status == "OK" else (None, None, None)
+    decode = lambda value: value.decode(errors="replace") if isinstance(value, bytes) else value
+    personal_ok = bool(personal and any(decode(prefix) == "" and decode(delimiter) == "/" for prefix, delimiter in personal))
+    shared_ok = bool(shared and any(decode(prefix) == "Shared/" and decode(delimiter) == "/" for prefix, delimiter in shared))
+    check("IMAP-010 NAMESPACE personal and shared", status == "OK" and personal_ok and shared_ok,
+          f"personal={personal!r}; shared={shared!r}; other-users={other_users!r}")
 
     status, folders = client.list()
     names = [f.decode(errors="replace") for f in (folders or []) if f]
