@@ -30,6 +30,26 @@ public sealed class CliTests
         return new AppDbContext(options);
     }
 
+    private static async Task<int> RunCliWithTestStorageAsync(string[] args)
+    {
+        var previousStorageDirectory = Environment.GetEnvironmentVariable("MIAUTRIX_STORAGE_DIR");
+        var storageDirectory = Path.Combine(Path.GetTempPath(), $"miautrix-cli-test-{Guid.NewGuid():N}");
+
+        try
+        {
+            Environment.SetEnvironmentVariable("MIAUTRIX_STORAGE_DIR", storageDirectory);
+            return await Miautrix.Mail.Cli.Program.Main(args);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("MIAUTRIX_STORAGE_DIR", previousStorageDirectory);
+            if (Directory.Exists(storageDirectory))
+            {
+                Directory.Delete(storageDirectory, recursive: true);
+            }
+        }
+    }
+
     [Fact]
     public async Task When_authorized_operator_lists_mailboxes_cli_exits_zero()
     {
@@ -43,7 +63,7 @@ public sealed class CliTests
 
         try
         {
-            var exitCode = await Miautrix.Mail.Cli.Program.Main(new[]
+            var exitCode = await RunCliWithTestStorageAsync(new[]
             {
                 "mailbox", "list",
                 "--tenant", tenantSlug,
@@ -72,7 +92,7 @@ public sealed class CliTests
 
         try
         {
-            var exitCode = await Miautrix.Mail.Cli.Program.Main(new[]
+            var exitCode = await RunCliWithTestStorageAsync(new[]
             {
                 "mailbox", "list",
                 "--tenant", tenantSlug,
@@ -90,7 +110,7 @@ public sealed class CliTests
     [Fact]
     public async Task When_system_info_command_executes_cli_exits_zero()
     {
-        var exitCode = await Miautrix.Mail.Cli.Program.Main(new[] { "system", "info" });
+        var exitCode = await RunCliWithTestStorageAsync(new[] { "system", "info" });
         Assert.Equal(0, exitCode);
     }
 
