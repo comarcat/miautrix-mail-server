@@ -3,6 +3,7 @@ using System.Xml;
 using System.Xml.Linq;
 using Miautrix.Mail.Persistence;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.RateLimiting;
 using Miautrix.Mail.Web.Infrastructure;
@@ -14,6 +15,7 @@ public sealed class AutodiscoveryController(AppDbContext db, IConfiguration conf
 {
     [HttpGet(DiscoveryRoutes.WellKnownAutoconfig)]
     [HttpGet(DiscoveryRoutes.MailAutoconfig)]
+    [AllowAnonymous]
     [EnableRateLimiting("discovery")]
     public async Task<IActionResult> Autoconfig([FromQuery] string? emailaddress, CancellationToken ct)
     {
@@ -32,6 +34,7 @@ public sealed class AutodiscoveryController(AppDbContext db, IConfiguration conf
 
     [HttpGet(DiscoveryRoutes.OutlookAutodiscover)]
     [HttpPost(DiscoveryRoutes.OutlookAutodiscover)]
+    [AllowAnonymous]
     [EnableRateLimiting("discovery")]
     public async Task<IActionResult> Outlook(CancellationToken ct)
     {
@@ -61,6 +64,7 @@ public sealed class AutodiscoveryController(AppDbContext db, IConfiguration conf
     }
 
     [HttpGet(DiscoveryRoutes.MtaStsPolicy)]
+    [AllowAnonymous]
     [EnableRateLimiting("discovery")]
     public async Task<IActionResult> MtaSts(CancellationToken ct)
     {

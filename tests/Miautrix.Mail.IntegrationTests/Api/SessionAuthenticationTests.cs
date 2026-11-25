@@ -6,6 +6,9 @@ using Miautrix.Mail.Web;
 using Miautrix.Mail.Web.Infrastructure;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
 
 namespace Miautrix.Mail.IntegrationTests.Api;
@@ -22,9 +25,17 @@ public sealed class SessionAuthenticationTests(WebApplicationFactory<Miautrix.Ma
     {
         using var client = factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Get, path);
-        request.Headers.Add("X-Tenant-Id", Guid.NewGuid().ToString());
-        request.Headers.Add("X-User-Id", Guid.NewGuid().ToString());
         using var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Controller_route_outside_api_prefix_still_requires_a_session()
+    {
+        using var testFactory = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.AddControllers().AddApplicationPart(typeof(OutsideApiProtectedTestController).Assembly)));
+        using var client = testFactory.CreateClient();
+        using var response = await client.GetAsync("/test/protected-controller");
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
@@ -92,4 +103,12 @@ public sealed class SessionAuthenticationTests(WebApplicationFactory<Miautrix.Ma
         await using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(connection).Options);
         Assert.True(await db.AuditLogs.AnyAsync(x => x.TenantId == tenantId && x.ActorId == userId && x.Action == "authorization.failed"));
     }
+}
+
+[ApiController]
+[Route("/test/protected-controller")]
+public sealed class OutsideApiProtectedTestController : ControllerBase
+{
+    [HttpGet]
+    public IActionResult Get() => Ok();
 }

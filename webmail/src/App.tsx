@@ -54,6 +54,7 @@ export const App: React.FC = () => {
   const [currentUserId, setCurrentUserId] = useState<string>('');
   const [currentUserRoles, setCurrentUserRoles] = useState<string[]>([]);
   const [mustChangePassword, setMustChangePassword] = useState<boolean>(false);
+  const [mobileConfigDownloadError, setMobileConfigDownloadError] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<'inbox' | 'compose' | 'contacts' | 'calendar' | 'rules'>('inbox');
   const [messages, setMessages] = useState<EmailMessage[]>([]);
@@ -69,6 +70,14 @@ export const App: React.FC = () => {
   const [composeInitialState, setComposeInitialState] = useState<ComposeInitialState>({ mode: 'new' });
   const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const canEditCompanyDirectory = currentUserRoles.includes('owner') || currentUserRoles.includes('admin');
+  const downloadMobileConfig = async () => {
+    setMobileConfigDownloadError(null);
+    try {
+      await webmailClient.downloadAttachment('/api/v1/webmail/mobileconfig', 'miautrix-mail.mobileconfig');
+    } catch (error) {
+      setMobileConfigDownloadError(error instanceof Error ? error.message : 'Could not download the profile.');
+    }
+  };
 
   useEffect(() => {
     const username = currentUserEmail?.trim();
@@ -769,7 +778,10 @@ export const App: React.FC = () => {
         )}
         {activeTab === 'rules' && (
           <>
-            <div style={{ padding: '12px 20px' }}><a href="/api/v1/webmail/mobileconfig">Set up on iPhone/Mac</a></div>
+            <div style={{ padding: '12px 20px' }}>
+              <button type="button" onClick={() => void downloadMobileConfig()}>Set up on iPhone/Mac</button>
+              {mobileConfigDownloadError && <p role="alert">{mobileConfigDownloadError}</p>}
+            </div>
             <SieveRulesView initialRules={rules} mailboxId={selectedMailboxAccount} onRulesChanged={(nextRules) => setRules(nextRules)} />
           </>
         )}

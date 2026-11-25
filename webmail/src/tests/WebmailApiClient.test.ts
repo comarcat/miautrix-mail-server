@@ -23,6 +23,19 @@ describe('WebmailApiClient session authentication', () => {
     expect(localStorage.getItem('miautrix_webmail_refresh_token')).toBe('new-refresh');
   });
 
+  it('sends the session bearer token to the Sieve script API', async () => {
+    localStorage.setItem('miautrix_webmail_token', 'sieve-access');
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      status: 200,
+      ok: true,
+      json: async () => ({ data: [] }),
+    } as Response);
+    const client = new WebmailApiClient('http://test/api/v1');
+    await client.getSieveScripts('mailbox-1');
+    expect(fetchMock.mock.calls[0][0]).toBe('http://test/api/v1/mail/sieve/scripts?mailboxId=mailbox-1');
+    expect((fetchMock.mock.calls[0][1]?.headers as Record<string, string>).Authorization).toBe('Bearer sieve-access');
+  });
+
   it('uses bearer auth and refresh retry for attachment downloads', async () => {
     localStorage.setItem('miautrix_webmail_token', 'old-access');
     localStorage.setItem('miautrix_webmail_refresh_token', 'old-refresh');

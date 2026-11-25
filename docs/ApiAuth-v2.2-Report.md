@@ -2,11 +2,11 @@
 
 ## Implementation
 
-The Web host validates a bearer token against the persisted SHA-256 hash on every `/api/**` request, using a fixed-time comparison. It rejects missing, unknown, expired, idle, and revoked sessions with the standard 401 error envelope, updates `last_seen_at`, and attaches the session's user and tenant to request context. Identity headers are not trusted; a supplied tenant or user ID that differs from the session returns 404 and writes a failed authorization audit row.
+The Web host validates a bearer token against the persisted SHA-256 hash on every controller action endpoint, using a fixed-time comparison. This includes controller routes outside `/api`; each action requires a valid session unless the action carries reviewed `[AllowAnonymous]` metadata. Static frontend files and non-endpoint requests remain untouched. It rejects missing, unknown, expired, idle, and revoked sessions with the standard 401 error envelope, updates `last_seen_at`, and attaches the session's user and tenant to request context. Identity headers are not trusted; a supplied tenant or user ID that differs from the session returns 404 and writes a failed authorization audit row.
 
 Login persists only the access and refresh token hashes. Refresh rotates both tokens; reusing a consumed refresh token revokes the full session. Logout revokes the current session and its refresh tokens. Password changes revoke the user's other sessions while preserving the current session. The existing per-domain `SessionLifetimeMinutes` setting controls access lifetime when it is within 1–1440 minutes; otherwise access lifetime defaults to one hour. Refresh lifetime defaults to 30 days and idle timeout defaults to 30 days.
 
-The middleware protects all API endpoints by default. `[AllowAnonymous]` is present only on login, refresh, the independently checked inbound Cloudflare webhook, and token-protected public calendar invitation routes. The reflection test inventories every controller HTTP action and fails if an action's anonymous metadata does not match that reviewed allowlist. Static frontends remain public; `/openapi/v1.json` is mapped only in Development. The current Web host has no health controller endpoint; future public routes can opt in with `[AllowAnonymous]` and must update the reflection allowlist.
+The reviewed `[AllowAnonymous]` actions are login, refresh, the independently checked inbound Cloudflare webhook, token-protected public calendar invitation routes, Mozilla autoconfig (both paths), Outlook autodiscover (GET and POST), and the MTA-STS policy file. The reflection test inventories each controller route and HTTP verb, including absolute routes, and fails if an action's anonymous metadata does not match that reviewed allowlist. Mobileconfig remains authenticated. Static frontends remain public; `/openapi/v1.json` is mapped only in Development. The current Web host has no health controller endpoint; future public routes can opt in with `[AllowAnonymous]` and must update the reflection allowlist.
 
 Both browser API clients persist refresh tokens, send bearer authorization for API and binary requests, and retry one time after a 401 by rotating the session. If refresh fails, they clear local auth and dispatch the existing event that returns the app to login. They no longer send client-supplied identity headers. Webmail attachments and admin mailbox archives download through authenticated `fetch` and blob URLs.
 
@@ -49,11 +49,11 @@ Without a bearer token this must return `401`. Do not use the public hostname fo
 ## Verification evidence
 
 - `dotnet build Miautrix.Mail.sln -warnaserror -m:1`: passed, zero warnings and errors.
-- Unit tests: 125 passed; Security tests: 7 passed; Protocol tests: 38 passed.
-- Targeted integration tests: 34 passed. API/auth and allowlist integration tests: 35 passed.
-- Full integration run: 104 passed, 15 failed. The 15 failures match the known fixture failures documented in `ERRORS_AND_ISSUES.md` §13.18 (CLI environment, in-memory/PostgreSQL fixtures, inbound parser DI, and calendar missing Sent-folder fixtures); the API send fixture was repaired and now passes.
-- Admin Vitest: 21 passed; Webmail Vitest: 20 passed. Admin and Webmail production builds succeeded.
-- DB-backed integration verification used a uniquely named `miautrix_test_apiauth_*` database created from `MIAUTRIX_TEST_SERVER_CONNECTION` and dropped after the run; no shared or production database was migrated.
+- Unit tests: 242 passed; Security tests: 7 passed; Protocol tests: 44 passed.
+- Targeted integration tests: 40 passed. The full integration run includes the session-auth, absolute-route allowlist, discovery, mobileconfig, MTA-STS, and Sieve API coverage.
+- Full integration run on a freshly migrated throwaway database: 137 passed, 12 failed. The 12 failures are the remaining known fixtures documented in `ERRORS_AND_ISSUES.md` §13.18: three CLI storage configuration cases, backup/licensing tests using the in-memory provider, and seven calendar tests with no Sent folder. The inbound-parser, mail-send, and other previously failing fixtures pass.
+- Admin Vitest: 23 passed; Webmail Vitest: 24 passed. Admin and Webmail production builds succeeded.
+- `dotnet ef database update --connection <throwaway>` applied all migrations to a fresh uniquely named `miautrix_test_v22rev_*` database created from `MIAUTRIX_TEST_SERVER_CONNECTION`; the database was dropped after the suites. No shared or production database was migrated.
 
 ## Deferred
 

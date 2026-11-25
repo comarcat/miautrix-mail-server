@@ -84,8 +84,7 @@ public sealed class MtaStsPolicyTests : IClassFixture<WebApplicationFactory<Miau
             {
                 Content = new StringContent(JsonSerializer.Serialize(new { mta_sts_mode = mode, mta_sts_mx = mx }), Encoding.UTF8, "application/json")
             };
-            request.Headers.Add("X-Tenant-Id", tenantId.ToString());
-            request.Headers.Add("X-User-Id", userId.ToString());
+            TestSessionHelper.Attach(request, tenantId, userId);
             request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
             using var response = await client.SendAsync(request);
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -111,8 +110,7 @@ public sealed class MtaStsPolicyTests : IClassFixture<WebApplicationFactory<Miau
         {
             Content = new StringContent(JsonSerializer.Serialize(new { mta_sts_mx = "*.mx.cloudflare.net, invalid host" }), Encoding.UTF8, "application/json")
         };
-        invalidRequest.Headers.Add("X-Tenant-Id", tenantId.ToString());
-        invalidRequest.Headers.Add("X-User-Id", userId.ToString());
+        TestSessionHelper.Attach(invalidRequest, tenantId, userId);
         invalidRequest.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
         using var invalidResponse = await client.SendAsync(invalidRequest);
         Assert.Equal(HttpStatusCode.BadRequest, invalidResponse.StatusCode);

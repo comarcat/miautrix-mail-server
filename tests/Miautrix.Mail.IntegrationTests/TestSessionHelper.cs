@@ -11,8 +11,6 @@ internal static class TestSessionHelper
     {
         var raw = CreateSession(tenantId, userId);
         request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", raw);
-        request.Headers.TryAddWithoutValidation("X-Tenant-Id", tenantId.ToString());
-        request.Headers.TryAddWithoutValidation("X-User-Id", userId.ToString());
     }
 
     public static string CreateSession(Guid tenantId, Guid userId, DateTimeOffset? expiresAt = null, DateTimeOffset? lastSeenAt = null, DateTimeOffset? revokedAt = null)
