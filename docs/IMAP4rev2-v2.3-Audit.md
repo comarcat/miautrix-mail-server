@@ -112,11 +112,11 @@ Known exclusions include client-only requirements and cleartext STARTTLS (the li
 | §5 para 3 | “not follow the modified UTF-7 convention MUST convert any mailbox name that contains either non-ASCII” | MUST | Implemented | `ImapSession.ExecuteCommandAsync / ImapCommandTokenizer.Tokenize` | ImapListenerRawSocketTests.Report_python_sequence_over_test_listener_has_exact_literal_framing: tagged/untagged response and literal framing assertions in rev1/rev2 command sequences. |
 | §6.1.1 para 1 | “Responses: REQUIRED untagged response: CAPABILITY” | REQUIRED | Partial | `ImapSession.CapabilityLine / HandleAuthenticateAsync` | Partial: CAPABILITY refresh and authentication state edge cases. |
 | §6.1.1 para 2 | “that the server supports. The server MUST send a single untagged CAPABILITY response with "IMAP4rev2"” | MUST | Partial | `ImapSession.CapabilityLine / HandleAuthenticateAsync` | Partial: CAPABILITY refresh and authentication state edge cases. |
-| §6.1.1 para 3 | “Client and server implementations MUST implement the STARTTLS (Section 6.2.1) and LOGINDISABLED capabilities on cleartext” | MUST | Partial | `ImapSession.CapabilityLine / HandleAuthenticateAsync` | Partial: CAPABILITY refresh and authentication state edge cases. |
+| §6.1.1 para 3 | “Client and server implementations MUST implement the STARTTLS (Section 6.2.1) and LOGINDISABLED capabilities on cleartext” | MUST | Not applicable | `ImapSession.ExecuteCommandAsync` | Cleartext STARTTLS is not offered; the service listens with implicit TLS only. |
 | §6.1.3 para 1 | “Responses: REQUIRED untagged response: BYE” | REQUIRED | Partial | `ImapSession.CapabilityLine / HandleAuthenticateAsync` | Partial: CAPABILITY refresh and authentication state edge cases. |
 | §6.1.3 para 2 | “done with the connection. The server MUST send a BYE untagged response before the (tagged)” | MUST | Partial | `ImapSession.CapabilityLine / HandleAuthenticateAsync` | Partial: CAPABILITY refresh and authentication state edge cases. |
-| §6.2.1 para 1 | “only on cleartext ports. The server MUST always respond with a tagged BAD response when” | MUST | Partial | `ImapSession.HandleAuthenticateAsync / HandleLoginAsync` | Partial: SASL/TLS failure, continuation, and mechanism edge cases. |
-| §6.2.1 para 2 | “client issues a STARTTLS command, it MUST NOT issue further commands until a server response” | MUST NOT | Partial | `ImapSession.HandleAuthenticateAsync / HandleLoginAsync` | Partial: SASL/TLS failure, continuation, and mechanism edge cases. |
+| §6.2.1 para 1 | “only on cleartext ports. The server MUST always respond with a tagged BAD response when” | MUST | Not applicable | `ImapSession.ExecuteCommandAsync` | Cleartext STARTTLS is not offered; the service listens with implicit TLS only. |
+| §6.2.1 para 2 | “client issues a STARTTLS command, it MUST NOT issue further commands until a server response” | MUST NOT | Not applicable | `ImapSession.ExecuteCommandAsync` | Client-only sequencing requirement. |
 | §6.2.2 para 1 | “mechanism is not supported, the server SHOULD reject the AUTHENTICATE command by sending a tagged” | SHOULD | Partial | `ImapSession.HandleAuthenticateAsync / HandleLoginAsync` | Partial: SASL/TLS failure, continuation, and mechanism edge cases. |
 | §6.2.2 para 2 | “base64 alphabet or non-terminal "="), it MUST reject the AUTHENTICATE command by sending a tagged” | MUST | Partial | `ImapSession.HandleAuthenticateAsync / HandleLoginAsync` | Partial: SASL/TLS failure, continuation, and mechanism edge cases. |
 | §6.2.2 para 3 | “other client response, the initial response MUST be encoded as base64. It also MUST be” | MUST | Partial | `ImapSession.HandleAuthenticateAsync / HandleLoginAsync` | Partial: SASL/TLS failure, continuation, and mechanism edge cases. |
@@ -257,3 +257,34 @@ Known exclusions include client-only requirements and cleartext STARTTLS (the li
 | §7.5.2 para 5 | “decode the section's Content- Transfer-Encoding, it MUST fail the request and issue a "NO" response” | MUST | Implemented | `ImapSession.ExecuteCommandAsync / ImapCommandTokenizer.Tokenize` | ImapListenerRawSocketTests.Report_python_sequence_over_test_listener_has_exact_literal_framing: tagged/untagged response and literal framing assertions in rev1/rev2 command sequences. |
 | §7.5.2 para 6 | “of the specified section. The string SHOULD be interpreted by the client according to the” | SHOULD | Not applicable | `—` | Client-only normative clause; the server has no corresponding obligation. |
 | §7.5.2 para 7 | “Note: The origin octet facility MUST NOT be used by a server in a FETCH” | MUST NOT | Implemented | `ImapSession.ExecuteCommandAsync / ImapCommandTokenizer.Tokenize` | ImapListenerRawSocketTests.Report_python_sequence_over_test_listener_has_exact_literal_framing: tagged/untagged response and literal framing assertions in rev1/rev2 command sequences. |
+## Appendix E change mapping (items 1–21 requested)
+
+Appendix E is a historical change summary, not a normative-conformance section, and has no E.1–E.21 subheadings in RFC 9051. The numbered change items below are mapped to §§2–7 rows; they do not create additional normative requirements.
+
+| Appendix E item | Subject | Audit disposition |
+|---|---|---|
+| E item 1 | 64-bit message and body part sizes | See corresponding §2–7 rows; Appendix E itself adds no normative verb. |
+| E item 2 | Folded-in NAMESPACE, UNSELECT, UIDPLUS, ESEARCH, SEARCHRES, ENABLE, IDLE, SASL-IR, LIST-EXTENDED, LIST-STATUS, MOVE, literal extensions, BINARY, SPECIAL-USE | See corresponding §2–7 rows; Appendix E itself adds no normative verb. |
+| E item 3 | STATUS SIZE and DELETED | See corresponding §2–7 rows; Appendix E itself adds no normative verb. |
+| E item 4 | ESEARCH response for SEARCH | See corresponding §2–7 rows; Appendix E itself adds no normative verb. |
+| E item 5 | SEARCH substring matching | See corresponding §2–7 rows; Appendix E itself adds no normative verb. |
+| E item 6 | RFC 2231 parameter continuations | See corresponding §2–7 rows; Appendix E itself adds no normative verb. |
+| E item 7 | COPYUID for MOVE and UID MOVE | See corresponding §2–7 rows; Appendix E itself adds no normative verb. |
+| E item 8 | COPY/MOVE target and TRYCREATE behavior | See corresponding §2–7 rows; Appendix E itself adds no normative verb. |
+| E item 9 | CLOSED on SELECT/EXAMINE | See corresponding §2–7 rows; Appendix E itself adds no normative verb. |
+| E item 10 | Untagged LIST on SELECT/EXAMINE | See corresponding §2–7 rows; Appendix E itself adds no normative verb. |
+| E item 11 | UNSEEN deprecation | See corresponding §2–7 rows; Appendix E itself adds no normative verb. |
+| E item 12 | RECENT deprecation | See corresponding §2–7 rows; Appendix E itself adds no normative verb. |
+| E item 13 | PERMANENTFLAGS clarification | See corresponding §2–7 rows; Appendix E itself adds no normative verb. |
+| E item 14 | tagged-ext-simple bare number64 | See corresponding §2–7 rows; Appendix E itself adds no normative verb. |
+| E item 15 | SHOULD support common keywords | See corresponding §2–7 rows; Appendix E itself adds no normative verb. |
+| E item 16 | UTF-8 mailbox names and headers | See corresponding §2–7 rows; Appendix E itself adds no normative verb. |
+| E item 17 | CHECK removed | See corresponding §2–7 rows; Appendix E itself adds no normative verb. |
+| E item 18 | RFC822 FETCH items deprecated | See corresponding §2–7 rows; Appendix E itself adds no normative verb. |
+| E item 19 | LSUB deprecated | See corresponding §2–7 rows; Appendix E itself adds no normative verb. |
+| E item 20 | IDLE updates outside selected mailbox | See corresponding §2–7 rows; Appendix E itself adds no normative verb. |
+| E item 21 | UID in unsolicited FETCH updates | See corresponding §2–7 rows; Appendix E itself adds no normative verb. |
+
+## Gate decision
+
+Keep IMAP4rev2 unadvertised until all applicable Partial MUST rows have specific code and raw-socket evidence and the matrix has been reviewed against the complete RFC clauses. This audit modified no product code or existing tests.
