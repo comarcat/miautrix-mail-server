@@ -10,7 +10,7 @@ using Miautrix.Mail.Web.Infrastructure;
 namespace Miautrix.Mail.Web.Controllers;
 
 [ApiController]
-public sealed class AutodiscoveryController(AppDbContext db, IConfiguration configuration, IRequestContextAccessor context, IHttpContextAccessor httpContextAccessor) : ControllerBase
+public sealed class AutodiscoveryController(AppDbContext db, IConfiguration configuration, IRequestContextAccessor context) : ControllerBase
 {
     [HttpGet(DiscoveryRoutes.WellKnownAutoconfig)]
     [HttpGet(DiscoveryRoutes.MailAutoconfig)]
@@ -79,9 +79,9 @@ public sealed class AutodiscoveryController(AppDbContext db, IConfiguration conf
     [HttpGet("/api/v1/webmail/mobileconfig")]
     public async Task<IActionResult> MobileConfig(CancellationToken ct)
     {
-        var request = httpContextAccessor.HttpContext?.Request;
-        if (request is null || !Guid.TryParse(request.Headers["X-User-Id"], out var userId) || !Guid.TryParse(request.Headers["X-Tenant-Id"], out var tenantId)) return Unauthorized();
-        if (userId != context.CurrentUserId || tenantId != context.CurrentTenantId) return Unauthorized();
+        // Identity comes only from the authenticated session (SessionAuthenticationMiddleware).
+        var userId = context.CurrentUserId;
+        var tenantId = context.CurrentTenantId;
         var email = await db.Users.AsNoTracking().Where(u => u.TenantId == tenantId && u.Id == userId).Select(u => u.Email).FirstOrDefaultAsync(ct);
         if (email is null) return NotFound();
         var domain = EmailDomain(email); if (domain is null) return NotFound();

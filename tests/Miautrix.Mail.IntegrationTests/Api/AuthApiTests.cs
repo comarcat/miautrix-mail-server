@@ -136,8 +136,7 @@ public sealed class AuthApiTests : IClassFixture<WebApplicationFactory<Miautrix.
         {
             using var client = _factory.CreateClient();
             using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/auth/me");
-            request.Headers.Add("X-Tenant-Id", tenantId.ToString());
-            request.Headers.Add("X-User-Id", userId.ToString());
+            global::Miautrix.Mail.IntegrationTests.TestSessionHelper.Attach(request, tenantId, userId);
 
             var response = await client.SendAsync(request);
             var body = await response.Content.ReadAsStringAsync();
@@ -157,26 +156,52 @@ public sealed class AuthApiTests : IClassFixture<WebApplicationFactory<Miautrix.
     [Fact]
     public async Task When_refresh_token_valid_returns_new_tokens()
     {
-        using var client = _factory.CreateClient();
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/refresh")
+        var tenantId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var email = $"refresh-{Guid.NewGuid():N}@example.com";
+        const string password = "Password123!";
+        await SeedUserAsync(tenantId, userId, email, password);
+        try
         {
-            Content = new StringContent(
-                JsonSerializer.Serialize(new { refresh_token = "valid-refresh-token-test-sample" }),
-                Encoding.UTF8,
-                "application/json")
-        };
-        request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+            using var client = _factory.CreateClient();
+            using var login = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/login")
+            {
+                Content = new StringContent(JsonSerializer.Serialize(new { email_or_username = email, password }), Encoding.UTF8, "application/json")
+            };
+            login.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+            using var loginResponse = await client.SendAsync(login);
+            using var loginJson = JsonDocument.Parse(await loginResponse.Content.ReadAsStringAsync());
+            var oldRefresh = loginJson.RootElement.GetProperty("refresh_token").GetString()!;
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/refresh")
+            {
+                Content = new StringContent(JsonSerializer.Serialize(new { refresh_token = oldRefresh }), Encoding.UTF8, "application/json")
+            };
+            request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
 
-        var response = await client.SendAsync(request);
-        var body = await response.Content.ReadAsStringAsync();
+            using var response = await client.SendAsync(request);
+            var body = await response.Content.ReadAsStringAsync();
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        using var json = JsonDocument.Parse(body);
-        Assert.True(json.RootElement.TryGetProperty("token", out var token));
-        Assert.True(json.RootElement.TryGetProperty("refresh_token", out var refreshToken));
-        Assert.NotNull(token.GetString());
-        Assert.NotNull(refreshToken.GetString());
+            using var json = JsonDocument.Parse(body);
+            Assert.True(json.RootElement.TryGetProperty("token", out var token));
+            Assert.True(json.RootElement.TryGetProperty("refresh_token", out var refreshToken));
+            Assert.NotEqual(oldRefresh, refreshToken.GetString());
+            Assert.NotNull(token.GetString());
+
+            using var reuse = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/refresh")
+            {
+                Content = new StringContent(JsonSerializer.Serialize(new { refresh_token = oldRefresh }), Encoding.UTF8, "application/json")
+            };
+            reuse.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+            using var reuseResponse = await client.SendAsync(reuse);
+            Assert.Equal(HttpStatusCode.Unauthorized, reuseResponse.StatusCode);
+            using var revokedRequest = new HttpRequestMessage(HttpMethod.Get, "/api/v1/auth/me");
+            revokedRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token.GetString());
+            using var revokedResponse = await client.SendAsync(revokedRequest);
+            Assert.Equal(HttpStatusCode.Unauthorized, revokedResponse.StatusCode);
+        }
+        finally { await DeleteUserAsync(tenantId); }
     }
 
     [Fact]
@@ -188,6 +213,7 @@ public sealed class AuthApiTests : IClassFixture<WebApplicationFactory<Miautrix.
         var oldPassword = "OldPassword123!";
         var newPassword = "NewSecurePassword456!";
         await SeedUserAsync(tenantId, userId, email, oldPassword);
+        var otherSession = global::Miautrix.Mail.IntegrationTests.TestSessionHelper.CreateSession(tenantId, userId);
 
         try
         {
@@ -200,13 +226,17 @@ public sealed class AuthApiTests : IClassFixture<WebApplicationFactory<Miautrix.
                     "application/json")
             };
             request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
-            request.Headers.Add("X-Tenant-Id", tenantId.ToString());
-            request.Headers.Add("X-User-Id", userId.ToString());
+            global::Miautrix.Mail.IntegrationTests.TestSessionHelper.Attach(request, tenantId, userId);
 
             var response = await client.SendAsync(request);
             var body = await response.Content.ReadAsStringAsync();
 
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+            using var otherSessionRequest = new HttpRequestMessage(HttpMethod.Get, "/api/v1/auth/me");
+            otherSessionRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", otherSession);
+            using var otherSessionResponse = await client.SendAsync(otherSessionRequest);
+            Assert.Equal(HttpStatusCode.Unauthorized, otherSessionResponse.StatusCode);
 
             // Verify login with new password works
             using var loginRequest = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/login")
@@ -233,11 +263,14 @@ public sealed class AuthApiTests : IClassFixture<WebApplicationFactory<Miautrix.
         using var client = _factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/logout");
         request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
-        request.Headers.Add("X-Tenant-Id", Guid.NewGuid().ToString());
-        request.Headers.Add("X-User-Id", Guid.NewGuid().ToString());
+        global::Miautrix.Mail.IntegrationTests.TestSessionHelper.Attach(request, Guid.NewGuid(), Guid.NewGuid());
 
         var response = await client.SendAsync(request);
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        using var next = new HttpRequestMessage(HttpMethod.Get, "/api/v1/auth/me");
+        next.Headers.Authorization = request.Headers.Authorization;
+        using var afterLogout = await client.SendAsync(next);
+        Assert.Equal(HttpStatusCode.Unauthorized, afterLogout.StatusCode);
     }
 
     private static async Task SeedUserAsync(Guid tenantId, Guid userId, string email, string password)

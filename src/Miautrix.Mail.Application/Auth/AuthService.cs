@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Miautrix.Mail.Domain;
@@ -99,7 +101,14 @@ public sealed class AuthService : IAuthService
             mailbox?.Address);
 
         // 6. Issue tokens
-        var (sessionToken, refreshToken) = _sessionManager.IssueSessionTokens();
+        var configuredMinutes = await _db.Domains.Where(d => d.TenantId == user.TenantId && d.SessionLifetimeMinutes.HasValue)
+            .Select(d => d.SessionLifetimeMinutes).FirstOrDefaultAsync(cancellationToken);
+        var sessionLifetime = configuredMinutes is > 0 and <= 1440 ? TimeSpan.FromMinutes(configuredMinutes.Value) : _sessionManager.DefaultSessionLifetime;
+        var (sessionToken, refreshToken) = _sessionManager.IssueSessionTokens(sessionLifetime);
+        var session = new Session { TenantId = user.TenantId, UserId = user.Id, AccessTokenHash = sessionToken.HashedToken, ExpiresAt = sessionToken.ExpiresAt, LastSeenAt = DateTimeOffset.UtcNow, ClientHash = string.IsNullOrWhiteSpace(ipAddress) ? null : _sessionManager.HashToken(ipAddress) };
+        _db.Sessions.Add(session);
+        _db.RefreshTokens.Add(new RefreshToken { TenantId = user.TenantId, UserId = user.Id, SessionId = session.Id, TokenHash = refreshToken.HashedToken, ExpiresAt = refreshToken.ExpiresAt });
+        await _db.SaveChangesAsync(cancellationToken);
         _eventSink.RecordEvent(user.TenantId, user.Id, SecurityEventCodes.AuthLoginSuccess, "User logged in successfully.", ipAddress);
 
         return new AuthResult(
@@ -149,7 +158,8 @@ public sealed class AuthService : IAuthService
         Guid userId,
         string currentPassword,
         string newPassword,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Guid? currentSessionId = null)
     {
         if (string.IsNullOrWhiteSpace(currentPassword) || string.IsNullOrWhiteSpace(newPassword))
         {
@@ -180,39 +190,66 @@ public sealed class AuthService : IAuthService
         credential.MustChangePassword = false;
         credential.UpdatedAt = DateTimeOffset.UtcNow;
 
+        var otherSessions = _db.Sessions.Where(s => s.TenantId == tenantId && s.UserId == userId && s.RevokedAt == null && (!currentSessionId.HasValue || s.Id != currentSessionId.Value));
+        await otherSessions.ExecuteUpdateAsync(setters => setters.SetProperty(s => s.RevokedAt, DateTimeOffset.UtcNow), cancellationToken);
+        await _db.RefreshTokens.Where(t => t.TenantId == tenantId && t.UserId == userId && t.RevokedAt == null && (!currentSessionId.HasValue || t.SessionId != currentSessionId.Value))
+            .ExecuteUpdateAsync(setters => setters.SetProperty(t => t.RevokedAt, DateTimeOffset.UtcNow), cancellationToken);
+
         await _db.SaveChangesAsync(cancellationToken);
         _eventSink.RecordEvent(tenantId, userId, SecurityEventCodes.AuthPasswordChanged, "User password changed successfully.");
 
         return new ChangePasswordResult(true, "Password changed successfully.");
     }
 
-    public Task<AuthResult> RefreshTokenAsync(
+    public async Task<AuthResult> RefreshTokenAsync(
         string rawRefreshToken,
         string? ipAddress = null,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(rawRefreshToken))
+        if (string.IsNullOrWhiteSpace(rawRefreshToken)) return new AuthResult(AuthStatus.Failed, "Refresh token is required.");
+        var hash = _sessionManager.HashToken(rawRefreshToken);
+        var stored = await _db.RefreshTokens.IgnoreQueryFilters().FirstOrDefaultAsync(x => x.TokenHash == hash, cancellationToken);
+        if (stored is null) return new AuthResult(AuthStatus.Failed, "Refresh token is invalid.");
+        var session = await _db.Sessions.IgnoreQueryFilters().FirstOrDefaultAsync(x => x.Id == stored.SessionId, cancellationToken);
+        if (session is null) return new AuthResult(AuthStatus.Failed, "Refresh token is invalid.");
+        if (!CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(stored.TokenHash), Encoding.UTF8.GetBytes(hash))) return new AuthResult(AuthStatus.Failed, "Refresh token is invalid.");
+        if (stored.UsedAt.HasValue)
         {
-            return Task.FromResult(new AuthResult(AuthStatus.Failed, "Refresh token is required."));
+            session.RevokedAt = DateTimeOffset.UtcNow;
+            await _db.RefreshTokens.IgnoreQueryFilters().Where(x => x.SessionId == session.Id && x.RevokedAt == null).ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, DateTimeOffset.UtcNow), cancellationToken);
+            await _db.SaveChangesAsync(cancellationToken);
+            return new AuthResult(AuthStatus.Failed, "Refresh token reuse detected; session revoked.");
         }
-
-        var (sessionToken, newRefreshToken) = _sessionManager.IssueSessionTokens();
-        return Task.FromResult(new AuthResult(
-            AuthStatus.Success,
-            "Tokens refreshed.",
-            sessionToken.RawToken,
-            newRefreshToken.RawToken,
-            sessionToken.ExpiresAt));
+        if (stored.RevokedAt.HasValue || stored.ExpiresAt <= DateTimeOffset.UtcNow || session.RevokedAt.HasValue || session.ExpiresAt <= DateTimeOffset.UtcNow)
+            return new AuthResult(AuthStatus.Failed, "Refresh token is expired or revoked.");
+        stored.UsedAt = DateTimeOffset.UtcNow;
+        var (access, refresh) = _sessionManager.IssueSessionTokens();
+        session.AccessTokenHash = access.HashedToken;
+        session.ExpiresAt = access.ExpiresAt;
+        session.LastSeenAt = DateTimeOffset.UtcNow;
+        _db.RefreshTokens.Add(new RefreshToken { TenantId = session.TenantId, UserId = session.UserId, SessionId = session.Id, TokenHash = refresh.HashedToken, ExpiresAt = refresh.ExpiresAt });
+        await _db.SaveChangesAsync(cancellationToken);
+        return new AuthResult(AuthStatus.Success, "Tokens refreshed.", access.RawToken, refresh.RawToken, access.ExpiresAt);
     }
 
-    public Task LogoutAsync(
+    public async Task LogoutAsync(
         Guid tenantId,
         Guid userId,
         string? rawSessionToken = null,
         CancellationToken cancellationToken = default)
     {
+        if (!string.IsNullOrWhiteSpace(rawSessionToken))
+        {
+            var hash = _sessionManager.HashToken(rawSessionToken);
+            var session = await _db.Sessions.FirstOrDefaultAsync(s => s.TenantId == tenantId && s.UserId == userId && s.AccessTokenHash == hash, cancellationToken);
+            if (session is not null)
+            {
+                session.RevokedAt = DateTimeOffset.UtcNow;
+                await _db.RefreshTokens.Where(t => t.SessionId == session.Id && t.RevokedAt == null).ExecuteUpdateAsync(s => s.SetProperty(t => t.RevokedAt, DateTimeOffset.UtcNow), cancellationToken);
+                await _db.SaveChangesAsync(cancellationToken);
+            }
+        }
         _eventSink.RecordEvent(tenantId, userId, SecurityEventCodes.AuthSessionRevoked, "User session logged out.");
-        return Task.CompletedTask;
     }
 
     private async Task<(IReadOnlyList<string> Roles, IReadOnlyList<string> Permissions)> ResolveRolesAndPermissionsAsync(

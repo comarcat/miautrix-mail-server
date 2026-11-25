@@ -2,7 +2,6 @@ using Miautrix.Mail.Application.Mail;
 using Miautrix.Mail.Domain;
 using Miautrix.Mail.Persistence;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 using Testcontainers.PostgreSql;
 
 namespace Miautrix.Mail.IntegrationTests.Mail;
@@ -36,14 +35,11 @@ public sealed class SenderAuthorizationTests : IClassFixture<UidPostgresFixture>
     }
 
     [Fact]
-    public async Task Sender_permission_migration_is_repeatable_on_dev_database()
+    public async Task Sender_permission_migration_is_repeatable_on_its_throwaway_database()
     {
-        var connection = Environment.GetEnvironmentVariable("MIAUTRIX_DB_CONNECTION") ?? throw new InvalidOperationException("MIAUTRIX_DB_CONNECTION required.");
-        var databaseName = new NpgsqlConnectionStringBuilder(connection).Database ?? string.Empty;
-        if (!string.Equals(databaseName, "miautrix-mail-dev", StringComparison.Ordinal) &&
-            !databaseName.StartsWith("miautrix_test_", StringComparison.Ordinal))
-            throw new InvalidOperationException("Idempotency check is allowed only against miautrix-mail-dev or an isolated miautrix_test_ database.");
+        var connection = await _fixture.CreateDatabaseAsync();
         await using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(connection).Options);
+        await db.Database.MigrateAsync();
         const string repeatable = """
             ALTER TABLE mailbox_delegates ADD COLUMN IF NOT EXISTS can_send_as boolean NOT NULL DEFAULT false;
             UPDATE mailbox_delegates SET can_send_as = false WHERE can_send_as IS NULL;

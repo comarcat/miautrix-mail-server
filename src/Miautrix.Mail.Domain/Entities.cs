@@ -127,8 +127,24 @@ public class Membership : TenantScopedEntityBase
     public Guid? UserId { get; set; }
     public Guid? RoleId { get; set; }
 }
-public class Session : TenantScopedEntityBase { }
-public class RefreshToken : TenantScopedEntityBase { }
+public class Session : TenantScopedEntityBase
+{
+    public Guid UserId { get; set; }
+    public string AccessTokenHash { get; set; } = string.Empty;
+    public DateTimeOffset ExpiresAt { get; set; }
+    public DateTimeOffset? LastSeenAt { get; set; }
+    public DateTimeOffset? RevokedAt { get; set; }
+    public string? ClientHash { get; set; }
+}
+public class RefreshToken : TenantScopedEntityBase
+{
+    public Guid SessionId { get; set; }
+    public Guid UserId { get; set; }
+    public string TokenHash { get; set; } = string.Empty;
+    public DateTimeOffset ExpiresAt { get; set; }
+    public DateTimeOffset? UsedAt { get; set; }
+    public DateTimeOffset? RevokedAt { get; set; }
+}
 public class ApplicationPassword : TenantScopedEntityBase { }
 public class ApiKey : TenantScopedEntityBase { }
 public class Invitation : TenantScopedEntityBase { }

@@ -1,13 +1,5 @@
-using System.Security.Cryptography;
-using System.Text;
-
 namespace Miautrix.Mail.Web.Infrastructure;
 
-/// <summary>
-/// Resolves the acting tenant and user from the <c>X-Tenant-Id</c> and
-/// <c>X-User-Id</c> request headers. When headers are omitted, falls back to
-/// the default system tenant and default administrator ID.
-/// </summary>
 public interface IRequestContextAccessor
 {
     Guid CurrentTenantId { get; }
@@ -16,53 +8,18 @@ public interface IRequestContextAccessor
 
 public sealed class HeaderRequestContextAccessor : IRequestContextAccessor
 {
-    private static readonly Guid FallbackTenantId = DeterministicGuid(Guid.Empty, "tenant:default");
-    private static readonly Guid FallbackUserId = DeterministicGuid(FallbackTenantId, "user:admin@miautrix.org");
-
-    private readonly IHttpContextAccessor _httpContextAccessor;
-
-    public HeaderRequestContextAccessor(IHttpContextAccessor httpContextAccessor)
+    private readonly IHttpContextAccessor _http;
+    public HeaderRequestContextAccessor(IHttpContextAccessor http) => _http = http;
+    public Guid CurrentTenantId => Get("tenant_id", "X-Tenant-Id");
+    public Guid CurrentUserId => Get("user_id", "X-User-Id");
+    private Guid Get(string key, string header)
     {
-        _httpContextAccessor = httpContextAccessor;
-    }
-
-    public Guid CurrentTenantId => ReadGuid("X-Tenant-Id", FallbackTenantId);
-
-    public Guid CurrentUserId => ReadGuid("X-User-Id", FallbackUserId);
-
-    private Guid ReadGuid(string header, Guid fallback)
-    {
-        var context = _httpContextAccessor.HttpContext;
-        if (context is null)
-        {
-            return fallback;
-        }
-
-        var value = context.Request.Headers[header].FirstOrDefault();
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return fallback;
-        }
-
-        if (Guid.TryParse(value, out var guid))
-        {
-            return guid;
-        }
-
-        throw new InvalidOperationException($"The '{header}' header must carry a valid tenant/user id.");
-    }
-
-    private static Guid DeterministicGuid(Guid namespaceId, string value)
-    {
-        var input = $"{namespaceId}:{value}";
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(input));
-        var guidBytes = new byte[16];
-        Array.Copy(hash, guidBytes, 16);
-
-        // RFC 4122 variant
-        guidBytes[6] = (byte)((guidBytes[6] & 0x0F) | 0x50);
-        guidBytes[8] = (byte)((guidBytes[8] & 0x3F) | 0x80);
-
-        return new Guid(guidBytes);
+        var context = _http.HttpContext ?? throw new InvalidOperationException("No authenticated request context.");
+        if (!context.Items.TryGetValue(key, out var value) || value is not Guid id || id == Guid.Empty)
+            throw new InvalidOperationException("No authenticated request context.");
+        if (context.Request.Headers.TryGetValue(header, out var supplied) &&
+            (!Guid.TryParse(supplied, out var parsed) || parsed != id))
+            throw new Miautrix.Mail.Security.ResourceNotFoundException("Resource not found.");
+        return id;
     }
 }
