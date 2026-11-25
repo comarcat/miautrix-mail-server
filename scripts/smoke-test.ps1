@@ -43,7 +43,11 @@ param(
     [string]$TotpCode,
     [switch]$SkipCertificateCheck,
     [switch]$Json,
-    [string]$SendTestTo
+    [string]$SendTestTo,
+    [Parameter(DontShow)][string]$TestTrustedCertificateThumbprint,
+    [Parameter(DontShow)][ValidateRange(1,65535)][int]$TestSmtp25Port = 25,
+    [Parameter(DontShow)][ValidateRange(1,65535)][int]$TestSmtp465Port = 465,
+    [Parameter(DontShow)][ValidateRange(1,65535)][int]$TestSmtp587Port = 587
 )
 
 Set-StrictMode -Version Latest
@@ -75,6 +79,14 @@ if ($SendTestTo -and -not $Credential) {
     [Console]::Error.WriteLine('-SendTestTo requires -Credential.')
     exit 2
 }
+if ($TestTrustedCertificateThumbprint -and $parsedIp -ne [Net.IPAddress]::Loopback) {
+    [Console]::Error.WriteLine('-TestTrustedCertificateThumbprint is only allowed with -ServerIp 127.0.0.1.')
+    exit 2
+}
+if (($TestSmtp25Port -ne 25 -or $TestSmtp465Port -ne 465 -or $TestSmtp587Port -ne 587) -and $parsedIp -ne [Net.IPAddress]::Loopback) {
+    [Console]::Error.WriteLine('Test SMTP port overrides are only allowed with -ServerIp 127.0.0.1.')
+    exit 2
+}
 
 $script:Results = [Collections.Generic.List[object]]::new()
 $script:Secrets = [Collections.Generic.List[string]]::new()
@@ -82,6 +94,10 @@ $script:IpAddress = $parsedIp
 $script:HostName = $MailHost
 $script:Timeout = $TimeoutSeconds
 $script:IgnoreCertificateErrors = [bool]$SkipCertificateCheck
+$script:TestTrustedCertificateThumbprint = $TestTrustedCertificateThumbprint
+$script:SmtpPort25 = $TestSmtp25Port
+$script:SmtpPort465 = $TestSmtp465Port
+$script:SmtpPort587 = $TestSmtp587Port
 $script:CredentialUser = $null
 $script:CredentialPassword = $null
 $script:ApiToken = $null
@@ -100,8 +116,26 @@ using System.Threading.Tasks;
 
 public static class SmokeHttpTransport
 {
-    public static SocketsHttpHandler Create(string address, bool skipCertificateCheck)
+    private static bool SkipCertificateCheck;
+    private static string TrustedThumbprint;
+
+    public static void Configure(bool skipCertificateCheck, string trustedThumbprint)
     {
+        SkipCertificateCheck = skipCertificateCheck;
+        TrustedThumbprint = trustedThumbprint;
+    }
+
+    public static bool ValidateCertificate(object sender, System.Security.Cryptography.X509Certificates.X509Certificate certificate, System.Security.Cryptography.X509Certificates.X509Chain chain, SslPolicyErrors errors)
+    {
+        if (SkipCertificateCheck || errors == SslPolicyErrors.None) return true;
+        return !String.IsNullOrEmpty(TrustedThumbprint) &&
+            certificate.GetCertHashString().Equals(TrustedThumbprint, StringComparison.OrdinalIgnoreCase) &&
+            (errors & SslPolicyErrors.RemoteCertificateNameMismatch) == 0;
+    }
+
+    public static SocketsHttpHandler Create(string address, bool skipCertificateCheck, string trustedThumbprint)
+    {
+        Configure(skipCertificateCheck, trustedThumbprint);
         var ip = IPAddress.Parse(address);
         var handler = new SocketsHttpHandler();
         handler.AllowAutoRedirect = false;
@@ -111,8 +145,7 @@ public static class SmokeHttpTransport
             await tcp.ConnectAsync(ip, context.DnsEndPoint.Port, cancellationToken).ConfigureAwait(false);
             return tcp.GetStream();
         };
-        handler.SslOptions.RemoteCertificateValidationCallback = (sender, certificate, chain, errors) =>
-            skipCertificateCheck || errors == SslPolicyErrors.None;
+        handler.SslOptions.RemoteCertificateValidationCallback = ValidateCertificate;
         return handler;
     }
 }
@@ -196,11 +229,8 @@ function Read-SmtpReply {
 
 function Start-ServerTls {
     param([Net.Sockets.TcpClient]$Client, [string]$TargetHost)
-    $callback = [Net.Security.RemoteCertificateValidationCallback]{
-        param($sender, $certificate, $chain, $errors)
-        if ($script:IgnoreCertificateErrors) { return $true }
-        return $errors -eq [Net.Security.SslPolicyErrors]::None
-    }
+    [SmokeHttpTransport]::Configure($script:IgnoreCertificateErrors, $script:TestTrustedCertificateThumbprint)
+    $callback = [Net.Security.RemoteCertificateValidationCallback][SmokeHttpTransport]::ValidateCertificate
     $ssl = [Net.Security.SslStream]::new($Client.GetStream(), $false, $callback)
     $ssl.AuthenticateAsClient($TargetHost, $null, [Security.Authentication.SslProtocols]::Tls12 -bor [Security.Authentication.SslProtocols]::Tls13, $false)
     return $ssl
@@ -226,11 +256,14 @@ function Test-TlsEndpoint {
             try {
                 $certificate = [Security.Cryptography.X509Certificates.X509Certificate2]::new($ssl.RemoteCertificate)
                 $daysLeft = [math]::Floor(($certificate.NotAfter - [datetime]::Now).TotalDays)
-                if ($daysLeft -lt 0) { throw 'Certificate has expired.' }
+                if ($daysLeft -lt 0 -and -not $script:IgnoreCertificateErrors) {
+                    throw "Certificate EXPIRED $([math]::Abs($daysLeft)) days ago."
+                }
                 if ($ssl.SslProtocol -notin @('Tls12', 'Tls13')) { throw "Unsupported TLS protocol $($ssl.SslProtocol)." }
                 $status = 'PASS'
                 if ($daysLeft -lt 21 -or $script:IgnoreCertificateErrors) { $status = 'WARN' }
-                return @{ Status = $status; Detail = "TLS $($ssl.SslProtocol); certificate expires in $daysLeft days." }
+                $expiryDetail = if ($daysLeft -lt 0) { "certificate EXPIRED $([math]::Abs($daysLeft)) days ago" } else { "certificate expires in $daysLeft days" }
+                return @{ Status = $status; Detail = "TLS $($ssl.SslProtocol); $expiryDetail." }
             }
             finally { $ssl.Dispose() }
         }
@@ -249,8 +282,8 @@ function Test-SmtpStartTls {
             $io.Writer.WriteLine("EHLO $script:HostName")
             $beforeTls = Read-SmtpReply $io.Reader
             $capabilities = $beforeTls -join ' '
-            if ($Port -eq 587 -and $capabilities -match '(?i)AUTH') { throw 'AUTH was advertised before TLS.' }
-            if ($Port -eq 25 -and $capabilities -match '(?i)AUTH') { throw 'AUTH was advertised without TLS.' }
+            if ($Port -eq $script:SmtpPort587 -and $capabilities -match '(?i)AUTH') { throw 'AUTH was advertised before TLS.' }
+            if ($Port -eq $script:SmtpPort25 -and $capabilities -match '(?i)AUTH') { throw 'AUTH was advertised without TLS.' }
             if ($capabilities -notmatch '(?i)STARTTLS') { throw 'STARTTLS was not advertised.' }
             $io.Writer.WriteLine('STARTTLS')
             if ((Read-SmtpReply $io.Reader)[0] -notmatch '^220') { throw 'STARTTLS was rejected.' }
@@ -259,10 +292,10 @@ function Test-SmtpStartTls {
                 $tlsIo = New-ProtocolIo $ssl
                 $tlsIo.Writer.WriteLine("EHLO $script:HostName")
                 $afterTls = Read-SmtpReply $tlsIo.Reader
-                if ($Port -eq 587 -and (($afterTls -join ' ') -notmatch '(?i)AUTH')) { throw 'AUTH was not advertised after STARTTLS.' }
-                if ($Credential -and $Port -eq 587) { Invoke-SmtpAuthentication $tlsIo $false }
-                if ($Credential -and $Port -eq 587) { Add-Result 'Authenticated SMTP AUTH' 'PASS' 'AUTH succeeded over STARTTLS; session closed with QUIT.' 0 }
-                if ($SendTestTo -and $Port -eq 587) { Send-TestMessage $tlsIo }
+                if ($Port -eq $script:SmtpPort587 -and (($afterTls -join ' ') -notmatch '(?i)AUTH')) { throw 'AUTH was not advertised after STARTTLS.' }
+                if ($Credential -and $Port -eq $script:SmtpPort587) { Invoke-SmtpAuthentication $tlsIo $false }
+                if ($Credential -and $Port -eq $script:SmtpPort587) { Add-Result 'Authenticated SMTP AUTH' 'PASS' 'AUTH succeeded over STARTTLS; session closed with QUIT.' 0 }
+                if ($SendTestTo -and $Port -eq $script:SmtpPort587) { Send-TestMessage $tlsIo }
                 $tlsIo.Writer.WriteLine('QUIT')
                 return @{ Status = 'PASS'; Detail = 'Greeting, EHLO and STARTTLS policy passed.' }
             }
@@ -273,8 +306,8 @@ function Test-SmtpStartTls {
 }
 
 function Test-SmtpImplicitTls {
-    Invoke-Check 'SMTP 465 greeting/EHLO' {
-        $client = Open-ServerTcp 465
+    Invoke-Check "SMTP $script:SmtpPort465 greeting/EHLO" {
+        $client = Open-ServerTcp $script:SmtpPort465
         try {
             $ssl = Start-ServerTls $client $script:HostName
             try {
@@ -380,7 +413,7 @@ function Test-ImapExamine {
 }
 
 function New-HttpClient {
-    $handler = [SmokeHttpTransport]::Create($script:IpAddress.ToString(), $script:IgnoreCertificateErrors)
+    $handler = [SmokeHttpTransport]::Create($script:IpAddress.ToString(), $script:IgnoreCertificateErrors, $script:TestTrustedCertificateThumbprint)
     $client = [Net.Http.HttpClient]::new($handler)
     $client.Timeout = [timespan]::FromSeconds($script:Timeout)
     return $client
@@ -482,10 +515,10 @@ try {
     if ($TotpCode) { $script:Secrets.Add($TotpCode) }
 
     Test-TcpPorts
-    Test-TlsEndpoint 465 'SMTP implicit TLS'
+    Test-TlsEndpoint $script:SmtpPort465 'SMTP implicit TLS'
     Test-TlsEndpoint $ImapsPort 'IMAPS'
     Test-SmtpImplicitTls
-    foreach ($port in $SmtpPorts | Where-Object { $_ -in @(25, 587) }) { Test-SmtpStartTls $port }
+    foreach ($port in $SmtpPorts | Where-Object { $_ -in @($script:SmtpPort25, $script:SmtpPort587) }) { Test-SmtpStartTls $port }
     Test-Imap
     Test-HttpsRoutes
     Test-Discovery

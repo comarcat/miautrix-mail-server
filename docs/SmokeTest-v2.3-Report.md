@@ -11,7 +11,7 @@ PowerShell 7 or later, run from an administrator workstation with direct LAN acc
 ./scripts/smoke-test.ps1 -ServerIp <server-ip> -MailHost <mail-hostname> -Credential (Get-Credential) -SendTestTo <recipient-address>
 ```
 
-`ServerIp` must be a literal IPv4 or IPv6 address and is the only network destination. `MailHost` is used as TLS SNI/name and the HTTPS Host header, never resolved by the script. Discovery requests use `autoconfig.<Domain>` and `mta-sts.<Domain>` as Host values. The defaults are HTTPS 443, IMAPS 993, SMTP 25/465/587, and a 10 second timeout. `-SkipCertificateCheck` downgrades certificate trust/name failures to a warning for TLS connections. `-SendTestTo` requires `-Credential` and submits one short plain text message.
+`ServerIp` must be a literal IPv4 or IPv6 address and is the only network destination. `MailHost` is used as TLS SNI/name and the HTTPS Host header, never resolved by the script. Discovery requests use `autoconfig.<Domain>` and `mta-sts.<Domain>` as Host values. The defaults are HTTPS 443, IMAPS 993, SMTP 25/465/587, and a 10 second timeout. `-SkipCertificateCheck` downgrades certificate trust/name and expiry failures to WARN; expired certificates still include the days elapsed in the detail. `-SendTestTo` requires `-Credential` and submits one short plain text message.
 
 ## Checks
 
@@ -50,6 +50,17 @@ Every result has PASS, WARN, FAIL, INFO, or SKIP, duration, and detail. JSON mod
 
 ## Test evidence and remaining work
 
-`Invoke-Pester scripts/tests/smoke-test.Tests.ps1` passed 5 tests in the available Pester 6.2.0 environment. The tests exercise invalid parameter exit codes, local loopback TCP PASS plus protocol FAIL behavior, JSON output shape, and absence of hardcoded production addresses. `dotnet build Miautrix.Mail.sln -warnaserror` succeeded with zero warnings.
+`scripts/tests/SmokeTestFakes.psm1` provides threaded local SMTP, IMAP, and HTTPS fakes plus in-memory `CertificateRequest` test certificates. `-TestTrustedCertificateThumbprint` and `-TestSmtp25Port`/`-TestSmtp465Port`/`-TestSmtp587Port` are hidden test hooks; overrides are rejected unless `-ServerIp` is loopback. They let tests trust only the selected fake cert and assign random ports without changing production defaults.
 
-This checkpoint still lacks the specified self-signed TLS fake SMTP/IMAP/HTTPS servers and the full family-by-family PASS/FAIL matrix, expired/wrong-name certificate coverage, credential masking assertions across all six streams, and credentialed end-to-end fake-server tests. Pester 5 was not installed in the environment, so the available Pester 6 runner was used. The implementation should not be treated as acceptance complete until these local fake-server tests are added and all credential flows are exercised against them.
+The Pester cases cover:
+
+- parameter failures and loopback-only test hook enforcement (exit 2);
+- complete local happy path and JSON field shape (exit 0);
+- anonymous `/auth/me` returning 200 and SMTP 587 AUTH before STARTTLS (each FAIL, exit 1);
+- expired and wrong-name certificates (FAIL), certificate skip behavior (WARN), and a certificate expiring in 10 days (WARN);
+- IMAP4rev2 present and absent capability details;
+- API login/me/logout/revocation, IMAP AUTH + EXAMINE, SMTP AUTH, message submission with `TEST123`, and MFA-required login (SKIP);
+- autoconfig XML, valid MTA-STS, and missing MTA-STS (INFO);
+- capture of combined PowerShell streams 1–6 and JSON to ensure the fake password, AUTH PLAIN base64, and access/refresh tokens do not appear.
+
+The suite passed **19 tests, 0 failed** on each of two consecutive runs with the available Pester 6.2.0 runner. Pester 5 was not installed in this environment; the suite uses Pester 5-compatible syntax. `dotnet build Miautrix.Mail.sln -warnaserror` succeeded with zero warnings.
