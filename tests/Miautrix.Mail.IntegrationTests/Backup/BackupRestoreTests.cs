@@ -8,30 +8,24 @@ using DomainEntity = Miautrix.Mail.Domain.Domain;
 namespace Miautrix.Mail.IntegrationTests.Backup;
 
 [Trait("Category", "Backup")]
-public class BackupRestoreTests
+public class BackupRestoreTests : IClassFixture<IsolatedPostgresFixture>
 {
-    private AppDbContext CreateDbContext(string dbName)
-    {
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseInMemoryDatabase(dbName)
-            .Options;
-        return new AppDbContext(options);
-    }
+    private readonly IsolatedPostgresFixture _database;
+
+    public BackupRestoreTests(IsolatedPostgresFixture database) => _database = database;
 
     [Fact]
     public async Task CreateAndRestoreBackup_ProducesMatchingRowCounts()
     {
-        var sourceDbName = $"source_db_{Guid.NewGuid():N}";
-        var targetDbName = $"target_db_{Guid.NewGuid():N}";
-
-        using var sourceDb = CreateDbContext(sourceDbName);
+        await using var sourceDb = IsolatedPostgresFixture.CreateContext(_database.PrimaryConnectionString);
+        var targetConnectionString = await _database.CreateDatabaseAsync();
 
         // Populate source data
         var tenantId = Guid.NewGuid();
         var tenant = new Tenant
         {
             Id = tenantId,
-            Slug = "acme",
+            Slug = $"acme-{tenantId:N}",
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow
         };
@@ -150,7 +144,7 @@ public class BackupRestoreTests
             Assert.Equal(1, manifest.TableRowCounts["AuditLogs"]);
 
             // Act: Restore to scratch database
-            using var targetDb = CreateDbContext(targetDbName);
+            await using var targetDb = IsolatedPostgresFixture.CreateContext(targetConnectionString);
             var restoredManifest = await backupService.RestoreBackupAsync(tempArchive, targetDb);
 
             // Assert: verify matching row counts in target DB

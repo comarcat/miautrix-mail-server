@@ -8,35 +8,27 @@ using DomainEntity = Miautrix.Mail.Domain.Domain;
 namespace Miautrix.Mail.IntegrationTests.Licensing;
 
 [Trait("Category", "Licensing")]
-public class LicensingQuotaTests
+public class LicensingQuotaTests : IClassFixture<IsolatedPostgresFixture>
 {
-    private AppDbContext CreateDbContext(string dbName)
-    {
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseInMemoryDatabase(dbName)
-            .Options;
-        return new AppDbContext(options);
-    }
+    private readonly IsolatedPostgresFixture _database;
+
+    public LicensingQuotaTests(IsolatedPostgresFixture database) => _database = database;
 
     [Fact]
     public async Task TenantOverAllowance_BlocksNewMailboxes_ContinuesMailDelivery_PreservesData()
     {
-        var dbName = $"license_db_{Guid.NewGuid():N}";
-        using var db = CreateDbContext(dbName);
-
         var tenantId = Guid.NewGuid();
-        var tenant = new Tenant { Id = tenantId, Slug = "acme" };
-        db.Tenants.Add(tenant);
-
         var domainId = Guid.NewGuid();
-        var domain = new DomainEntity { Id = domainId, TenantId = tenantId };
-        db.Domains.Add(domain);
+        var host = tenantId.ToString("N");
+        await using var db = IsolatedPostgresFixture.CreateContext(_database.PrimaryConnectionString);
+        db.Tenants.Add(new Tenant { Id = tenantId, Slug = $"acme-{host}" });
+        db.Domains.Add(new DomainEntity { Id = domainId, TenantId = tenantId, Name = $"{host}.corp" });
 
-        var mailbox1 = new Mailbox { Id = Guid.NewGuid(), TenantId = tenantId, DomainId = domainId, Address = "user1@acme.corp" };
-        var mailbox2 = new Mailbox { Id = Guid.NewGuid(), TenantId = tenantId, DomainId = domainId, Address = "user2@acme.corp" };
-        var mailbox3 = new Mailbox { Id = Guid.NewGuid(), TenantId = tenantId, DomainId = domainId, Address = "user3@acme.corp" };
-        var mailbox4 = new Mailbox { Id = Guid.NewGuid(), TenantId = tenantId, DomainId = domainId, Address = "user4@acme.corp" };
-        var mailbox5 = new Mailbox { Id = Guid.NewGuid(), TenantId = tenantId, DomainId = domainId, Address = "user5@acme.corp" };
+        var mailbox1 = new Mailbox { Id = Guid.NewGuid(), TenantId = tenantId, DomainId = domainId, Address = $"user1@{host}.corp" };
+        var mailbox2 = new Mailbox { Id = Guid.NewGuid(), TenantId = tenantId, DomainId = domainId, Address = $"user2@{host}.corp" };
+        var mailbox3 = new Mailbox { Id = Guid.NewGuid(), TenantId = tenantId, DomainId = domainId, Address = $"user3@{host}.corp" };
+        var mailbox4 = new Mailbox { Id = Guid.NewGuid(), TenantId = tenantId, DomainId = domainId, Address = $"user4@{host}.corp" };
+        var mailbox5 = new Mailbox { Id = Guid.NewGuid(), TenantId = tenantId, DomainId = domainId, Address = $"user5@{host}.corp" };
 
         db.Mailboxes.AddRange(mailbox1, mailbox2, mailbox3, mailbox4, mailbox5);
 
@@ -56,6 +48,8 @@ public class LicensingQuotaTests
         };
         db.Messages.Add(message1);
 
+        try
+        {
         await db.SaveChangesAsync();
 
         var quotaEnforcer = new LicenseQuotaEnforcer(db);
@@ -96,5 +90,14 @@ public class LicensingQuotaTests
         Assert.NotNull(deliveredMsg);
         Assert.True(deliveredMsg.Uid > 0);
         Assert.Equal("Urgent Client Order", deliveredMsg.Subject);
+        }
+        finally
+        {
+            await db.Messages.Where(m => m.TenantId == tenantId).ExecuteDeleteAsync();
+            await db.Folders.Where(f => f.TenantId == tenantId).ExecuteDeleteAsync();
+            await db.Mailboxes.Where(m => m.TenantId == tenantId).ExecuteDeleteAsync();
+            await db.Domains.Where(d => d.TenantId == tenantId).ExecuteDeleteAsync();
+            await db.Tenants.Where(t => t.Id == tenantId).ExecuteDeleteAsync();
+        }
     }
 }
