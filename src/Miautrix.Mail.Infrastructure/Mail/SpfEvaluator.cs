@@ -53,11 +53,34 @@ public sealed class SpfEvaluator(IDnsResolver dns)
         var tokens = records[0].Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
         if (tokens.Length == 0 || !tokens[0].Equals("v=spf1", StringComparison.OrdinalIgnoreCase)) return "permerror";
         string? redirect = null;
+        var sawExp = false;
         foreach (var raw in tokens.Skip(1))
         {
-            if (raw.StartsWith("exp=", StringComparison.OrdinalIgnoreCase)) continue;
-            if (raw.StartsWith("redirect=", StringComparison.OrdinalIgnoreCase)) { if (redirect is not null) return "permerror"; redirect = raw[9..]; continue; }
-            if (raw.Contains('=')) return "permerror"; // unknown modifier is ignored only when syntactically valid
+            var equals = raw.IndexOf('=');
+            if (equals >= 0)
+            {
+                var name = raw[..equals];
+                var value = raw[(equals + 1)..];
+                if (!IsModifierName(name) || value.Length == 0) return "permerror";
+                if (name.Equals("redirect", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (redirect is not null) return "permerror";
+                    ValidateMacroString(value, allowExpMacros: false);
+                    redirect = value;
+                }
+                else if (name.Equals("exp", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (sawExp) return "permerror";
+                    sawExp = true;
+                    ValidateMacroString(value, allowExpMacros: true);
+                }
+                else
+                {
+                    // RFC 7208 §6 requires unrecognized, syntactically valid modifiers to be ignored.
+                    ValidateMacroString(value, allowExpMacros: false);
+                }
+                continue;
+            }
             var qualifier = raw[0] is '+' or '-' or '~' or '?' ? raw[0] : '+';
             var mechanism = qualifier == '+' && raw[0] is not '+' ? raw : raw[1..];
             var outcome = await EvalMechanism(s, domain, mechanism, depth);
@@ -179,13 +202,7 @@ public sealed class SpfEvaluator(IDnsResolver dns)
 
     private static async Task<string> MacroAsync(string body, State s, string domain)
     {
-        if (body.Length == 0) throw new FormatException("empty SPF macro");
-        var p = 1;
-        while (p < body.Length && char.IsDigit(body[p])) p++;
-        var count = p == 1 ? int.MaxValue : int.Parse(body[1..p]);
-        var reverse = p < body.Length && body[p] is 'r' or 'R'; if (reverse) p++;
-        var delimiters = p == body.Length ? ".-+" : body[p..];
-        var code = body.Length > 0 ? char.ToLowerInvariant(body[0]) : throw new FormatException();
+        var (code, count, reverse, delimiters) = ParseMacroBody(body, allowExpMacros: false);
         var value = code switch
         {
             's' => s.Sender, 'l' => s.Sender.Split('@')[0], 'o' => s.Sender.Contains('@') ? s.Sender[(s.Sender.LastIndexOf('@') + 1)..] : domain,
@@ -197,6 +214,42 @@ public sealed class SpfEvaluator(IDnsResolver dns)
         if (reverse) Array.Reverse(pieces);
         var transformed = string.Join('.', pieces);
         return body.Length > 0 && char.IsUpper(body[0]) ? Uri.EscapeDataString(transformed) : transformed;
+    }
+
+    private static bool IsModifierName(string name) => name.Length > 0 &&
+        char.IsAsciiLetter(name[0]) && name.Skip(1).All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_');
+
+    private static void ValidateMacroString(string input, bool allowExpMacros)
+    {
+        for (var i = 0; i < input.Length; i++)
+        {
+            if (input[i] != '%') continue;
+            if (++i >= input.Length) throw new FormatException("incomplete SPF macro");
+            if (input[i] is '%' or '_' or '-') continue;
+            if (input[i] != '{') throw new FormatException("invalid SPF macro");
+            var end = input.IndexOf('}', i + 1);
+            if (end < 0) throw new FormatException("unterminated SPF macro");
+            _ = ParseMacroBody(input[(i + 1)..end], allowExpMacros);
+            i = end;
+        }
+    }
+
+    private static (char Code, int Count, bool Reverse, string Delimiters) ParseMacroBody(string body, bool allowExpMacros)
+    {
+        if (body.Length == 0) throw new FormatException("empty SPF macro");
+        var p = 1;
+        while (p < body.Length && char.IsAsciiDigit(body[p])) p++;
+        var count = p == 1 ? int.MaxValue : int.Parse(body[1..p]);
+        var reverse = p < body.Length && body[p] is 'r' or 'R';
+        if (reverse) p++;
+        var delimiters = p == body.Length ? ".-+" : body[p..];
+        if (delimiters.Any(c => c is not ('.' or '-' or '+' or ',' or '/' or '_' or '=')))
+            throw new FormatException("invalid SPF macro delimiter");
+        var code = char.ToLowerInvariant(body[0]);
+        if (code is not ('s' or 'l' or 'o' or 'd' or 'i' or 'p' or 'v' or 'h' or 'c' or 'r' or 't'))
+            throw new FormatException("unknown SPF macro");
+        if (!allowExpMacros && code is 'c' or 'r' or 't') throw new FormatException("SPF macro is only valid in exp modifiers");
+        return (code, count, reverse, delimiters);
     }
 
     private static string FormatIp(IPAddress ip)
