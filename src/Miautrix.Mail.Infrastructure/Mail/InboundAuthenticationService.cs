@@ -9,6 +9,7 @@ namespace Miautrix.Mail.Infrastructure.Mail;
 /// <summary>Inbound authentication implementation; all DNS access is through the injectable resolver.</summary>
 public sealed class InboundAuthenticationService(IDnsResolver dns, InboundAuthenticationOptions options) : IInboundAuthenticationService
 {
+    private readonly SpfEvaluator _spfEvaluator = new(dns);
     public async Task<InboundAuthenticationResult> EvaluateAsync(InboundAuthenticationInput input, CancellationToken cancellationToken = default)
     {
         if (options.Mode == AuthenticationMode.Off)
@@ -16,7 +17,7 @@ public sealed class InboundAuthenticationService(IDnsResolver dns, InboundAuthen
 
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         budget.CancelAfter(TimeSpan.FromSeconds(10));
-        var spf = await EvaluateSpf(input, budget.Token);
+        var spf = await _spfEvaluator.EvaluateAsync(input.ClientIp, input.Helo, input.MailFrom, budget.Token);
         var dkim = await EvaluateDkim(input.RawMessage, budget.Token);
         var message = MimeMessage.Load(new MemoryStream(Encoding.UTF8.GetBytes(input.RawMessage)));
         var fromDomains = message.From.Mailboxes.Select(m => m.Domain.ToLowerInvariant()).Distinct().ToArray();
@@ -51,70 +52,6 @@ public sealed class InboundAuthenticationService(IDnsResolver dns, InboundAuthen
         return new(spf, dkim, dmarc, auth);
     }
 
-    private async Task<SpfAuthenticationResult> EvaluateSpf(InboundAuthenticationInput input, CancellationToken ct)
-    {
-        var ip = input.ClientIp;
-        var sender = input.MailFrom;
-        if (string.IsNullOrEmpty(sender) || sender == "<>") sender = input.Helo;
-        if (string.IsNullOrWhiteSpace(sender)) return new("none", null);
-        var domain = sender.Contains('@') ? sender[(sender.LastIndexOf('@') + 1)..] : sender;
-        domain = domain.Trim('<', '>').ToLowerInvariant();
-        if (ip is null) return new("none", domain, "client IP unavailable");
-        var records = await dns.GetTxtAsync(domain, ct);
-        var spfs = records.Where(x => x.StartsWith("v=spf1", StringComparison.OrdinalIgnoreCase)).ToArray();
-        if (spfs.Length == 0) return new("none", domain);
-        if (spfs.Length != 1) return new("permerror", domain, "multiple SPF records");
-        var terms = spfs[0].Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Skip(1).ToArray();
-        var lookups = 0;
-        var voids = 0;
-        foreach (var term in terms)
-        {
-            var qualifier = term[0] is '+' or '-' or '~' or '?' ? term[0] : '+';
-            var mechanism = qualifier == '+' && term[0] is not '+' ? term : term[1..];
-            var matched = false;
-            if (mechanism.Equals("all", StringComparison.OrdinalIgnoreCase)) matched = true;
-            else if (mechanism.StartsWith("ip4:", StringComparison.OrdinalIgnoreCase) || mechanism.StartsWith("ip6:", StringComparison.OrdinalIgnoreCase))
-            {
-                var parts = mechanism.Split(':', 2)[1].Split('/', 2);
-                if (IPAddress.TryParse(parts[0], out var network))
-                {
-                    var prefix = parts.Length == 2 && int.TryParse(parts[1], out var bits) ? bits : (network.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork ? 32 : 128);
-                    matched = IsInNetwork(ip, network, prefix);
-                }
-            }
-            else if (mechanism.StartsWith("exists:", StringComparison.OrdinalIgnoreCase))
-            {
-                lookups++;
-                matched = (await dns.GetAddressesAsync(mechanism[7..], ct)).Count > 0;
-            }
-            else if (mechanism.StartsWith("include:", StringComparison.OrdinalIgnoreCase))
-            {
-                lookups++;
-                var included = await dns.GetTxtAsync(mechanism[8..], ct);
-                matched = included.Any(x => x.StartsWith("v=spf1", StringComparison.OrdinalIgnoreCase) && x.Contains(ip.ToString(), StringComparison.Ordinal));
-                if (included.Count == 0) voids++;
-            }
-            else if (mechanism.StartsWith("a", StringComparison.OrdinalIgnoreCase) || mechanism.StartsWith("mx", StringComparison.OrdinalIgnoreCase) || mechanism.StartsWith("ptr", StringComparison.OrdinalIgnoreCase))
-            {
-                lookups++;
-                if (mechanism.StartsWith("a", StringComparison.OrdinalIgnoreCase)) matched = (await dns.GetAddressesAsync(domain, ct)).Contains(ip);
-                else if (mechanism.StartsWith("mx", StringComparison.OrdinalIgnoreCase))
-                {
-                    foreach (var mx in await dns.GetMxAsync(domain, ct)) if ((await dns.GetAddressesAsync(mx.Host, ct)).Contains(ip)) { matched = true; break; }
-                }
-                else
-                {
-                    foreach (var host in await dns.GetPtrAsync(ip, ct))
-                        if ((host.Equals(domain, StringComparison.OrdinalIgnoreCase) || host.EndsWith("." + domain, StringComparison.OrdinalIgnoreCase)) && (await dns.GetAddressesAsync(host, ct)).Contains(ip)) { matched = true; break; }
-                }
-            }
-            if (lookups > 10 || voids > 2) return new("permerror", domain, "SPF lookup limit exceeded");
-            if (!matched) continue;
-            return new(qualifier switch { '-' => "fail", '~' => "softfail", '?' => "neutral", _ => "pass" }, domain);
-        }
-        return new("neutral", domain);
-    }
-
     private async Task<IReadOnlyList<DkimAuthenticationResult>> EvaluateDkim(string raw, CancellationToken ct)
     {
         var message = MimeMessage.Load(new MemoryStream(Encoding.UTF8.GetBytes(raw)));
@@ -134,14 +71,6 @@ public sealed class InboundAuthenticationService(IDnsResolver dns, InboundAuthen
     }
 
     private static bool Align(string from, string signer, string mode) => mode.Equals("s", StringComparison.OrdinalIgnoreCase) ? from.Equals(signer, StringComparison.OrdinalIgnoreCase) : from.Equals(signer, StringComparison.OrdinalIgnoreCase) || from.EndsWith("." + signer, StringComparison.OrdinalIgnoreCase) || signer.EndsWith("." + from, StringComparison.OrdinalIgnoreCase);
-    private static bool IsInNetwork(IPAddress ip, IPAddress network, int prefix)
-    {
-        var a = ip.GetAddressBytes(); var b = network.GetAddressBytes();
-        if (a.Length != b.Length || prefix < 0 || prefix > a.Length * 8) return false;
-        for (var i = 0; i < a.Length; i++) { var bits = Math.Clamp(prefix - i * 8, 0, 8); var mask = bits == 0 ? 0 : 0xff << (8 - bits); if ((a[i] & mask) != (b[i] & mask)) return false; }
-        return true;
-    }
-
     private sealed class DnsDkimLocator(IDnsResolver dns) : DkimPublicKeyLocatorBase
     {
         public override Org.BouncyCastle.Crypto.AsymmetricKeyParameter LocatePublicKey(string methods, string domain, string selector, CancellationToken cancellationToken = default)
