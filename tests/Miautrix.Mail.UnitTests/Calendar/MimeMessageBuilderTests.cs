@@ -119,6 +119,35 @@ public sealed class MimeMessageBuilderTests
     }
 
     [Fact]
+    public void Long_non_ascii_subject_uses_bounded_encoded_words_and_folds_headers()
+    {
+        var built = MimeMessageBuilder.Build(Request(subject: string.Concat(Enumerable.Repeat("Réunion café ☕ ", 18))));
+        var subjectLines = built.TopLevelHeaders.Split("\r\n")
+            .SkipWhile(line => !line.StartsWith("Subject:", StringComparison.Ordinal))
+            .TakeWhile((line, index) => index == 0 || line.StartsWith(' ')).ToArray();
+        var encodedWords = System.Text.RegularExpressions.Regex.Matches(string.Join(" ", subjectLines), @"=\?UTF-8\?B\?.*?\?=")
+            .Select(match => match.Value).ToArray();
+
+        Assert.NotEmpty(encodedWords);
+        Assert.All(encodedWords, word => Assert.True(word.Length <= 75));
+        Assert.All(subjectLines, line => Assert.True(Encoding.UTF8.GetByteCount(line) <= 78));
+    }
+
+    [Fact]
+    public void Long_unicode_attachment_filename_uses_rfc2231_continuations()
+    {
+        var filename = "résumé-" + string.Concat(Enumerable.Repeat("long-name-", 12)) + ".pdf";
+        var attachment = new MimeAttachment(filename, "application/pdf", [1, 2, 3]);
+        var built = MimeMessageBuilder.Build(Request(text: "Body", attachments: [attachment]));
+        var filenameLines = built.RawMessage.Split("\r\n").Where(line => line.Contains("filename*", StringComparison.Ordinal) || line.Contains("name*", StringComparison.Ordinal));
+
+        Assert.Contains("filename*0*=UTF-8''", built.RawMessage, StringComparison.Ordinal);
+        Assert.Contains("filename*1*=", built.RawMessage, StringComparison.Ordinal);
+        Assert.Contains("name*0*=UTF-8''", built.RawMessage, StringComparison.Ordinal);
+        Assert.All(filenameLines, line => Assert.True(Encoding.UTF8.GetByteCount(line) <= 78));
+    }
+
+    [Fact]
     public void Base64_wraps_at_76_characters()
     {
         var attachment = new MimeAttachment("blob.bin", "application/octet-stream", Enumerable.Range(0, 500).Select(i => (byte)i).ToArray());
