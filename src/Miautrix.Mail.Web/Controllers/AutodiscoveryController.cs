@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using System.Xml;
 using System.Xml.Linq;
 using Miautrix.Mail.Persistence;
 using Microsoft.AspNetCore.Mvc;
@@ -35,14 +36,23 @@ public sealed class AutodiscoveryController(AppDbContext db, IConfiguration conf
     public async Task<IActionResult> Outlook(CancellationToken ct)
     {
         string? email = null;
-        try { var xml = await XDocument.LoadAsync(Request.Body, LoadOptions.None, ct); email = xml.Descendants().FirstOrDefault(e => e.Name.LocalName.Equals("EMailAddress", StringComparison.OrdinalIgnoreCase))?.Value; }
+        try
+        {
+            if (Request.ContentLength is > 65536) return BadRequest();
+            using var reader = new StreamReader(Request.Body, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+            var body = await reader.ReadToEndAsync(ct);
+            using var stringReader = new StringReader(body);
+            using var xmlReader = XmlReader.Create(stringReader, new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null, MaxCharactersInDocument = 65536 });
+            var xml = XDocument.Load(xmlReader, LoadOptions.None);
+            email = xml.Descendants().FirstOrDefault(e => e.Name.LocalName.Equals("EMailAddress", StringComparison.OrdinalIgnoreCase))?.Value;
+        }
         catch { return BadRequest(); }
         var domainName = EmailDomain(email);
         var domain = domainName is null ? null : await db.Domains.AsNoTracking().FirstOrDefaultAsync(d => d.Name.ToLower() == domainName, ct);
         if (domain is null) return NotFound();
         var imap = PublicHost("IMAP"); var smtp = PublicHost("SMTP");
         XNamespace ns = "http://schemas.microsoft.com/exchange/autodiscover/outlook/responseschema/2006a";
-        var response = new XDocument(new XElement(ns + "Autodiscover", new XAttribute(XNamespace.Xmlns + "", ns),
+        var response = new XDocument(new XElement(ns + "Autodiscover",
             new XElement(ns + "Response", new XElement(ns + "Account", new XElement(ns + "AccountType", "email"), new XElement(ns + "Action", "settings"),
                 Protocol(ns, "IMAP", imap, 993), Protocol(ns, "SMTP", smtp, 465), Protocol(ns, "SMTP", smtp, 587)))));
         // Preserve the submitted address in the POX response.

@@ -48,6 +48,7 @@ public class Program
         builder.Services.AddRateLimiter(options => options.AddPolicy("discovery", context =>
             RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
             { PermitLimit = 60, Window = TimeSpan.FromMinutes(1), QueueLimit = 0, AutoReplenishment = true })));
+        builder.Services.Configure<Microsoft.AspNetCore.RateLimiting.RateLimiterOptions>(options => options.RejectionStatusCode = StatusCodes.Status429TooManyRequests);
 
         var backupDirectory = Environment.GetEnvironmentVariable("MIAUTRIX_BACKUP_DIR");
         if (string.IsNullOrWhiteSpace(backupDirectory))
@@ -171,6 +172,7 @@ public class Program
         builder.Services.AddEndpointsApiExplorer();
 
         var app = builder.Build();
+        app.UseRouting();
         app.UseRateLimiter();
 
         // Windows packages expose the application directly over HTTPS. Keep HSTS scoped to
