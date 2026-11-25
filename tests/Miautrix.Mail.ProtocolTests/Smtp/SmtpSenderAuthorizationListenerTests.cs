@@ -61,11 +61,12 @@ public sealed class SmtpSenderAuthorizationListenerTests
 
     private sealed class CapturingInboundAuthentication : IInboundAuthenticationService
     {
+        public InboundAuthenticationResult Result { get; set; } = new(new("fail", "sender.test"), [], new("fail", "remote.test", "reject", "reject", []), "localhost; spf=fail; dkim=fail; dmarc=fail policy.dmarc=reject");
         public InboundAuthenticationInput? LastInput { get; private set; }
         public Task<InboundAuthenticationResult> EvaluateAsync(InboundAuthenticationInput input, CancellationToken cancellationToken = default)
         {
             LastInput = input;
-            return Task.FromResult(new InboundAuthenticationResult(new("none", null), [], new("none", null, null, "none", []), "localhost; spf=none; dkim=none; dmarc=none"));
+            return Task.FromResult(Result);
         }
     }
 
@@ -90,6 +91,7 @@ public sealed class SmtpSenderAuthorizationListenerTests
         }
 
         var queue = new CapturingQueue();
+        var inboundAuthProbe = new CapturingInboundAuthentication();
         using var certificateKey = RSA.Create(2048);
         var certReq = new CertificateRequest("CN=localhost", certificateKey, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         using var generatedCertificate = certReq.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow.AddHours(1));
@@ -103,6 +105,8 @@ public sealed class SmtpSenderAuthorizationListenerTests
             .AddScoped<ISenderAuthorizationService, SenderAuthorizationService>()
             .AddScoped<ISmtpSubmissionHandler, SmtpSubmissionHandler>()
             .AddScoped<ISmtpDomainValidator>(_ => new TestDomains(tenantId))
+            .AddSingleton<IInboundAuthenticationService>(inboundAuthProbe)
+            .AddSingleton(new InboundAuthenticationOptions { Mode = AuthenticationMode.Enforce, AuthservId = "localhost" })
             .AddScoped<ISmtpInboundHandler, SmtpInboundHandler>()
             .BuildServiceProvider();
         var portProbe = new TcpListener(IPAddress.Loopback, 0); portProbe.Start(); var port = ((IPEndPoint)portProbe.LocalEndpoint).Port; portProbe.Stop();
@@ -155,6 +159,7 @@ public sealed class SmtpSenderAuthorizationListenerTests
             rejectedCount = queue.Items.Count; var external = await Send("outside@external.invalid", "outside@external.invalid"); Assert.StartsWith("550 5.7.1", external.Mail); Assert.Equal(rejectedCount, queue.Items.Count);
             rejectedCount = queue.Items.Count; var nullSender = await Send("", own); Assert.StartsWith("550 5.7.1", nullSender.Mail); Assert.Equal(rejectedCount, queue.Items.Count);
             rejectedCount = queue.Items.Count; var forged = await Send(own, "other@sender-test.invalid"); Assert.StartsWith("550 5.7.1", forged.Data); Assert.Equal(rejectedCount, queue.Items.Count);
+            Assert.Null(inboundAuthProbe.LastInput); // Authenticated submission is outside inbound authentication.
         }
         finally
         {
@@ -250,11 +255,58 @@ public sealed class SmtpSenderAuthorizationListenerTests
             Assert.StartsWith("250", await Reply());
             Assert.Equal(IPAddress.Loopback, auth.LastInput?.ClientIp); Assert.Equal("client.example", auth.LastInput?.Helo); Assert.Equal(InboundMailPath.Smtp25, auth.LastInput?.Path);
             var raw = Assert.Single(queue.Items).RawMessage;
-            Assert.Equal(1, raw.Split("Authentication-Results:", StringSplitOptions.None).Length - 1);
-            Assert.Contains("localhost; spf=none; dkim=none; dmarc=none", raw);
+            Assert.Equal(2, raw.Split("Authentication-Results:", StringSplitOptions.None).Length - 1);
+            Assert.Equal(1, raw.Split("Authentication-Results: localhost;", StringSplitOptions.None).Length - 1);
+            Assert.Contains("localhost; spf=fail; dkim=fail; dmarc=fail policy.dmarc=reject", raw);
             Assert.Contains("untrusted.example; spf=pass", raw);
         }
         finally { await listener.StopAsync(CancellationToken.None); }
+    }
+
+    [Fact]
+    public async Task Enforce_rejects_dmarc_reject_at_end_of_data_before_queueing()
+    {
+        var tenant = Guid.NewGuid(); var queue = new CapturingQueue(); var auth = new CapturingInboundAuthentication();
+        var domains = new MappedDomains(new Dictionary<string, Guid> { ["local@inbound.invalid"] = tenant });
+        using var provider = new ServiceCollection().AddLogging()
+            .AddSingleton<ISmtpQueueManager>(queue).AddSingleton<ISmtpDomainValidator>(domains)
+            .AddSingleton<IInboundAuthenticationService>(auth)
+            .AddSingleton(new InboundAuthenticationOptions { Mode = AuthenticationMode.Enforce, AuthservId = "localhost" })
+            .AddScoped<ISmtpInboundHandler, SmtpInboundHandler>().AddScoped<ISmtpSubmissionHandler, UnusedSubmissionHandler>().BuildServiceProvider();
+        var probe = new TcpListener(IPAddress.Loopback, 0); probe.Start(); var port = ((IPEndPoint)probe.LocalEndpoint).Port; probe.Stop();
+        var listener = new SmtpListenerService(provider.GetRequiredService<IServiceScopeFactory>(), provider.GetRequiredService<ILogger<SmtpListenerService>>(), port, SmtpListenerMode.Inbound, null, "localhost");
+        await listener.StartAsync(CancellationToken.None);
+        try
+        {
+            using var client = new TcpClient();
+            for (var i = 0; ; i++) { try { await client.ConnectAsync(IPAddress.Loopback, port); break; } catch when (i < 30) { await Task.Delay(50); } }
+            using var reader = new StreamReader(client.GetStream(), Encoding.ASCII, leaveOpen: true);
+            using var writer = new StreamWriter(client.GetStream(), Encoding.ASCII, leaveOpen: true) { AutoFlush = true, NewLine = "\r\n" };
+            async Task<string> Reply() { var line = await reader.ReadLineAsync() ?? ""; while (line.Length > 3 && line[3] == '-') line = await reader.ReadLineAsync() ?? ""; return line; }
+            _ = await Reply(); await writer.WriteLineAsync("EHLO client.example"); _ = await Reply();
+            await writer.WriteLineAsync("MAIL FROM:<sender@remote.test>"); _ = await Reply(); await writer.WriteLineAsync("RCPT TO:<local@inbound.invalid>"); _ = await Reply();
+            await writer.WriteLineAsync("DATA"); Assert.StartsWith("354", await Reply());
+            await writer.WriteLineAsync("From: sender@remote.test"); await writer.WriteLineAsync(""); await writer.WriteLineAsync("body"); await writer.WriteLineAsync(".");
+            Assert.StartsWith("550 5.7.1", await Reply());
+            Assert.Empty(queue.Items);
+        }
+        finally { await listener.StopAsync(CancellationToken.None); }
+    }
+
+    [Fact]
+    public async Task Enforce_delivers_temperror_without_rejecting()
+    {
+        var tenant = Guid.NewGuid(); var queue = new CapturingQueue();
+        var auth = new CapturingInboundAuthentication
+        {
+            Result = new(new("temperror", "sender.test"), [], new("fail", "remote.test", "reject", "reject", []), "localhost; spf=temperror; dmarc=fail policy.dmarc=reject")
+        };
+        var domains = new MappedDomains(new Dictionary<string, Guid> { ["local@inbound.invalid"] = tenant });
+        var handler = new SmtpInboundHandler(domains, queue, auth, new InboundAuthenticationOptions { Mode = AuthenticationMode.Enforce, AuthservId = "localhost" });
+        var (response, item) = await handler.HandleDataAsync(tenant, "sender@remote.test", "local@inbound.invalid", "From: sender@remote.test\r\n\r\nbody");
+        Assert.True(response.IsSuccess);
+        Assert.NotNull(item);
+        Assert.Single(queue.Items);
     }
 
     [Fact]

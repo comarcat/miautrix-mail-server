@@ -42,7 +42,7 @@ public sealed class InboundAuthenticationService : IInboundAuthenticationService
         var dmarc = await EvaluateDmarc(fromDomains, spf, dkim, budget.Token);
         var auth = $"{options.AuthservId}; spf={spf.Result} smtp.mailfrom={(spf.Domain ?? "unknown")}; " +
                    (dkim.Count == 0 ? "dkim=none" : string.Join("; ", dkim.Select(x => $"dkim={x.Result} header.d={x.Domain ?? "unknown"}"))) +
-                   $"; dmarc={dmarc.Result} header.from={dmarc.Domain ?? "unknown"}";
+                   $"; dmarc={dmarc.Result} header.from={dmarc.Domain ?? "unknown"} policy.dmarc={dmarc.Disposition ?? "none"}";
         return new(spf, dkim, dmarc, auth);
     }
 
@@ -77,6 +77,8 @@ public sealed class InboundAuthenticationService : IInboundAuthenticationService
     {
         if (fromDomains.Length != 1) return new("fail", null, null, "none", []);
         var from = fromDomains[0];
+        if (spf.Result == "temperror" || dkim.Any(signature => signature.Result == "temperror"))
+            return new("temperror", from, null, "none", []);
         string? record = await FindDmarcRecord(from, ct);
         string? policyDomain = from;
         if (record is null)

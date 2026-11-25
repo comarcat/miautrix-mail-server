@@ -71,7 +71,24 @@ public sealed class SmtpInboundHandler : ISmtpInboundHandler
 
         if (_authentication is not null && _authenticationOptions?.Mode != AuthenticationMode.Off)
         {
-            var auth = await _authentication.EvaluateAsync(new InboundAuthenticationInput(clientIp, helo, sender, rawMessage, path, cloudflareAuthenticationResults), cancellationToken);
+            InboundAuthenticationResult auth;
+            try
+            {
+                auth = await _authentication.EvaluateAsync(new InboundAuthenticationInput(clientIp, helo, sender, rawMessage, path, cloudflareAuthenticationResults), cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+            catch
+            {
+                var authserv = _authenticationOptions?.AuthservId ?? "unknown";
+                auth = new(new("temperror", null), [new(null, null, "temperror", "verification service error")],
+                    new("temperror", null, null, "none", []), $"{authserv}; spf=temperror; dkim=temperror; dmarc=temperror");
+            }
+
+            var temporaryError = auth.Spf.Result == "temperror" || auth.Dmarc.Result == "temperror" || auth.Dkim.Any(item => item.Result == "temperror");
+            if (_authenticationOptions?.Mode == AuthenticationMode.Enforce && !temporaryError &&
+                auth.Dmarc.Result == "fail" && auth.Dmarc.Disposition == "reject")
+                return (new SmtpResponse(550, "5.7.1", "Message rejected by DMARC policy"), null);
+
             var separator = rawMessage.IndexOf("\r\n\r\n", StringComparison.Ordinal);
             var headerEnd = separator >= 0 ? separator : rawMessage.IndexOf("\n\n", StringComparison.Ordinal);
             var headerLength = separator >= 0 ? 4 : 2;

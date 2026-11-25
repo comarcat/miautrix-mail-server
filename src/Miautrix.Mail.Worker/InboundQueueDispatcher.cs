@@ -17,6 +17,7 @@ using Miautrix.Mail.Persistence;
 using Miautrix.Mail.Storage;
 using Miautrix.Mail.Application.Mail.Mime;
 using Miautrix.Mail.Application.Mail;
+using Miautrix.Mail.Application.Transport;
 
 namespace Miautrix.Mail.Worker;
 
@@ -29,11 +30,13 @@ public sealed class InboundQueueDispatcher : BackgroundService
 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<InboundQueueDispatcher> _logger;
+    private readonly InboundAuthenticationOptions? _inboundAuthenticationOptions;
 
-    public InboundQueueDispatcher(IServiceScopeFactory scopeFactory, ILogger<InboundQueueDispatcher> logger)
+    public InboundQueueDispatcher(IServiceScopeFactory scopeFactory, ILogger<InboundQueueDispatcher> logger, InboundAuthenticationOptions? inboundAuthenticationOptions = null)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
+        _inboundAuthenticationOptions = inboundAuthenticationOptions;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -245,7 +248,10 @@ public sealed class InboundQueueDispatcher : BackgroundService
             return;
         }
 
-        var deliveredRole = result.Score >= junkThreshold ? "junk" : "inbox";
+        var dmarcQuarantine = _inboundAuthenticationOptions?.Mode == AuthenticationMode.Enforce &&
+            item.RawMessage.Contains("dmarc=fail", StringComparison.OrdinalIgnoreCase) &&
+            item.RawMessage.Contains("policy.dmarc=quarantine", StringComparison.OrdinalIgnoreCase);
+        var deliveredRole = dmarcQuarantine ? "junk" : result.Score >= junkThreshold ? "junk" : "inbox";
         var _ = result; // keep result in scope for the following role decision
 
         // Continue with folder selection using deliveredRole
@@ -295,6 +301,16 @@ public sealed class InboundQueueDispatcher : BackgroundService
         }
 
         var desiredRole = deliveredRole;
+        var dmarcFlagFallback = false;
+        if (dmarcQuarantine)
+        {
+            var junkFolderExists = await db.Folders.AnyAsync(f => f.TenantId == item.TenantId && f.MailboxId == mailbox.Id && f.Role == "junk", ct);
+            if (!junkFolderExists)
+            {
+                desiredRole = "inbox";
+                dmarcFlagFallback = true;
+            }
+        }
 
         var folder = await db.Folders
             .FirstOrDefaultAsync(f => f.TenantId == item.TenantId && f.MailboxId == mailbox.Id && f.Role == desiredRole, ct);
@@ -342,6 +358,7 @@ public sealed class InboundQueueDispatcher : BackgroundService
             StoragePath = storageResult.StoragePath,
             SizeBytes = storageResult.SizeBytes,
             IsRead = false,
+            Flags = dmarcFlagFallback ? "\\Flagged" : string.Empty,
             RawHeaders = parsed.RawHeaders,
             BodyText = parsed.BodyText,
             BodyHtml = parsed.BodyHtml,

@@ -8,6 +8,10 @@ using Miautrix.Mail.Domain;
 using Miautrix.Mail.Persistence;
 using Miautrix.Mail.Storage;
 using Miautrix.Mail.Worker;
+using Miautrix.Mail.Application.Transport;
+using Miautrix.Mail.Application.Mail;
+using Miautrix.Mail.Application.Mail.Mime;
+using Miautrix.Mail.Infrastructure.Mail;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -113,6 +117,51 @@ public sealed class InboundQueueDispatcherTests
     }
 
     [Fact]
+    public async Task Enforced_dmarc_quarantine_uses_junk_or_flagged_inbox_fallback()
+    {
+        var tenantId = await SeedTenantAsync();
+        try
+        {
+            var mailboxId = await SeedDomainAndMailboxAsync(tenantId, $"user@{TestDomain}");
+            await SeedFolderAsync(tenantId, mailboxId, "Inbox", "inbox");
+            var queueItemId = await SeedQueueItemAsync(tenantId, $"user@{TestDomain}",
+                "From: sender@example.test\r\nSubject: DMARC quarantine\r\nAuthentication-Results: mx; dmarc=fail header.from=example.test policy.dmarc=quarantine\r\n\r\nbody");
+            await RunOnePassAsync(inboundAuthenticationOptions: new InboundAuthenticationOptions { Mode = AuthenticationMode.Enforce });
+
+            await using var context = CreateContext();
+            var queuedItem = await context.SmtpQueue.AsNoTracking().FirstAsync(q => q.Id == queueItemId);
+            Assert.Equal("Delivered", queuedItem.Status);
+            var message = await context.Messages.AsNoTracking().FirstAsync(m => m.MailboxId == mailboxId);
+            var folder = await context.Folders.AsNoTracking().FirstAsync(f => f.Id == message.FolderId);
+            Assert.Equal("inbox", folder.Role);
+            Assert.Contains("\\Flagged", message.Flags);
+            Assert.Equal("Delivered", (await context.SmtpQueue.AsNoTracking().FirstAsync(q => q.Id == queueItemId)).Status);
+        }
+        finally { await CleanupAsync(tenantId); }
+    }
+
+    [Fact]
+    public async Task Enforced_dmarc_quarantine_delivers_to_existing_junk_folder()
+    {
+        var tenantId = await SeedTenantAsync();
+        try
+        {
+            var mailboxId = await SeedDomainAndMailboxAsync(tenantId, $"user@{TestDomain}");
+            await SeedFolderAsync(tenantId, mailboxId, "Inbox", "inbox");
+            await SeedFolderAsync(tenantId, mailboxId, "Junk", "junk");
+            await SeedQueueItemAsync(tenantId, $"user@{TestDomain}",
+                "From: sender@example.test\r\nSubject: DMARC quarantine\r\nAuthentication-Results: mx; dmarc=fail header.from=example.test policy.dmarc=quarantine\r\n\r\nbody");
+            await RunOnePassAsync(inboundAuthenticationOptions: new InboundAuthenticationOptions { Mode = AuthenticationMode.Enforce });
+
+            await using var verify = CreateContext();
+            var message = await verify.Messages.AsNoTracking().FirstAsync(m => m.MailboxId == mailboxId);
+            Assert.Equal("junk", (await verify.Folders.AsNoTracking().FirstAsync(f => f.Id == message.FolderId)).Role);
+            Assert.DoesNotContain("\\Flagged", message.Flags);
+        }
+        finally { await CleanupAsync(tenantId); }
+    }
+
+    [Fact]
     public async Task One_bad_row_in_a_batch_does_not_block_or_hide_the_other_rows()
     {
         const string poisonSubjectMarker = "[[POISON-ROW]]";
@@ -179,13 +228,15 @@ public sealed class InboundQueueDispatcherTests
     // Harness
     // ------------------------------------------------------------------
 
-    private static async Task RunOnePassAsync(string? poisonSubjectMarker = null)
+    private static async Task RunOnePassAsync(string? poisonSubjectMarker = null, InboundAuthenticationOptions? inboundAuthenticationOptions = null)
     {
         var services = new ServiceCollection();
 
         services.AddDbContext<AppDbContext>(options => options.UseNpgsql(GetConnectionString()));
         services.AddSingleton<IMailStorage>(new FileSystemMailStorage(
             System.IO.Path.Combine(System.IO.Path.GetTempPath(), "miautrix-inbound-dispatch-tests", Guid.NewGuid().ToString("N"))));
+        services.AddSingleton<IMimeMessageParser, MimeKitMimeMessageParser>();
+        services.AddScoped<IMessageUidAllocator, MessageUidAllocator>();
         services.AddSingleton<IAntiMalwareScanner, ClamAvScanner>();
         services.AddSingleton(new AntiMalwareOptions("/run/clamav/this-socket-does-not-exist.ctl", Required: false, ScanTimeoutSeconds: 1));
 
@@ -199,12 +250,14 @@ public sealed class InboundQueueDispatcherTests
         }
 
         services.AddScoped<IQuarantineService, QuarantineService>();
+        if (inboundAuthenticationOptions is not null) services.AddSingleton(inboundAuthenticationOptions);
 
         await using var provider = services.BuildServiceProvider();
 
         var dispatcher = new InboundQueueDispatcher(
             provider.GetRequiredService<IServiceScopeFactory>(),
-            NullLogger<InboundQueueDispatcher>.Instance);
+            NullLogger<InboundQueueDispatcher>.Instance,
+            inboundAuthenticationOptions);
 
         await dispatcher.ProcessPendingMessagesAsync(CancellationToken.None);
     }
@@ -294,6 +347,13 @@ public sealed class InboundQueueDispatcherTests
         await context.SaveChangesAsync();
 
         return id;
+    }
+
+    private static async Task SeedFolderAsync(Guid tenantId, Guid mailboxId, string name, string role)
+    {
+        await using var context = CreateContext();
+        context.Folders.Add(new Folder { Id = Guid.NewGuid(), TenantId = tenantId, MailboxId = mailboxId, Name = name, Role = role, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow });
+        await context.SaveChangesAsync();
     }
 
     private static async Task CleanupAsync(Guid tenantId)
