@@ -7,8 +7,7 @@ namespace Miautrix.Mail.UnitTests.Transport;
 /// Existing deployments have no OUTBOUND_EHLO_NAME; the Worker must still start by falling back
 /// to MIAUTRIX_HOSTNAME, while an explicit invalid value still fails at boot.
 /// </summary>
-[Collection(nameof(DirectSmtpOptionsEnvironmentTests))]
-[CollectionDefinition(nameof(DirectSmtpOptionsEnvironmentTests), DisableParallelization = true)]
+[Collection("ProcessEnvironment")]
 public sealed class DirectSmtpOptionsEnvironmentTests
 {
     [Fact]

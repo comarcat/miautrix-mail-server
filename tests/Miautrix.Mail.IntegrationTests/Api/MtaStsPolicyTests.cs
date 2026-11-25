@@ -14,8 +14,7 @@ public sealed class MtaStsPolicyTests : IClassFixture<WebApplicationFactory<Miau
     private readonly WebApplicationFactory<Miautrix.Mail.Web.Program> _factory;
     public MtaStsPolicyTests(WebApplicationFactory<Miautrix.Mail.Web.Program> factory)
     {
-        Environment.SetEnvironmentVariable("MIAUTRIX_PUBLIC_SMTP_HOST", "smtp.mailhost.test");
-        _factory = factory;
+        _factory = factory.WithPublicMailHosts();
     }
 
     [Theory]

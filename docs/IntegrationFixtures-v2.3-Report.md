@@ -32,3 +32,19 @@ The other two `CalendarInvitationEmailTests` cases intentionally do not require 
 ## Fixture/database notes
 
 `IsolatedPostgresFixture` creates migrated databases named `miautrix_test_fixtures_<random>` and drops them after the class finishes. The UID allocator test fixture now uses the same permitted disposable-database namespace instead of `uidtest_*`. All external connection values were loaded into the test process only; no production database name was used.
+
+## Follow-up: process environment and parallel execution
+
+The flaky CLI helper changed `MIAUTRIX_STORAGE_DIR` process-wide while unrelated integration tests were using the web host's mail storage. The CLI now accepts a programmatic storage-directory override; the test passes a unique path without touching environment variables. The CLI registrar owns its generated service providers and disposes them before the helper attempts cleanup; cleanup retries transient file locks and never fails the test.
+
+The other IntegrationTests environment writes were in `AutodiscoveryContractTests`, `MtaStsPolicyTests`, and `MobileConfigTests`. These tests now set the public mail hosts through isolated in-memory configuration on each `WebApplicationFactory`. `rg SetEnvironmentVariable tests/Miautrix.Mail.IntegrationTests` returns no matches. The remaining environment-mutating tests are in the separate UnitTests assembly; all three classes share the `ProcessEnvironment` collection, which disables parallel execution for them.
+
+Five consecutive full IntegrationTests runs used separate fresh, fully migrated throwaway databases. Each passed with all 149 tests and no skips:
+
+```text
+Passed!  - Failed:     0, Passed:   149, Skipped:     0, Total:   149, Duration: 13 s - Miautrix.Mail.IntegrationTests.dll (net10.0)
+Passed!  - Failed:     0, Passed:   149, Skipped:     0, Total:   149, Duration: 15 s - Miautrix.Mail.IntegrationTests.dll (net10.0)
+Passed!  - Failed:     0, Passed:   149, Skipped:     0, Total:   149, Duration: 19 s - Miautrix.Mail.IntegrationTests.dll (net10.0)
+Passed!  - Failed:     0, Passed:   149, Skipped:     0, Total:   149, Duration: 19 s - Miautrix.Mail.IntegrationTests.dll (net10.0)
+Passed!  - Failed:     0, Passed:   149, Skipped:     0, Total:   149, Duration: 15 s - Miautrix.Mail.IntegrationTests.dll (net10.0)
+```

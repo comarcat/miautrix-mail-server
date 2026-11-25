@@ -2,6 +2,7 @@ using Miautrix.Mail.Application.Transport;
 
 namespace Miautrix.Mail.UnitTests.Transport;
 
+[Collection("ProcessEnvironment")]
 public sealed class InboundAuthenticationOptionsTests
 {
     [Fact]

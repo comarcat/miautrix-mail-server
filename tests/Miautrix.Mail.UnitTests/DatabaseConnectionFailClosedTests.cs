@@ -4,6 +4,7 @@ using Xunit;
 
 namespace Miautrix.Mail.UnitTests;
 
+[Collection("ProcessEnvironment")]
 public sealed class DatabaseConnectionFailClosedTests
 {
     [Fact]

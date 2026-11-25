@@ -14,9 +14,7 @@ public sealed class MobileConfigTests : IClassFixture<WebApplicationFactory<Miau
     private readonly WebApplicationFactory<Miautrix.Mail.Web.Program> _factory;
     public MobileConfigTests(WebApplicationFactory<Miautrix.Mail.Web.Program> factory)
     {
-        Environment.SetEnvironmentVariable("MIAUTRIX_PUBLIC_IMAP_HOST", "imap.mailhost.test");
-        Environment.SetEnvironmentVariable("MIAUTRIX_PUBLIC_SMTP_HOST", "smtp.mailhost.test");
-        _factory = factory;
+        _factory = factory.WithPublicMailHosts();
     }
 
     [Fact]
