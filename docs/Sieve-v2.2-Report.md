@@ -12,7 +12,7 @@ Delivery supports folder routing (including create), flags, discard, copy, redir
 |---|---|---|
 | 5228 core | `require`, conditional control, keep/discard/redirect, header/address/envelope/exists/size/boolean tests, comparators, match types, address parts, lists, comments and `text:` | Implemented in compiler/interpreter; extension requirements are checked at compile time. |
 | 5229 | `body` | Not implemented; optional and deferred. |
-| 5230 | vacation tags, suppression, null envelope sender, response headers and dedupe | Implemented; `:mime` handling is not complete. |
+| 5230 | vacation tags, suppression, null envelope sender, response headers and dedupe | Implemented, including `:mime` vacation content. |
 | 5232 | set/add/remove/hasflag and flags on keep/fileinto | Implemented for delivery storage. |
 | 5429 | reject / ereject with DSN | Implemented after acceptance; null envelope senders are not sent a DSN. |
 | 3894 | `:copy` | Implemented for fileinto and redirect queueing. |
@@ -36,12 +36,12 @@ Migration `V22_Sieve_Scripts` creates the vacation dedupe table and active-scrip
 - Delivery integration coverage exercises routing, create, discard, flags, redirect guard, reject, vacation dedupe/suppression, runtime fallback and submission bypass.
 - Webmail Vitest: 20 passed; webmail production build passed.
 - Build: `dotnet build Miautrix.Mail.sln -warnaserror -m:1` passed with zero warnings.
-- Unit, Security and Protocol suites: 164, 7 and 39 passed.
-- Focused Sieve integration run: 2 passed; migration and API throwaway-database tests passed in earlier runs.
+- Unit, Security and Protocol suites: 167, 7 and 39 passed.
+- Focused Sieve delivery integration: 1 passed after adding MIME vacation coverage; dispatcher delivery integration: 1 passed. Migration and API throwaway-database tests passed in earlier runs.
 - Full IntegrationTests run: 100 passed, 14 failed. The repository baseline documents 16 known pre-existing failures; this run stayed within that count.
 - Common targeted IntegrationTests filter plus Sieve cases: 37 passed, 1 failed because `Sender_permission_migration_is_repeatable_on_dev_database` explicitly refuses a throwaway database; shared dev DB migration was not run.
 - Webmail Vitest: 20 passed; webmail production build passed.
 
 ## Deferred
 
-RFC 5173 body tests and complete vacation `:mime` serialization remain deferred. The targeted sender-migration idempotency test requires the specifically named dev database and therefore was not run against a throwaway database.
+RFC 5173 body tests remain deferred. The targeted sender-migration idempotency test requires the specifically named dev database and therefore was not run against a throwaway database.
