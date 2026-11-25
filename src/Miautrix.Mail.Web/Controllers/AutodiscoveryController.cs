@@ -1,4 +1,3 @@
-using System.Net;
 using System.Text;
 using System.Xml;
 using System.Xml.Linq;
@@ -85,12 +84,58 @@ public sealed class AutodiscoveryController(AppDbContext db, IConfiguration conf
         if (email is null) return NotFound();
         var domain = EmailDomain(email); if (domain is null) return NotFound();
         var imap = PublicHost("IMAP"); var smtp = PublicHost("SMTP");
-        var payload = $"<?xml version=\"1.0\" encoding=\"UTF-8\"?><plist version=\"1.0\"><dict><key>PayloadContent</key><array><dict><key>EmailAddress</key><string>{WebUtility.HtmlEncode(email)}</string><key>IncomingMailServerHostName</key><string>{imap}</string><key>IncomingMailServerPortNumber</key><integer>993</integer><key>IncomingMailServerUseSSL</key><true/><key>IncomingMailServerUsername</key><string>{WebUtility.HtmlEncode(email)}</string><key>OutgoingMailServerHostName</key><string>{smtp}</string><key>OutgoingMailServerPortNumber</key><integer>465</integer><key>OutgoingMailServerUseSSL</key><true/><key>OutgoingMailServerUsername</key><string>{WebUtility.HtmlEncode(email)}</string></dict></array><key>PayloadType</key><string>Configuration</string></dict></plist>";
-        return File(Encoding.UTF8.GetBytes(payload), "application/x-apple-aspen-config", $"{domain}.mobileconfig");
+        var payloadId = DeterministicPayloadGuid(userId, "mail");
+        var profileId = DeterministicPayloadGuid(userId, "configuration");
+        var profile = new XDocument(
+            new XDeclaration("1.0", "UTF-8", null),
+            new XDocumentType("plist", "-//Apple//DTD PLIST 1.0//EN", "http://www.apple.com/DTDs/PropertyList-1.0.dtd", null),
+            new XElement("plist", new XAttribute("version", "1.0"),
+                new XElement("dict",
+                    PlistKey("PayloadContent"), new XElement("array",
+                        new XElement("dict",
+                            PlistKey("EmailAccountType"), PlistString("EmailTypeIMAP"),
+                            PlistKey("EmailAddress"), PlistString(email),
+                            PlistKey("EmailAccountDescription"), PlistString($"Miautrix Mail - {domain}"),
+                            PlistKey("IncomingMailServerAuthentication"), PlistString("EmailAuthPassword"),
+                            PlistKey("IncomingMailServerHostName"), PlistString(imap),
+                            PlistKey("IncomingMailServerPortNumber"), PlistInteger(993),
+                            PlistKey("IncomingMailServerUseSSL"), new XElement("true"),
+                            PlistKey("IncomingMailServerUsername"), PlistString(email),
+                            PlistKey("OutgoingMailServerAuthentication"), PlistString("EmailAuthPassword"),
+                            PlistKey("OutgoingMailServerHostName"), PlistString(smtp),
+                            PlistKey("OutgoingMailServerPortNumber"), PlistInteger(465),
+                            PlistKey("OutgoingMailServerUseSSL"), new XElement("true"),
+                            PlistKey("OutgoingMailServerUsername"), PlistString(email),
+                            PlistKey("OutgoingPasswordSameAsIncomingPassword"), new XElement("true"),
+                            PlistKey("PayloadDisplayName"), PlistString($"Mail account for {email}"),
+                            PlistKey("PayloadIdentifier"), PlistString($"org.miautrix.mail.account.{userId:N}"),
+                            PlistKey("PayloadType"), PlistString("com.apple.mail.managed"),
+                            PlistKey("PayloadUUID"), PlistString(payloadId.ToString().ToUpperInvariant()),
+                            PlistKey("PayloadVersion"), PlistInteger(1))),
+                    PlistKey("PayloadDisplayName"), PlistString($"Miautrix Mail - {domain}"),
+                    PlistKey("PayloadIdentifier"), PlistString($"org.miautrix.mail.configuration.{userId:N}"),
+                    PlistKey("PayloadUUID"), PlistString(profileId.ToString().ToUpperInvariant()),
+                    PlistKey("PayloadVersion"), PlistInteger(1),
+                    PlistKey("PayloadType"), PlistString("Configuration"))));
+        using var output = new MemoryStream();
+        using (var writer = XmlWriter.Create(output, new XmlWriterSettings { Encoding = new UTF8Encoding(false), OmitXmlDeclaration = false, Indent = false }))
+            profile.Save(writer);
+        return File(output.ToArray(), "application/x-apple-aspen-config", $"{domain}.mobileconfig");
     }
 
     private string PublicHost(string protocol) => configuration[$"MIAUTRIX_PUBLIC_{protocol}_HOST"] ?? Environment.GetEnvironmentVariable("MIAUTRIX_HOSTNAME") ?? throw new InvalidOperationException("MIAUTRIX_HOSTNAME is required for client discovery.");
     private static string? EmailDomain(string? email) { var at = email?.LastIndexOf('@') ?? -1; return at <= 0 || at == email!.Length - 1 ? null : email[(at + 1)..].Trim().ToLowerInvariant(); }
+    private static XElement PlistKey(string key) => new("key", key);
+    private static XElement PlistString(string value) => new("string", value);
+    private static XElement PlistInteger(int value) => new("integer", value);
+    private static Guid DeterministicPayloadGuid(Guid userId, string purpose)
+    {
+        var bytes = System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes($"miautrix-mail:{userId:N}:{purpose}"));
+        var guid = bytes[..16];
+        guid[6] = (byte)((guid[6] & 0x0F) | 0x50);
+        guid[8] = (byte)((guid[8] & 0x3F) | 0x80);
+        return new Guid(guid);
+    }
     private static XElement Server(string type, string name, string host, int port, string socket, string username, string auth) => new(type, new XAttribute("type", name), new XElement("hostname", host), new XElement("port", port), new XElement("socketType", socket), new XElement("username", username), new XElement("authentication", auth));
     private static XElement Protocol(XNamespace ns, string type, string host, int port) => new(ns + "Protocol", new XElement(ns + "Type", type), new XElement(ns + "Server", host), new XElement(ns + "Port", port), new XElement(ns + "SSL", "on"), new XElement(ns + "SPA", "off"), new XElement(ns + "AuthRequired", "on"));
 }
