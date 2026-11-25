@@ -35,8 +35,13 @@ Migration `V22_Sieve_Scripts` creates the vacation dedupe table and active-scrip
 - Sieve parser/interpreter unit tests and migration/API/delivery integration tests were added in their respective commits; migration coverage uses a throwaway PostgreSQL database.
 - Delivery integration coverage exercises routing, create, discard, flags, redirect guard, reject, vacation dedupe/suppression, runtime fallback and submission bypass.
 - Webmail Vitest: 20 passed; webmail production build passed.
-- Full .NET suite evidence is pending the final verification run.
+- Build: `dotnet build Miautrix.Mail.sln -warnaserror -m:1` passed with zero warnings.
+- Unit, Security and Protocol suites: 164, 7 and 39 passed.
+- Focused Sieve integration run: 2 passed; migration and API throwaway-database tests passed in earlier runs.
+- Full IntegrationTests run: 100 passed, 14 failed. The repository baseline documents 16 known pre-existing failures; this run stayed within that count.
+- Common targeted IntegrationTests filter plus Sieve cases: 37 passed, 1 failed because `Sender_permission_migration_is_repeatable_on_dev_database` explicitly refuses a throwaway database; shared dev DB migration was not run.
+- Webmail Vitest: 20 passed; webmail production build passed.
 
 ## Deferred
 
-RFC 5173 body tests and complete vacation `:mime` serialization remain deferred. The report should be updated with final full-suite counts before release.
+RFC 5173 body tests and complete vacation `:mime` serialization remain deferred. The targeted sender-migration idempotency test requires the specifically named dev database and therefore was not run against a throwaway database.
