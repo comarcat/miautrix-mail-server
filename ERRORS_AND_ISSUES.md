@@ -1015,7 +1015,7 @@ The root `deploy.ps1` previously included a hardcoded production database passwo
 - **Lost manual section:** TROUBLESHOOTING §15 (Send As), written for v2.0.0, had been placed below the appendix marker, so the bundle generator removed it. It is restored above the marker, together with the new §16–§18.
 
 
-### 13.18 Known, pre-existing: 16 (12 since v2.2) integration tests fail on the shared dev test environment (2026-11-24, Low — test debt)
+### 13.18 RESOLVED in v2.3 — previously: 16 (12 since v2.2) integration tests fail on the shared dev test environment (2026-11-24, Low — test debt)
 
 - **Scope:** the same 16 tests fail on v2.0.0 (`76c8e7c`, 84/100 pass) and on `release/v2.1` (94/110 pass). v2.1 introduces no new integration failures; its 10 new integration tests pass.
 - **Causes (fixtures, not product code):**
@@ -1057,4 +1057,19 @@ The root `deploy.ps1` previously included a hardcoded production database passwo
 - **Migrations:** two migrations weren't idempotent.
 - **Session enforcement** only applied under `/api`; it now applies to every controller endpoint.
 - **Merge fallout:** the `.mobileconfig` endpoint still read identity headers after the auth change. Sieve and inbound auth now share one authserv-id.
+- **Resolved (v2.3, 2026-11-25):**
+  - Root causes:
+    - `BackupRestoreTests`/`LicensingQuotaTests` used EF in-memory (against "never mock the database"), so they now use an isolated real PostgreSQL fixture;
+    - `CliTests` had no isolated storage directory;
+    - the calendar MIME checks didn't unfold folded headers.
+  - **No product bugs.**
+  - The follow-up flakiness came from tests mutating process-wide `MIAUTRIX_STORAGE_DIR` while other tests ran in parallel. It was removed, and the CLI now disposes its service providers.
+  - Integration is 149/149 on fresh databases over 9 consecutive coordinator runs.
+
+### 13.21 Known gap: IMAP4rev2 not advertised (v2.3, 2026-11-25, Low — compliance)
+
+- The RFC 9051 audit (`docs/IMAP4rev2-v2.3-Audit.md`): 229 rows, 80 Implemented, 120 Partial, 29 N/A, **0 Missing**. 89 of the Partial rows are applicable MUST rows.
+- They are mostly unproven edge cases (state × command matrix, SEARCH/LIST option matrices, SASL edge cases, response-code placement), not observed defects.
+- **Owner decision:** ship v2.3 without advertising IMAP4rev2; close the rows in v2.4, then flip `CapabilityLine`.
+- **Impact:** none for current clients. Thunderbird, Outlook and iOS use IMAP4rev1 plus extensions.
 

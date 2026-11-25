@@ -2,6 +2,38 @@
 
 All notable changes to this project are documented here.
 
+## [2.3.0] - 2026-11-25
+
+No migrations and no `.env` changes; deploy without `-RunMigrations`. Handoff: `docs/HANDOFF-v2.3.md`.
+
+### Added
+- `scripts/smoke-test.ps1` checks a deployed server directly by LAN IP:
+  - ports, TLS and certificate expiry;
+  - the SMTP AUTH-before-TLS policy and IMAP capabilities;
+  - that the API rejects anonymous calls (401);
+  - webmail/admin/HSTS, autoconfig and MTA-STS;
+  - optional logged-in checks and a test send.
+
+  It is read-only by default and masks secrets. Exit codes: 0 pass, 1 fail, 2 bad parameters. Covered by Pester tests against local fake servers.
+- **IMAP:** the `ID` command (RFC 2971), additive `ENABLE`, and `OLDNAME` for normalized CREATE.
+- **RFC 9051 paragraph-level audit:** `docs/IMAP4rev2-v2.3-Audit.md`.
+
+### Fixed
+- **IMAP:**
+  - BINARY is limited to eligible MIME leaves;
+  - mailbox updates are emitted at command boundaries, and a session's own STORE is not echoed as an unsolicited FETCH;
+  - stricter argument handling.
+- **Integration suite:** the 12 long-standing failures are fixed, with no product bugs found.
+  - Tests now use real PostgreSQL instead of EF in-memory.
+  - CLI tests use an isolated storage directory, and the CLI disposes its service providers.
+  - Folded MIME headers are unfolded before asserting.
+  - Parallel tests no longer change process-wide environment variables.
+  - The search-latency test warms up before timing.
+  - Result: 149/149 on fresh databases.
+
+### Known gaps (recommended for v2.4)
+- IMAP4rev2 is still not advertised. The RFC 9051 audit (`docs/IMAP4rev2-v2.3-Audit.md`) has 0 Missing rows and 89 applicable MUST rows marked Partial, mostly edge cases without dedicated tests. Closing them is recommended for v2.4.
+
 ## [2.2.1] - 2026-11-25
 
 ### Changed

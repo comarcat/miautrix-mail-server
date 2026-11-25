@@ -103,6 +103,9 @@ Miautrix Mail Server
 | V2.2-WP4 | Sieve on delivery plus webmail Filters / Out of office | ✅ Deployed 2026-11-25 |
 | V2.2-DISC | Autodiscovery, MTA-STS/TLS-RPT hosting | ✅ Deployed 2026-11-25 |
 | V2.2-AUD | Audit triage, MIME hardening, outbound DANE (off by default) | ✅ Deployed 2026-11-25 |
+| V2.3-TEST | Fix the 12 pre-existing integration failures, plus suite stability | ✅ Released v2.3 |
+| V2.3-SMOKE | `scripts/smoke-test.ps1` direct-IP deployed-server probe | ✅ Released v2.3 |
+| V2.3-IMAP | IMAP fixes plus the RFC 9051 audit; IMAP4rev2 advertisement | ⚠️ Partial: 89 MUST rows Partial; advertisement moved to v2.4 (owner decision) |
 | V2.1-WP5 | Remove the JMAP claim (empty project); revisit later | ⏳ Planned for v2.1 (owner decision 2026-11-24) |
 | WEBMAIL-001 | IMAP-appended drafts open empty in webmail | ✅ Merged (`9457ec5`) |
 | V2-10 | Windows server package for real-world testing | 🟡 Built 2026-11-24: `publish/miautrix-mail-win-x64-2.0.0-6086f60.zip` (sha256 ef119ff0…). Windows services, Kestrel HTTPS with the PEM certificate (HTTP on loopback only), registry environment with a restricted ACL, efbundle to the latest schema, secure `users bootstrap-admin`, verify/rollback, `docs/WINDOWS-INSTALL.md` checklist. Pending: the external tester's real-world install and feedback. |
@@ -168,6 +171,7 @@ Each work package carries strict Acceptance Criteria under the EARS standard (*W
 
 | Date | Change | Verification |
 |---|---|---|
+| 2026-11-25 | **v2.3 released** (`release/v2.3`, `main`). Integration suite fully green; new smoke-test script; IMAP fixes and RFC 9051 audit. Owner decision: ship without advertising IMAP4rev2; the 89 Partial MUST rows are recommended for v2.4 (ERRORS §13.21). | Build 0 warnings; unit 243, security 7, protocol 44, integration 149/149 (9 runs, fresh DBs), webmail 24, admin 23, Pester 19/19. No migrations. |
 | 2026-11-25 | **v2.2 merged on `release/v2.2` (not yet deployed).** Owner decision: the critical API-authentication fix ships in v2.2, with no separate hotfix. Five parallel packages: inbound SPF/DKIM/DMARC, Sieve, autodiscovery/MTA-STS, audit/DANE, and IMAP4rev2 (still unadvertised). Coordinator review blocked 11 defects before merge (ERRORS §13.20). | Build 0/0; unit 242, security 7, protocol 44, webmail 24, admin 23; integration 137/149 (12 pre-existing) on a fresh migrated DB, run twice; model snapshot clean. Three idempotent migrations. |
 | 2026-11-24 | **v2.1 work merged on `release/v2.1` (not yet deployed).**
 - **Owner decisions:** the SMTP production bugs ship in v2.1 with no separate hotfix; JMAP is removed for now; Sieve runs on delivery without ManageSieve; outbound gets per-domain direct MX delivery and Cloudflare stays the default.

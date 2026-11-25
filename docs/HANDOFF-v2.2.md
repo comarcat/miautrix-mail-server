@@ -1,7 +1,7 @@
 # Handoff — Miautrix Mail Server v2.2
 
 **Status:** v2.2.0 deployed to production 2026-11-25 (release `v2.2.0-590feb4`). v2.2.1 (logging noise only) deploys without `-RunMigrations`.
-Previous handoff: `docs/HANDOFF-v2.1.md`.
+Previous handoff: `docs/HANDOFF-v2.1.md`. **Next: `docs/HANDOFF-v2.3.md`.**
 
 ## What is in v2.2
 

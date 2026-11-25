@@ -7,7 +7,7 @@ Self-hosted, multi-tenant mail platform designed as a modular monolith in .NET 1
 - **Architecture Diagram:** [`architecture.html`](architecture.html) (interactive diagram with showcase quality profile)
 - **Architecture Blueprint:** [`blueprints/miautrix-mail-server/blueprint.md`](blueprints/miautrix-mail-server/blueprint.md)
 - **Charter & Plan:** [`PMI_Project_Charter_and_Plan.md`](PMI_Project_Charter_and_Plan.md) — Version 1.0 complete (2026-10-03); **Version 2.0.0 released 2026-11-24** (M5 closed); **v2.1 deployed 2026-11-25**; **v2.2 deployed 2026-11-25**
-- **Handoff (v2.2):** [`docs/HANDOFF-v2.2.md`](docs/HANDOFF-v2.2.md) — **start here to catch up**: deploy (with `-RunMigrations`) and test checklist. Previous: [`docs/HANDOFF-v2.1.md`](docs/HANDOFF-v2.1.md), [`docs/HANDOFF-v2.0.0-release.md`](docs/HANDOFF-v2.0.0-release.md). Full history: [`docs/HANDOFF-v2.0.md`](docs/HANDOFF-v2.0.md)
+- **Handoff (v2.3):** [`docs/HANDOFF-v2.3.md`](docs/HANDOFF-v2.3.md) — **start here to catch up**: deploy, smoke test, and what's recommended for v2.4. Previous: [`docs/HANDOFF-v2.2.md`](docs/HANDOFF-v2.2.md), [`docs/HANDOFF-v2.1.md`](docs/HANDOFF-v2.1.md), [`docs/HANDOFF-v2.0.0-release.md`](docs/HANDOFF-v2.0.0-release.md). Full history: [`docs/HANDOFF-v2.0.md`](docs/HANDOFF-v2.0.md)
 - **Protocols (v2.1):** compliance audit [`docs/v2.1-Protocol-Compliance-Audit.md`](docs/v2.1-Protocol-Compliance-Audit.md); SMTP [`docs/SMTP-v2.1-Report.md`](docs/SMTP-v2.1-Report.md); outbound/direct MX [`docs/Outbound-v2.1-Report.md`](docs/Outbound-v2.1-Report.md); IMAP phase 2 [`docs/IMAP-Phase2-Report.md`](docs/IMAP-Phase2-Report.md)
 - **IMAP:** [`docs/IMAP.md`](docs/IMAP.md) — capabilities, `Shared/` namespace, client setup; Send As model: [`docs/SMTP-SendAs-Report.md`](docs/SMTP-SendAs-Report.md)
 - **Deployment:** [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — versioned deploy, storage preflight, rollback and cleanup
@@ -31,7 +31,13 @@ Self-hosted, multi-tenant mail platform designed as a modular monolith in .NET 1
 - **MTA-STS/TLS-RPT hosting;**
 - **opt-in outbound DANE.**
 
-IMAP4rev2 is still not advertised.
+
+**Version 2.3** (2026-11-25):
+- fixes the remaining integration tests (149/149);
+- adds `scripts/smoke-test.ps1` for checking a deployed server by LAN IP;
+- improves IMAP and adds a full RFC 9051 audit.
+
+IMAP4rev2 is still not advertised. The RFC 9051 audit (`docs/IMAP4rev2-v2.3-Audit.md`) has 0 Missing rows and 89 applicable MUST rows marked Partial, mostly edge cases without dedicated tests. Closing them is recommended for v2.4.
 
 Build and run with the .NET 10 SDK (`global.json` pins 10.0.403). The `messages reparse` command can backfill stored messages after deployment. Without `--user`, it trusts the local host operator, matching the existing CLI local-access model.
 

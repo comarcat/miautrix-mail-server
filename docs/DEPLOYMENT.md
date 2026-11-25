@@ -56,6 +56,13 @@ Cleanup runs only after a successful verification marker. `cleanup --keep 2` ret
 - **After deploy:** run `messages reparse --tenant all` (dry run first) with `.env` loaded in a subshell; see `docs/HANDOFF-v2.1.md` and TROUBLESHOOTING §18.
 - **Before switching a domain to `direct`:** outbound port 25 reachable, PTR matches the EHLO name, SPF includes the server IP, DKIM TXT published (TROUBLESHOOTING §17).
 
+## v2.3 upgrade notes
+
+- **No migrations and no `.env` changes;** deploy without `-RunMigrations`.
+- **After every deploy,** run the smoke test from a workstation on the server's network:
+  `./scripts/smoke-test.ps1 -ServerIp <server-ip> -MailHost <mail-hostname> [-Domain <mail-domain>] [-Credential (Get-Credential)]`.
+  Exit code `0` means every check passed (`docs/SmokeTest-v2.3-Report.md`).
+
 ## v2.2 upgrade notes
 
 - **Migrations:** `V22_Autodiscovery_MtaSts`, `V22_Sieve_Scripts` and `V22_ApiAuth_Sessions`. Deploy **with `-RunMigrations`**. They are forward-only and idempotent, and add only tables and columns.
