@@ -60,6 +60,7 @@ public static class ImapSearchParser
                 var name = token.Text.ToUpperInvariant();
                 if (name == "NOT") { children.Add(new ImapSearchNot(ReadCriterion())); continue; }
                 if (name == "OR") { children.Add(new ImapSearchOr(ReadCriterion(), ReadCriterion())); continue; }
+                if (name == "$") { children.Add(new ImapSearchKey(name, Array.Empty<string>())); continue; }
                 children.Add(ReadKey(name));
             }
             if (children.Count == 0) throw new FormatException("Empty SEARCH group.");
@@ -80,13 +81,14 @@ public static class ImapSearchParser
             var name = tokens[_position++].Text.ToUpperInvariant();
             if (name == "NOT") return new ImapSearchNot(ReadCriterion());
             if (name == "OR") return new ImapSearchOr(ReadCriterion(), ReadCriterion());
+            if (name == "$") return new ImapSearchKey(name, Array.Empty<string>());
             return ReadKey(name);
         }
 
         private ImapSearchNode ReadKey(string name)
         {
             if (ZeroArgumentKeys.Contains(name)) return new ImapSearchKey(name, Array.Empty<string>());
-            if (SequenceSet.TryParse(name, out _)) return new ImapSearchKey(name, Array.Empty<string>());
+                if (SequenceSet.TryParse(name, out _) || name.Contains('$')) return new ImapSearchKey(name, Array.Empty<string>());
             if (!OneArgumentKeys.Contains(name)) throw new FormatException($"Unknown SEARCH key: {name}");
             var count = name == "HEADER" ? 2 : 1;
             if (_position + count > tokens.Count) throw new FormatException($"SEARCH key {name} requires {count} argument(s).");

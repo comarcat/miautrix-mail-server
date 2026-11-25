@@ -175,7 +175,7 @@ public sealed class ImapListenerService : BackgroundService
                 }
                 collected = await ImapCommandCollector.ReadAsync(connectionReader,
                     async (_, token) => await WriteAsciiAsync(ssl, "+ Ready for literal data\r\n", token),
-                    maxLiteral, ct);
+                    maxLiteral, ct, literalMinusEnabled: session.IsImap4Rev2Enabled);
                 parsed = ImapCommandTokenizer.Parse(collected.Text, collected.Literals);
                 result = await session.ExecuteCommandAsync(parsed, ct);
             }

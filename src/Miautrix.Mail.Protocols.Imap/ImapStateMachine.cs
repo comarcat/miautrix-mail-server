@@ -10,7 +10,7 @@ public static class ImapStateMachine
         var selected = authenticated || command is "CHECK" or "CLOSE" or "UNSELECT" or "EXPUNGE" or "SEARCH" or "FETCH" or "STORE" or "COPY" or "MOVE" or "IDLE" or "UID";
         return state switch
         {
-            ImapState.NotAuthenticated => command is "LOGIN" or "AUTHENTICATE",
+            ImapState.NotAuthenticated => command is "LOGIN" or "AUTHENTICATE" or "STARTTLS",
             ImapState.Authenticated => authenticated,
             ImapState.Selected => selected,
             _ => false

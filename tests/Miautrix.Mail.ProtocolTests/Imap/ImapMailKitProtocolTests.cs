@@ -179,6 +179,7 @@ public sealed class ImapMailKitProtocolTests(ImapMailKitListenerFixture fixture)
         var mailbox = await fixture.CreateMailboxAsync();
         using var client = await fixture.ConnectAsync(mailbox.Address);
         Assert.Contains("IMAP4rev1", client.Capabilities.ToString());
+        Assert.False(client.Capabilities.HasFlag(ImapCapabilities.IMAP4rev2));
         await client.DisconnectAsync(true);
         using var bad = new ImapClient { ServerCertificateValidationCallback = (_, _, _, _) => true };
         await bad.ConnectAsync("127.0.0.1", fixture.Port, SecureSocketOptions.SslOnConnect);

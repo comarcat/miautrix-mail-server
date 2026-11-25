@@ -20,7 +20,8 @@ public static class ImapCommandCollector
         ImapConnectionReader reader,
         Func<bool, CancellationToken, Task> sendContinuation,
         int maxLiteralBytes,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool literalMinusEnabled = false)
     {
         var text = new StringBuilder();
         var literals = new List<byte[]>();
@@ -37,9 +38,10 @@ public static class ImapCommandCollector
             text.Append(Encoding.UTF8.GetString(line.AsSpan(0, marker.Value.Start)));
             var literalIndex = literals.Count;
             text.Append('\u0001').Append(literalIndex).Append('\u0002');
+            var nonSynchronizing = marker.Value.NonSynchronizing || literalMinusEnabled && marker.Value.Length <= 4096;
             if (marker.Value.Length > maxLiteralBytes)
-                throw new ImapLiteralTooLargeException(ExtractTag(text.ToString()), marker.Value.NonSynchronizing, ExtractCommandName(text.ToString()));
-            if (!marker.Value.NonSynchronizing) await sendContinuation(true, cancellationToken);
+                throw new ImapLiteralTooLargeException(ExtractTag(text.ToString()), nonSynchronizing, ExtractCommandName(text.ToString()));
+            if (!nonSynchronizing) await sendContinuation(true, cancellationToken);
             literals.Add(await reader.ReadLiteralAsync(marker.Value.Length, cancellationToken));
             line = await ReadLineAsync(reader, text, cancellationToken) ?? throw new EndOfStreamException("Command ended before literal continuation.");
             // Literal data is followed by command continuation text. Preserve that text and scan

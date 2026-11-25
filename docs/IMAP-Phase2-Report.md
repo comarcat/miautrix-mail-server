@@ -16,31 +16,31 @@ Columns match the Phase 1 report: Feature, RFC, Level, Status, Coverage/evidence
 |---|---|---:|---|---|---|
 | IMAP4rev1 behavior retained | 3501 | MUST | Implemented | Phase 1 regression matrix; Stage A regression suites green | Preserve rev1 defaults |
 | CAPABILITY advertises IMAP4rev2 | 9051 §6.1.1 | MUST | Missing/not advertised | CAPABILITY remains IMAP4rev1 only | Add only after every rev2 MUST is complete |
-| ENABLE IMAP4rev2 per-session mode | 9051 §6.1.1, §6.3.1 | MUST | Missing | No rev2 session switch or semantics matrix | Implement and test session-isolated switch |
-| AUTHENTICATE, LOGIN, UNAUTHENTICATED | 9051 §§6.2.2–6.2.3 | MUST/conditional | Partial | Rev1 PLAIN auth is covered; rev2 UNAUTHENTICATED response semantics not audited to completion | Audit response codes and authentication state rules |
-| STARTTLS handling | 9051 §6.2.1 | Conditional | Missing/not advertised | Deployment uses implicit TLS; STARTTLS is absent | Keep unadvertised unless implemented |
-| SELECT and rev2 RECENT removal | 9051 §6.3.1 | MUST | Partial | Rev1 SELECT reports RECENT; rev2 per-session omission is not implemented | Switch response semantics after ENABLE IMAP4rev2 |
+| ENABLE IMAP4rev2 per-session mode | 9051 §6.1.1, §6.3.1 | MUST | Partial | Raw sessions verify ENABLED response and rev1/rev2 SEARCH, LIST, BINARY, LITERAL and RECENT separation; several rev2 features and complete response semantics remain unaudited | Complete remaining rev2 semantics and validate capability transition |
+| AUTHENTICATE, LOGIN, UNAUTHENTICATED | 9051 §§6.2.2–6.2.3 | MUST/conditional | Partial | Credentials are accepted only on the implicit-TLS listener; generic failures do not reveal which credential was wrong; no cleartext listener/LOGINDISABLED path exists | Audit all rev2 authentication-state and response requirements |
+| STARTTLS handling | 9051 §6.2.1 | Conditional | Partial | Listener is Implicit TLS; exact raw test verifies tagged BAD for STARTTLS on an already protected connection; no cleartext STARTTLS listener exists | Keep TLS-only deployment or implement a separately configured cleartext STARTTLS listener |
+| SELECT, NOOP, FETCH and rev2 RECENT removal | 9051 §6.3.1 | MUST | Partial | Per-session rev2 SELECT/NOOP omit RECENT and FETCH omits `\\Recent`; STATUS RECENT is rejected; SELECT emits CLOSED when replacing a different selection; other response details remain under audit | Complete response and no-RECENT coverage |
 | NAMESPACE | 2342, 9051 §6.3.10 | Extension | Implemented | Exact raw response; MailKit PersonalNamespaces/SharedNamespaces test | Preserve namespace contract |
 | IDLE | 2177, 9051 §6.3.13 | Extension | Implemented | Raw tests cover cross-session APPEND/STORE/EXPUNGE, DONE, timeout and revocation | Preserve polling and authorization refresh |
 | MOVE / UID MOVE | 6851 | Extension | Implemented | Raw tests cover shared/personal transfer, authorization, read-only, TRYCREATE, COPYUID and EXPUNGE; MailKit MoveToAsync | Preserve atomicity and UID allocation |
-| ESEARCH | 4731, 9051 §6.4.4 | MUST | Missing | SEARCH/UID SEARCH do not implement ESEARCH return data | Implement TAG, UID, MIN/MAX/ALL/COUNT/MODSEQ options and tests |
-| SEARCHRES | 5182, 9051 §6.4.4 | MUST | Missing | `$` saved result references are not implemented | Implement SAVE and saved-result state per session |
-| LIST-EXTENDED | 5258, 9051 §6.3.9 | MUST | Missing | LIST does not parse extended selection/return options | Implement and test selection and RETURN options |
-| LIST-STATUS | 5819, 9051 §6.3.9 | MUST | Missing | LIST STATUS return data not implemented | Implement status items in LIST responses |
-| STATUS=SIZE | 9051 §6.3.11 | MUST | Missing | STATUS accepts only MESSAGES, RECENT, UIDNEXT, UIDVALIDITY, UNSEEN | Add SIZE and exact aggregate size tests |
-| SPECIAL-USE in LIST-EXTENDED | 6154, 9051 §6.3.9 | MUST | Missing | Basic SPECIAL-USE attributes are listed, extended LIST option absent | Implement extended LIST use selection/return |
-| LITERAL- | 7888, 9051 §6.1.1 | MUST | Missing | LITERAL+ is supported; synchronizing LITERAL- negotiation/limits are absent | Implement framing and size constraints |
-| BINARY command/data items and response codes | 3516, 9051 §6.4.5 | MUST | Missing | FETCH BINARY/BINARY.SIZE and required conversion response codes absent | Implement MIME part octet decoding and response codes |
+| ESEARCH | 4731, 9051 §6.4.4 | MUST | Implemented | Raw rev1 SEARCH and rev2 ESEARCH tests cover TAG/UID, empty and populated sets, and MIN/MAX/ALL/COUNT/SAVE return options | Preserve per-session response semantics |
+| SEARCHRES | 5182, 9051 §6.4.4 | MUST | Implemented | Session-local saved result set; raw tests cover SEARCH/FETCH `$`, UID mode, and SAVE-only behavior | Audit other commands and keyword interactions |
+| LIST-EXTENDED | 5258, 9051 §6.3.9 | MUST | Implemented | Rev2 selection options and SUBSCRIBED/CHILDREN/SPECIAL-USE return options parsed; rev1 exact rejection covered | Expand selection-option edge-case coverage |
+| LIST-STATUS | 5819, 9051 §6.3.9 | MUST | Implemented | LIST STATUS emits LIST followed by STATUS for selectable folders; raw response tested | Preserve response ordering |
+| STATUS=SIZE | 9051 §6.3.11 | MUST | Implemented | Rev2 STATUS returns SIZE as aggregate message octets and DELETED count; rev1 rejects rev2-only items | Verify large mailbox size bounds |
+| SPECIAL-USE in LIST-EXTENDED | 6154, 9051 §6.3.9 | MUST | Implemented | RETURN (SPECIAL-USE) accepted; role attributes returned in LIST; raw test covers extended return form | Extend coverage to every special-use role |
+| LITERAL- | 7888, 9051 §6.1.1 | MUST | Implemented | Rev2 session accepts synchronizing syntax as non-synchronizing up to 4096 octets; rev1 still sends a continuation; existing LITERAL+ remains | Add exact 4096/4097-octet boundary cases |
+| BINARY command/data items and response codes | 3516, 9051 §6.4.5 | MUST | Partial | FETCH BINARY/BINARY.PEEK/BINARY.SIZE decode MIME sections; unknown CTE maps to UNKNOWN-CTE and formatter unit tests exercise conversion | Add exact raw UNKNOWN-CTE response and section/partial boundary cases |
 | `$`-prefixed keywords | 9051 §6.3.1, §6.4.6 | MUST | Missing | STORE accepts ordinary keywords; rev2 `$` keyword handling is not validated | Implement allowed keyword semantics and tests |
-| Rev2 response-code changes | 9051 §§7–9 | MUST | Partial | Rev1 response codes covered; no complete cross-command rev2 response-code audit | Compare every response against rev2 semantics |
-| LITERAL framing and octet counts | 9051 §§4, 9 | MUST | Partial | Rev1 literal tests cover BODY and APPEND; rev2 LITERAL- behavior absent | Add rev2 literal boundary/continuation tests |
+| Rev2 response-code changes | 9051 §§7–9 | MUST | Partial | CLOSED on rev2 mailbox replacement and UNKNOWN-CTE for BINARY are implemented; no complete response-code audit | Compare every response against rev2 semantics |
+| LITERAL framing and octet counts | 9051 §§4, 9 | MUST | Partial | Raw tests prove sync vs non-sync APPEND framing by session; LITERAL- threshold boundaries remain untested | Add rev2 literal boundary tests |
 | Shared mailbox authorization under new commands | 9051, project policy | MUST | Implemented for Stage A | MOVE tests exercise write checks on source and destination; IDLE rechecks access | Retain hidden-NO behavior |
 
-Focused audit count: **5 implemented (including Stage A), 4 partial, 12 missing/not advertised** across the 21 rows above. This is not a claim that the listed rows enumerate every paragraph-level RFC 9051 MUST; the missing count is a lower-bound audit of the mandatory areas reviewed here, and the version is not advertised.
+Focused audit count: **12 implemented (including Stage A), 7 partial, 2 missing/not advertised** across the 21 rows above. This is not a claim that the listed rows enumerate every paragraph-level RFC 9051 MUST; response-code, authentication, and keyword semantics still need a complete paragraph-level audit, so the version is not advertised.
 
 ## Gap analysis
 
-The implemented extensions are independently advertised and have protocol tests. Rev2 is not safe to advertise: several mandatory commands/options and response semantics are absent, and ENABLE cannot currently switch behavior on only one session. In particular, ESEARCH, SEARCHRES, LIST-EXTENDED, LIST-STATUS, STATUS=SIZE, extended SPECIAL-USE, LITERAL-, BINARY and rev2-specific RECENT/keyword/response behavior remain gaps. The aggregate RFC 9051 MUST set is therefore not complete; no percentage or implemented count is claimed from this focused audit.
+Stage A extensions are independently advertised and have protocol tests. The rev2 switch changes ESEARCH/SEARCHRES, LIST-EXTENDED, STATUS=SIZE, LITERAL-, BINARY and RECENT behavior per session. IMAP4rev2 remains unadvertised because `$`-prefixed keyword behavior, complete response-code/authentication auditing, BINARY UNKNOWN-CTE raw coverage, and LITERAL- boundary tests are incomplete; the deployment has only an implicit-TLS listener.
 
 ## Final CAPABILITY
 
@@ -52,7 +52,7 @@ The implemented extensions are independently advertised and have protocol tests.
 
 ## Test evidence
 
-After Stage A, `dotnet build Miautrix.Mail.sln -warnaserror -m:1` passed with 0 warnings and 0 errors; UnitTests passed 101/101, SecurityTests 7/7, ProtocolTests 29/29, and the sender authorization / UID allocator integration filter 10/10. Protocol tests run against the real TLS listener and dev test database. The external validation script now checks NAMESPACE using only environment-provided host/credentials; external clients have not been run against production.
+The expanded full suite was run twice after the latest implementation slice: each run passed build with 0 warnings/errors, UnitTests 122/122, SecurityTests 7/7, ProtocolTests 35/35, and the sender authorization / UID allocator integration filter 10/10. Raw TLS coverage includes rev1/rev2 ESEARCH, SEARCHRES, LIST-EXTENDED, STATUS=SIZE, LITERAL framing, BINARY items, STARTTLS rejection on Implicit TLS, and the rev2 CLOSED response. MailKit tests cover namespaces and MOVE; MailKit 4.18 exposes no generic ENABLE API to exercise explicit IMAP4rev2 mode. External clients have not been run against production.
 
 ## Owner validation checklist
 

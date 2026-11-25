@@ -2,6 +2,8 @@
 
 The server advertises `IMAP4rev1 AUTH=PLAIN SASL-IR LITERAL+ ENABLE UTF8=ACCEPT UNSELECT UIDPLUS SPECIAL-USE NAMESPACE MOVE IDLE`. IMAP4rev2 is not advertised. Use port 993 with implicit TLS and the server hostname covered by its certificate.
 
+`ENABLE IMAP4rev2` switches the current session to rev2 response semantics. The implementation currently supports ESEARCH/SEARCHRES, LIST-EXTENDED with LIST STATUS and STATUS=SIZE, LITERAL-, BINARY fetch items, omission of `\\Recent`/RECENT, and the CLOSED response code in rev2 mode. IMAP4rev2 remains unadvertised until the remaining MUST requirements are completed; see [IMAP Phase 2 report](IMAP-Phase2-Report.md). STARTTLS is rejected with tagged BAD on this Implicit TLS listener, as required for an already TLS-protected port. LOGIN and AUTH=PLAIN are available because the connection is protected by TLS.
+
 Mailbox names use RFC 3501 modified UTF-7 until the client sends `ENABLE UTF8=ACCEPT`. After the tagged ENABLE succeeds and `* ENABLED UTF8=ACCEPT` is returned, UTF-8 mailbox names and quoted strings are accepted and returned in UTF-8. Raw non-ASCII mailbox names before ENABLE receive BAD; clients should use modified UTF-7 until that point.
 
 ## Login and personal mailbox

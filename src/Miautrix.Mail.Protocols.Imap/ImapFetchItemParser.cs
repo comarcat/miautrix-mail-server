@@ -39,14 +39,16 @@ public static class ImapFetchItemParser
                 partialCount = count;
                 raw = raw[..partialAt];
             }
-            var peek = raw.StartsWith("BODY.PEEK[", StringComparison.OrdinalIgnoreCase);
+            var peek = raw.StartsWith("BODY.PEEK[", StringComparison.OrdinalIgnoreCase) || raw.StartsWith("BINARY.PEEK[", StringComparison.OrdinalIgnoreCase);
             var sectionStart = raw.IndexOf('[');
             string name;
             string? section = null;
             if (sectionStart >= 0)
             {
                 if (!raw.EndsWith(']')) throw new FormatException("Invalid FETCH body section.");
-                name = peek ? "BODY.PEEK" : "BODY";
+                name = raw.StartsWith("BINARY.SIZE[", StringComparison.OrdinalIgnoreCase) ? "BINARY.SIZE"
+                    : raw.StartsWith("BINARY", StringComparison.OrdinalIgnoreCase) ? (peek ? "BINARY.PEEK" : "BINARY")
+                    : peek ? "BODY.PEEK" : "BODY";
                 section = raw[(sectionStart + 1)..^1].Trim();
             }
             else

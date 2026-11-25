@@ -37,4 +37,16 @@ public sealed class ImapMimeFormatterTests
         Assert.Contains("Nested body", Encoding.UTF8.GetString(nested));
         Assert.Contains("Nested body", Encoding.UTF8.GetString(nestedText));
     }
+
+    [Fact]
+    public void Decodes_binary_sections_and_reports_unknown_transfer_encoding()
+    {
+        var formatter = new MimeKitImapMimeFormatter();
+        var encoded = Encoding.ASCII.GetBytes("Content-Type: text/plain\r\nContent-Transfer-Encoding: base64\r\n\r\nSGVsbG8gYmluYXJ5\r\n");
+        var unknown = Encoding.ASCII.GetBytes("Content-Type: application/octet-stream\r\nContent-Transfer-Encoding: x-unknown\r\n\r\nabc\r\n");
+
+        Assert.True(formatter.TryGetBinarySection(encoded, "1", out var decoded));
+        Assert.Equal("Hello binary", Encoding.ASCII.GetString(decoded).Trim());
+        Assert.False(formatter.TryGetBinarySection(unknown, "1", out _));
+    }
 }

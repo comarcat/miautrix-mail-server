@@ -160,8 +160,11 @@ public sealed class ImapListenerRawSocketTests
             Assert.Contains("CAPABILITY", Encoding.UTF8.GetString(await reader.ReadLineAsync(stopping.Token) ?? []));
             var capabilities = await SendAndReadAsync(tls, reader, "A0 CAPABILITY", "A0", stopping.Token);
             var capabilityText = Encoding.UTF8.GetString(capabilities);
+            Assert.Equal("* CAPABILITY IMAP4rev1 AUTH=PLAIN SASL-IR LITERAL+ ENABLE UTF8=ACCEPT UNSELECT UIDPLUS SPECIAL-USE NAMESPACE MOVE IDLE\r\nA0 OK CAPABILITY completed\r\n", capabilityText);
             foreach (var capability in new[] { "IMAP4rev1", "AUTH=PLAIN", "SASL-IR", "LITERAL+", "ENABLE", "UTF8=ACCEPT", "UNSELECT", "UIDPLUS", "SPECIAL-USE", "NAMESPACE", "MOVE", "IDLE" })
                 Assert.Contains(capability, capabilityText);
+            Assert.DoesNotContain("LOGINDISABLED", capabilityText);
+            Assert.Equal("A0a BAD STARTTLS is not available on an Implicit TLS port\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A0a STARTTLS", "A0a", stopping.Token)));
 
             var sasl = Convert.ToBase64String(Encoding.UTF8.GetBytes($"\0{address}\0test-password"));
             var authResult = await SendAndReadAsync(tls, reader, $"A1 AUTHENTICATE PLAIN {sasl}", "A1", stopping.Token);
@@ -308,6 +311,7 @@ public sealed class ImapListenerRawSocketTests
             Assert.Contains("Body π", Encoding.UTF8.GetString(bodyText));
             Assert.Contains("* SEARCH 1", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A3g SEARCH SEEN", "A3g", stopping.Token)));
             var search = await SendAndReadAsync(tls, reader, "A4 SEARCH ALL", "A4", stopping.Token);
+            Assert.Equal("* SEARCH 1 2\r\nA4 OK SEARCH completed\r\n", Encoding.UTF8.GetString(search));
             Assert.Contains("* SEARCH 1 2", Encoding.UTF8.GetString(search));
             Assert.Contains("* SEARCH 1 2", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A4a SEARCH OR UNSEEN FROM sender@test.invalid", "A4a", stopping.Token)));
             Assert.Contains("* SEARCH 1 2", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A4b UID SEARCH 1:*", "A4b", stopping.Token)));
@@ -818,6 +822,85 @@ public sealed class ImapListenerRawSocketTests
                 Assert.Equal("* BYE IDLE timeout", await ReadIdleUntilAsync(timeoutReader, line => line.StartsWith("* BYE IDLE timeout", StringComparison.Ordinal), stopping.Token));
             }
 
+            using (var rev1Client = new TcpClient())
+            {
+                await rev1Client.ConnectAsync("127.0.0.1", service.BoundPort, stopping.Token);
+                using var rev1Tls = new SslStream(rev1Client.GetStream(), leaveInnerStreamOpen: false, (_, _, _, _) => true);
+                await rev1Tls.AuthenticateAsClientAsync(new SslClientAuthenticationOptions { TargetHost = "localhost" }, stopping.Token);
+                var rev1Reader = new ImapConnectionReader(rev1Tls);
+                await rev1Reader.ReadLineAsync(stopping.Token);
+                await SendAndReadAsync(rev1Tls, rev1Reader, $"R1 LOGIN {address} test-password", "R1", stopping.Token);
+                await SendAndReadAsync(rev1Tls, rev1Reader, "R2 SELECT FreshFolder", "R2", stopping.Token);
+                Assert.Equal("R2a BAD LIST-EXTENDED requires IMAP4rev2\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev1Tls, rev1Reader, "R2a LIST (SUBSCRIBED) \"\" \"*\"", "R2a", stopping.Token)));
+                Assert.Equal("R2a1 BAD BINARY requires IMAP4rev2\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev1Tls, rev1Reader, "R2a1 FETCH 1 (BINARY[1])", "R2a1", stopping.Token)));
+                Assert.Equal("* SEARCH\r\nR3 OK SEARCH completed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev1Tls, rev1Reader, "R3 SEARCH ALL", "R3", stopping.Token)));
+                Assert.Equal("R3a BAD SEARCHRES requires IMAP4rev2\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev1Tls, rev1Reader, "R3a SEARCH $", "R3a", stopping.Token)));
+                var rev1Literal = Encoding.UTF8.GetBytes($"From: sender@test.invalid\r\nTo: {address}\r\nSubject: rev1 synchronizing literal\r\n\r\nbody");
+                await rev1Tls.WriteAsync(Encoding.ASCII.GetBytes($"R3b APPEND INBOX {{{rev1Literal.Length}}}\r\n"), stopping.Token);
+                Assert.Equal("+ Ready for literal data", Encoding.ASCII.GetString(await rev1Reader.ReadLineAsync(stopping.Token) ?? []));
+                await rev1Tls.WriteAsync(rev1Literal, stopping.Token);
+                await rev1Tls.WriteAsync("\r\n"u8.ToArray(), stopping.Token);
+                Assert.StartsWith("R3b OK", Encoding.UTF8.GetString(await ReadResponseAsync(rev1Reader, "R3b", stopping.Token)));
+            }
+            using (var rev2Client = new TcpClient())
+            {
+                await rev2Client.ConnectAsync("127.0.0.1", service.BoundPort, stopping.Token);
+                using var rev2Tls = new SslStream(rev2Client.GetStream(), leaveInnerStreamOpen: false, (_, _, _, _) => true);
+                await rev2Tls.AuthenticateAsClientAsync(new SslClientAuthenticationOptions { TargetHost = "localhost" }, stopping.Token);
+                var rev2Reader = new ImapConnectionReader(rev2Tls);
+                await rev2Reader.ReadLineAsync(stopping.Token);
+                await SendAndReadAsync(rev2Tls, rev2Reader, $"R4 LOGIN {address} test-password", "R4", stopping.Token);
+                Assert.Equal("* ENABLED IMAP4REV2\r\nR5 OK ENABLE completed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R5 ENABLE IMAP4rev2", "R5", stopping.Token)));
+                List<uint> renamedInboxUids;
+                await using (var rev2Db = new AppDbContext(dbOptions))
+                {
+                    var renamedInboxId = await rev2Db.Folders.Where(folder => folder.TenantId == tenantId && folder.MailboxId == mailboxId && folder.Name == "ImapRenamedInbox").Select(folder => folder.Id).SingleAsync(stopping.Token);
+                    renamedInboxUids = await rev2Db.Messages.Where(message => message.TenantId == tenantId && message.MailboxId == mailboxId && message.FolderId == renamedInboxId).OrderBy(message => message.Uid).Select(message => message.Uid).ToListAsync(stopping.Token);
+                }
+                var rev2Select = Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R6 SELECT FreshFolder", "R6", stopping.Token));
+                Assert.DoesNotContain(" RECENT", rev2Select);
+                Assert.Equal("* ESEARCH (TAG \"R7\")\r\nR7 OK SEARCH completed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R7 SEARCH ALL", "R7", stopping.Token)));
+                Assert.Equal("* ESEARCH (TAG \"R8\") UID\r\nR8 OK SEARCH completed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R8 UID SEARCH ALL", "R8", stopping.Token)));
+                Assert.Contains("BAD RECENT is not available in IMAP4rev2", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R9 STATUS FreshFolder (RECENT)", "R9", stopping.Token)));
+                Assert.Contains("* OK [CLOSED] Previous mailbox closed", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R10 SELECT ImapRenamedInbox", "R10", stopping.Token)));
+                var sequenceSet = renamedInboxUids.Count == 0 ? string.Empty : " ALL " + FormatTestSequenceSet(Enumerable.Range(1, renamedInboxUids.Count).Select(value => (uint)value));
+                var uidSet = renamedInboxUids.Count == 0 ? string.Empty : " ALL " + FormatTestSequenceSet(renamedInboxUids);
+                Assert.Equal($"* ESEARCH (TAG \"R11\"){sequenceSet}\r\nR11 OK SEARCH completed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R11 SEARCH ALL", "R11", stopping.Token)));
+                Assert.Equal($"* ESEARCH (TAG \"R12\") UID{uidSet}\r\nR12 OK SEARCH completed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R12 UID SEARCH ALL", "R12", stopping.Token)));
+                var expectedReturn = $"* ESEARCH (TAG \"R13\") MIN 1 MAX {renamedInboxUids.Count} ALL {FormatTestSequenceSet(Enumerable.Range(1, renamedInboxUids.Count).Select(value => (uint)value))} COUNT {renamedInboxUids.Count}\r\nR13 OK SEARCH completed\r\n";
+                Assert.Equal(expectedReturn, Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R13 SEARCH RETURN (MIN MAX ALL COUNT) ALL", "R13", stopping.Token)));
+                Assert.Equal("R14 OK SEARCH completed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R14 SEARCH RETURN (SAVE) ALL", "R14", stopping.Token)));
+                using var expectedFetch = new MemoryStream();
+                for (var index = 0; index < renamedInboxUids.Count; index++)
+                {
+                    var line = Encoding.UTF8.GetBytes($"* {index + 1} FETCH (UID {renamedInboxUids[index]})\r\n");
+                    expectedFetch.Write(line);
+                }
+                expectedFetch.Write("R15 OK FETCH completed\r\n"u8);
+                Assert.Equal(expectedFetch.ToArray(), await SendAndReadAsync(rev2Tls, rev2Reader, "R15 FETCH $ (UID)", "R15", stopping.Token));
+                var savedSearchResponse = $"* ESEARCH (TAG \"R16\"){sequenceSet}\r\nR16 OK SEARCH completed\r\n";
+                Assert.Equal(savedSearchResponse, Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R16 SEARCH $", "R16", stopping.Token)));
+                Assert.Equal($"* ESEARCH (TAG \"R17\") UID{uidSet}\r\nR17 OK SEARCH completed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R17 UID SEARCH $", "R17", stopping.Token)));
+                using var expectedUidFetch = new MemoryStream();
+                for (var index = 0; index < renamedInboxUids.Count; index++) expectedUidFetch.Write(Encoding.UTF8.GetBytes($"* {index + 1} FETCH (UID {renamedInboxUids[index]})\r\n"));
+                expectedUidFetch.Write("R18 OK FETCH completed\r\n"u8);
+                Assert.Equal(expectedUidFetch.ToArray(), await SendAndReadAsync(rev2Tls, rev2Reader, "R18 UID FETCH $ (UID)", "R18", stopping.Token));
+                Assert.Equal($"* ESEARCH (TAG \"R19\") MIN 1\r\nR19 OK SEARCH completed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R19 SEARCH RETURN (MIN SAVE) ALL", "R19", stopping.Token)));
+                Assert.Equal($"* 1 FETCH (UID {renamedInboxUids[0]})\r\nR20 OK FETCH completed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R20 FETCH $ (UID)", "R20", stopping.Token)));
+                Assert.Equal("* STATUS \"FreshFolder\" (MESSAGES 0 DELETED 0 SIZE 0)\r\nR21 OK STATUS completed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R21 STATUS FreshFolder (MESSAGES SIZE DELETED)", "R21", stopping.Token)));
+                Assert.Equal("* LIST (\\HasNoChildren \\Subscribed) \"/\" \"FreshFolder\"\r\n* STATUS \"FreshFolder\" (MESSAGES 0 SIZE 0)\r\nR22 OK LIST completed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R22 LIST (SUBSCRIBED) \"\" \"FreshFolder\" RETURN (SUBSCRIBED CHILDREN SPECIAL-USE STATUS (MESSAGES SIZE))", "R22", stopping.Token)));
+                await SendAndReadAsync(rev2Tls, rev2Reader, "R23 SELECT ImapRenamedInbox", "R23", stopping.Token);
+                var binaryFetch = Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R24 FETCH 1 (BINARY[1] BINARY.SIZE[1] BINARY.PEEK[1])", "R24", stopping.Token));
+                Assert.Contains("BINARY[1] {", binaryFetch);
+                Assert.Contains("BINARY.SIZE[1] ", binaryFetch);
+                Assert.Contains("BINARY[1] {", binaryFetch);
+                var rev2Literal = Encoding.UTF8.GetBytes($"From: sender@test.invalid\r\nTo: {address}\r\nSubject: rev2 literal minus\r\n\r\nbody");
+                await rev2Tls.WriteAsync(Encoding.ASCII.GetBytes($"R25 APPEND INBOX {{{rev2Literal.Length}}}\r\n"), stopping.Token);
+                await rev2Tls.WriteAsync(rev2Literal, stopping.Token);
+                await rev2Tls.WriteAsync("\r\n"u8.ToArray(), stopping.Token);
+                Assert.StartsWith("R25 OK", Encoding.UTF8.GetString(await ReadResponseAsync(rev2Reader, "R25", stopping.Token)));
+            }
+
             var logout = await SendAndReadAsync(tls, reader, "A6i LOGOUT", "A6i", stopping.Token);
             Assert.Contains("* BYE", Encoding.UTF8.GetString(logout));
         }
@@ -884,6 +967,23 @@ public sealed class ImapListenerRawSocketTests
     {
         for (var i = 0; i <= source.Length - expected.Length; i++) if (source.AsSpan(i, expected.Length).SequenceEqual(expected)) return true;
         return false;
+    }
+
+    private static string FormatTestSequenceSet(IEnumerable<uint> values)
+    {
+        var ordered = values.Distinct().Order().ToArray();
+        if (ordered.Length == 0) return string.Empty;
+        var ranges = new List<string>();
+        var start = ordered[0];
+        var previous = start;
+        foreach (var value in ordered.Skip(1))
+        {
+            if (previous != uint.MaxValue && value == previous + 1) { previous = value; continue; }
+            ranges.Add(start == previous ? start.ToString() : $"{start}:{previous}");
+            start = previous = value;
+        }
+        ranges.Add(start == previous ? start.ToString() : $"{start}:{previous}");
+        return string.Join(',', ranges);
     }
 
     private sealed class StubAuthenticator(Guid tenantId, Guid mailboxId, Guid userId) : IImapAuthenticator
