@@ -35,7 +35,15 @@ public sealed class AutodiscoveryContractTests : IClassFixture<WebApplicationFac
         var xml = XDocument.Parse(existing);
         Assert.Equal("1.1", xml.Root!.Attribute("version")!.Value);
         Assert.Equal(new[] { "imap", "smtp", "smtp" }, xml.Descendants().Where(e => e.Name.LocalName is "incomingServer" or "outgoingServer").Select(e => e.Attribute("type")!.Value));
-        Assert.Equal(new[] { "993", "465", "587" }, xml.Descendants().Where(e => e.Name.LocalName is "incomingServer" or "outgoingServer").Select(e => e.Element("port")!.Value));
+        var servers = xml.Descendants().Where(e => e.Name.LocalName is "incomingServer" or "outgoingServer").ToArray();
+        Assert.Equal(new[] { "993", "465", "587" }, servers.Select(e => e.Element("port")!.Value));
+        Assert.Equal(new[] { "SSL", "SSL", "STARTTLS" }, servers.Select(e => e.Element("socketType")!.Value));
+        Assert.All(servers, server =>
+        {
+            Assert.Equal("%EMAILADDRESS%", server.Element("username")!.Value);
+            Assert.Equal("plain", server.Element("authentication")!.Value);
+            Assert.NotNull(server.Element("hostname"));
+        });
         Assert.Contains("%EMAILADDRESS%", existing);
         Assert.Contains("imap.mailhost.test", existing);
         Assert.Contains("smtp.mailhost.test", existing);
@@ -55,8 +63,10 @@ public sealed class AutodiscoveryContractTests : IClassFixture<WebApplicationFac
         var doc = XDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal("http://schemas.microsoft.com/exchange/autodiscover/outlook/responseschema/2006a", doc.Root!.Name.NamespaceName);
         Assert.Equal(email, doc.Descendants().Single(e => e.Name.LocalName == "EMailAddress").Value);
-        Assert.Equal(new[] { "IMAP", "SMTP", "SMTP" }, doc.Descendants().Where(e => e.Name.LocalName == "Protocol").Select(p => p.Element(p.Name.Namespace + "Type")!.Value));
-        Assert.All(doc.Descendants().Where(e => e.Name.LocalName == "Protocol"), p =>
+        var protocols = doc.Descendants().Where(e => e.Name.LocalName == "Protocol").ToArray();
+        Assert.Equal(new[] { "IMAP", "SMTP", "SMTP" }, protocols.Select(p => p.Element(p.Name.Namespace + "Type")!.Value));
+        Assert.Equal(new[] { "993", "465", "587" }, protocols.Select(p => p.Element(p.Name.Namespace + "Port")!.Value));
+        Assert.All(protocols, p =>
         {
             Assert.Equal("on", p.Element(p.Name.Namespace + "SSL")!.Value);
             Assert.Equal("off", p.Element(p.Name.Namespace + "SPA")!.Value);
