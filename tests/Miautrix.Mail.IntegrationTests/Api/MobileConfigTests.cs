@@ -33,8 +33,7 @@ public sealed class MobileConfigTests : IClassFixture<WebApplicationFactory<Miau
         var (tenantId, userId, email) = await SeedUserAsync();
         using var client = _factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/webmail/mobileconfig");
-        request.Headers.Add("X-Tenant-Id", tenantId.ToString());
-        request.Headers.Add("X-User-Id", userId.ToString());
+        TestSessionHelper.Attach(request, tenantId, userId);
         using var response = await client.SendAsync(request);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("application/x-apple-aspen-config", response.Content.Headers.ContentType!.MediaType);
@@ -61,8 +60,7 @@ public sealed class MobileConfigTests : IClassFixture<WebApplicationFactory<Miau
         Assert.DoesNotContain(mail.Elements("key"), key => key.Value.Contains("Password", StringComparison.Ordinal) && key.Value != "OutgoingPasswordSameAsIncomingPassword");
 
         using var secondRequest = new HttpRequestMessage(HttpMethod.Get, "/api/v1/webmail/mobileconfig");
-        secondRequest.Headers.Add("X-Tenant-Id", tenantId.ToString());
-        secondRequest.Headers.Add("X-User-Id", userId.ToString());
+        TestSessionHelper.Attach(secondRequest, tenantId, userId);
         using var secondResponse = await client.SendAsync(secondRequest);
         Assert.Equal(HttpStatusCode.OK, secondResponse.StatusCode);
         var secondProfile = ParseProfile(await secondResponse.Content.ReadAsByteArrayAsync()).Root!.Element("dict")!;
@@ -82,8 +80,8 @@ public sealed class MobileConfigTests : IClassFixture<WebApplicationFactory<Miau
         }
         using var client = _factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/webmail/mobileconfig");
+        TestSessionHelper.Attach(request, tenantId, userId);
         request.Headers.Add("X-Tenant-Id", otherTenant.ToString());
-        request.Headers.Add("X-User-Id", userId.ToString());
         using var response = await client.SendAsync(request);
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.NotEqual(tenantId, otherTenant);

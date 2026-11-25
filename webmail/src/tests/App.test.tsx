@@ -148,6 +148,7 @@ describe('Webmail SPA UI Flow', () => {
       vi.spyOn(webmailClient, 'getSieveRules').mockResolvedValue({
         data: [{ id: 'r1', name: 'Move Jira Notifications', field: 'from', comparator: 'contains', value: 'jira', action: 'fileinto', targetFolder: 'Jira', active: true }],
       });
+      vi.spyOn(webmailClient, 'getSieveScripts').mockResolvedValue([]);
     });
 
     it('renders webmail navigation tabs and default inbox messages', async () => {
@@ -201,7 +202,7 @@ describe('Webmail SPA UI Flow', () => {
       expect(screen.getByText('Miautrix Postmaster')).toBeInTheDocument();
     });
 
-    it('navigates to Settings & Rules to manage ManageSieve filters', async () => {
+    it('loads Sieve filters through the API client and downloads the mobile profile through authenticated fetch', async () => {
       render(<App />);
 
       await waitFor(() => {
@@ -213,7 +214,11 @@ describe('Webmail SPA UI Flow', () => {
 
       expect(screen.getByRole('heading', { level: 1, name: /^settings$/i })).toBeInTheDocument();
       expect(screen.getAllByText('Move Jira Notifications')[0]).toBeInTheDocument();
-      expect(screen.getByRole('link', { name: /set up on iphone\/mac/i })).toHaveAttribute('href', '/api/v1/webmail/mobileconfig');
+      await waitFor(() => expect(vi.mocked(webmailClient.getSieveRules)).toHaveBeenCalledWith('mb1'));
+      await waitFor(() => expect(vi.mocked(webmailClient.getSieveScripts)).toHaveBeenCalledWith('mb1'));
+      const download = vi.spyOn(webmailClient, 'downloadAttachment').mockResolvedValue();
+      fireEvent.click(screen.getByRole('button', { name: /set up on iphone\/mac/i }));
+      await waitFor(() => expect(download).toHaveBeenCalledWith('/api/v1/webmail/mobileconfig', 'miautrix-mail.mobileconfig'));
     });
 
     it('switches calendar month, week, and day layouts', async () => {

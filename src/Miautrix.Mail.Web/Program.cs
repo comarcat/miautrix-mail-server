@@ -194,8 +194,7 @@ public class Program
         app.UseRouting();
         app.UseMiddleware<ApiExceptionMiddleware>();
         app.UseMiddleware<RequestIdMiddleware>();
-        // v2.2 API authentication: every /api route requires a persisted bearer session.
-        app.UseRouting();
+        // v2.2 API authentication: every controller action requires a persisted bearer session unless reviewed anonymous.
         app.UseMiddleware<SessionAuthenticationMiddleware>();
         app.UseMiddleware<IdempotencyMiddleware>();
         app.UseRateLimiter();

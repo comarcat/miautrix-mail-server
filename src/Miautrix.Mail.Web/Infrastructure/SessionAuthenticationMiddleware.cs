@@ -4,15 +4,17 @@ using Miautrix.Mail.Identity;
 using Miautrix.Mail.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc.Controllers;
 
 namespace Miautrix.Mail.Web.Infrastructure;
 
 public sealed class SessionAuthenticationMiddleware(RequestDelegate next)
 {
-    public async Task InvokeAsync(HttpContext context, AppDbContext db, ISessionManager tokens, IWebHostEnvironment environment)
+    public async Task InvokeAsync(HttpContext context, AppDbContext db, ISessionManager tokens)
     {
-        var path = context.Request.Path;
-        if (!path.StartsWithSegments("/api") || context.GetEndpoint()?.Metadata.GetMetadata<AllowAnonymousAttribute>() is not null)
+        var endpoint = context.GetEndpoint();
+        if (endpoint?.Metadata.GetMetadata<ControllerActionDescriptor>() is null ||
+            endpoint.Metadata.GetMetadata<AllowAnonymousAttribute>() is not null)
         { await next(context); return; }
         var auth = context.Request.Headers.Authorization.ToString();
         if (!auth.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)) { await Unauthorized(context); return; }
