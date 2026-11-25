@@ -84,7 +84,10 @@ public sealed class MimeKitImapMimeFormatter : IImapMimeFormatter
         {
             var entity = GetPart(Load(rawMessage).Body, section.Trim());
             if (entity is not MimePart part || part.Content is null ||
-                part.ContentType.MediaType.Equals("multipart", StringComparison.OrdinalIgnoreCase))
+                part.ContentType.MediaType.Equals("multipart", StringComparison.OrdinalIgnoreCase) ||
+                part.ContentType.MediaType.Equals("message", StringComparison.OrdinalIgnoreCase) &&
+                (part.ContentType.MediaSubtype.Equals("rfc822", StringComparison.OrdinalIgnoreCase) ||
+                 part.ContentType.MediaSubtype.Equals("global", StringComparison.OrdinalIgnoreCase)))
             { bytes = Array.Empty<byte>(); return ImapBinarySectionStatus.NotLeafBodyPart; }
                 var transferEncoding = part.Headers[HeaderId.ContentTransferEncoding]?.Trim().ToLowerInvariant();
                 if (!string.IsNullOrWhiteSpace(transferEncoding) && transferEncoding is not "7bit" and not "8bit" and not "binary" and not "base64" and not "quoted-printable")

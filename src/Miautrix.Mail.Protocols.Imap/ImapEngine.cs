@@ -151,6 +151,9 @@ public sealed partial class ImapSession
         if (!ImapStateMachine.IsAllowed(State, commandName))
             return new ImapCommandResult(tag, "BAD", $"{commandName} is not valid in the {State} state", Array.Empty<string>());
 
+        if (commandName is "CAPABILITY" or "NOOP" or "LOGOUT" or "STARTTLS" or "NAMESPACE" or "CHECK" or "CLOSE" or "UNSELECT" or "EXPUNGE" or "IDLE" && args.Count != 0)
+            return new ImapCommandResult(tag, "BAD", $"{commandName} does not take arguments", Array.Empty<string>());
+
         if (State is ImapState.Authenticated or ImapState.Selected && commandName is not "LOGIN" and not "CAPABILITY" and not "LOGOUT")
         {
             var operation = commandName == "UID" && args.Count > 0 ? args[0].Text.ToUpperInvariant() : commandName;
@@ -216,6 +219,9 @@ public sealed partial class ImapSession
 
             case "NAMESPACE":
                 return HandleNamespace(tag);
+
+            case "ID":
+                return HandleId(tag, args);
 
             case "CHECK":
                 if (_imap4Rev2Enabled) return await HandleNoopAsync(tag, cancellationToken);
@@ -348,6 +354,27 @@ public sealed partial class ImapSession
         return new ImapCommandResult(tag, "OK", "ENABLE completed", enabled);
     }
 
+    private static ImapCommandResult HandleId(string tag, IReadOnlyList<ImapToken> args)
+    {
+        // RFC 2971 permits NIL or a parenthesized sequence of string/nstring pairs.
+        // The server does not retain client identification data, but always answers ID with ID NIL.
+        if (args.Count == 1 && args[0].Kind == ImapTokenKind.Atom && args[0].Text.Equals("NIL", StringComparison.OrdinalIgnoreCase))
+            return new ImapCommandResult(tag, "OK", "ID completed", new[] { "* ID NIL" });
+
+        if (args.Count < 2 || args[0].Kind != ImapTokenKind.LeftParenthesis || args[^1].Kind != ImapTokenKind.RightParenthesis)
+            return new ImapCommandResult(tag, "BAD", "Invalid ID arguments", Array.Empty<string>());
+
+        var pairs = args.Skip(1).Take(args.Count - 2).ToArray();
+        if (pairs.Length % 2 != 0 || pairs.Where((_, index) => index % 2 == 0)
+                .Any(token => token.Kind is not (ImapTokenKind.Atom or ImapTokenKind.QuotedString)) ||
+            pairs.Where((_, index) => index % 2 == 1)
+                .Any(token => token.Kind is not (ImapTokenKind.Atom or ImapTokenKind.QuotedString) ||
+                              token.Kind == ImapTokenKind.Atom && !token.Text.Equals("NIL", StringComparison.OrdinalIgnoreCase)))
+            return new ImapCommandResult(tag, "BAD", "Invalid ID arguments", Array.Empty<string>());
+
+        return new ImapCommandResult(tag, "OK", "ID completed", new[] { "* ID NIL" });
+    }
+
     private static ImapCommandResult HandleNamespace(string tag)
     {
         // Personal folders are unprefixed; delegated folders use the existing Shared/ tree.
@@ -367,11 +394,13 @@ public sealed partial class ImapSession
 
     public async Task<ImapCommandResult> PollIdleChangesAsync(CancellationToken cancellationToken = default)
     {
-        if (!IsIdling || SelectedFolder is null || TenantId is null)
+        if (SelectedFolder is null || TenantId is null)
             return new ImapCommandResult("*", "CONTINUE", string.Empty, Array.Empty<string>());
         var selected = SelectedFolder;
         if (!await AuthorizeMailboxAsync(selected.MailboxId, write: false, cancellationToken))
         {
+            if (!IsIdling)
+                return new ImapCommandResult("*", "CONTINUE", string.Empty, Array.Empty<string>());
             _idleTag = null;
             SelectedFolder = null;
             SelectedReadOnly = false;
@@ -398,7 +427,7 @@ public sealed partial class ImapSession
         {
             var message = current[index];
             if (_selectedFlagsSnapshot.TryGetValue(message.Uid, out var oldFlags) &&
-                !string.Equals(oldFlags, $"{message.Flags}|{message.IsRead}", StringComparison.Ordinal))
+                !string.Equals(oldFlags, FlagsSnapshot(message.Flags, message.IsRead), StringComparison.Ordinal))
             {
                 var formattedFlags = FormatFlags(message.Flags, message.IsRead, message.IsRecent && !_imap4Rev2Enabled);
                 responses.Add($"* {index + 1} FETCH (UID {message.Uid} FLAGS ({formattedFlags}))");
@@ -406,7 +435,7 @@ public sealed partial class ImapSession
         }
         _selectedUidSnapshot = currentUids;
         _selectedFlagsSnapshot.Clear();
-        foreach (var message in current) _selectedFlagsSnapshot[message.Uid] = $"{message.Flags}|{message.IsRead}";
+        foreach (var message in current) _selectedFlagsSnapshot[message.Uid] = FlagsSnapshot(message.Flags, message.IsRead);
         return new ImapCommandResult("*", "CONTINUE", string.Empty, responses);
     }
 
@@ -463,9 +492,19 @@ public sealed partial class ImapSession
         if (current.Count > _selectedUidSnapshot.Count || current.Any(uid => !_selectedUidSnapshot.Contains(uid)))
             responses.Add($"* {current.Count} EXISTS");
         if (!_imap4Rev2Enabled && recentUids.Count != priorRecentCount) responses.Add($"* {recentUids.Count} RECENT");
+        for (var index = 0; index < currentMessages.Count; index++)
+        {
+            var message = currentMessages[index];
+            if (_selectedFlagsSnapshot.TryGetValue(message.Uid, out var oldFlags) &&
+                !string.Equals(oldFlags, $"{message.Flags}|{message.IsRead}", StringComparison.Ordinal))
+            {
+                var isRecent = message.IsRecent || recentUids.Contains(message.Uid);
+                responses.Add($"* {index + 1} FETCH (UID {message.Uid} FLAGS ({FormatFlags(message.Flags, message.IsRead, isRecent && !_imap4Rev2Enabled)}))");
+            }
+        }
         _selectedUidSnapshot = current;
         _selectedFlagsSnapshot.Clear();
-        foreach (var message in currentMessages) _selectedFlagsSnapshot[message.Uid] = $"{message.Flags}|{message.IsRead}";
+        foreach (var message in currentMessages) _selectedFlagsSnapshot[message.Uid] = FlagsSnapshot(message.Flags, message.IsRead);
         return new ImapCommandResult(tag, "OK", "NOOP completed", responses);
     }
 
@@ -603,6 +642,7 @@ public sealed partial class ImapSession
             else flags.ExceptWith(incoming);
             if (flags.SetEquals(ParseFlags(message.Flags)) && flags.Contains("\\Seen") == message.IsRead) continue;
             if (!await _messageService.SetImapFlagsAsync(TenantId.Value, _userId.Value, SelectedFolder.MailboxId, message.Id, flags.ToArray(), ct)) continue;
+            _selectedFlagsSnapshot[message.Uid] = FlagsSnapshot(string.Join(' ', flags), flags.Contains("\\Seen", StringComparer.OrdinalIgnoreCase));
             if (!silent)
             {
                 var sequence = (uint)(messages.IndexOf(message) + 1);
@@ -763,7 +803,9 @@ public sealed partial class ImapSession
         if (name is null || TenantId is null || MailboxId is null || _userId is null || _mailboxService is null) return new ImapCommandResult(tag, "NO", "CREATE unavailable", Array.Empty<string>());
         if (_imap4Rev2Enabled && !IsValidNetUnicode(name))
             return new ImapCommandResult(tag, "NO", "Invalid Net-Unicode mailbox name", Array.Empty<string>());
+        var requestedName = name;
         name = DecodeMailboxPath(name);
+        var normalizedName = name;
         Guid? namespaceMailboxId = null;
         string[] segments;
         if (name.StartsWith("Shared/", StringComparison.OrdinalIgnoreCase))
@@ -792,7 +834,19 @@ public sealed partial class ImapSession
         if (segments.Length > 1 && parent is null) return new ImapCommandResult(tag, "NO", "[TRYCREATE] Parent folder does not exist", Array.Empty<string>());
         var createMailboxId = parent?.MailboxId ?? namespaceMailboxId ?? ActiveMailboxId;
         if (createMailboxId is null || !await AuthorizeMailboxAsync(createMailboxId.Value, write: true, ct)) return new ImapCommandResult(tag, "NO", "Mailbox does not exist", Array.Empty<string>());
-        try { await _mailboxService.CreateFolderAsync(TenantId.Value, _userId.Value, createMailboxId.Value, new CreateFolderRequest(segments[^1], parent?.Id), ct); return new ImapCommandResult(tag, "OK", "CREATE completed", Array.Empty<string>()); }
+        try
+        {
+            await _mailboxService.CreateFolderAsync(TenantId.Value, _userId.Value, createMailboxId.Value, new CreateFolderRequest(segments[^1], parent?.Id), ct);
+            if (!string.Equals(requestedName, normalizedName, StringComparison.Ordinal))
+            {
+                static string QuoteMailbox(string value) => "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+                var supplied = QuoteMailbox(EncodeMailboxPath(requestedName));
+                var normalized = QuoteMailbox(EncodeMailboxPath(normalizedName));
+                var list = $"* LIST (\\Subscribed) \"/\" {normalized} (\"OLDNAME\" ({supplied}))";
+                return new ImapCommandResult(tag, "OK", "CREATE completed", new[] { list });
+            }
+            return new ImapCommandResult(tag, "OK", "CREATE completed", Array.Empty<string>());
+        }
         catch (InvalidOperationException ex) when (ex.Message.Contains("already exists", StringComparison.OrdinalIgnoreCase)) { return new ImapCommandResult(tag, "NO", "[ALREADYEXISTS] Folder collision", Array.Empty<string>()); }
         catch (Exception ex) when (ex is ArgumentException or ResourceNotFoundException or InvalidOperationException) { return new ImapCommandResult(tag, "NO", "CREATE failed", Array.Empty<string>()); }
     }
@@ -844,6 +898,8 @@ public sealed partial class ImapSession
         if (SelectedFolder?.Id == folder.Id) return new ImapCommandResult(tag, "NO", "[INUSE] Mailbox is selected", Array.Empty<string>());
         try
         {
+            if (_imap4Rev2Enabled && (!IsValidNetUnicode(names[0].Text) || !IsValidNetUnicode(names[1].Text)))
+                return new ImapCommandResult(tag, "NO", "Invalid Net-Unicode mailbox name", Array.Empty<string>());
             var destinationPath = DecodeMailboxPath(names[1].Text);
             var destinationMailboxId = folder.MailboxId;
             if (destinationPath.StartsWith("Shared/", StringComparison.OrdinalIgnoreCase))
@@ -1007,7 +1063,7 @@ public sealed partial class ImapSession
             recentUids.UnionWith(await ClaimRecentMessagesAsync(folder.MailboxId, folder.Id, cancellationToken));
         _selectedUidSnapshot = orderedMessages.Select(message => message.Uid).ToList();
         _selectedFlagsSnapshot.Clear();
-        foreach (var message in orderedMessages) _selectedFlagsSnapshot[message.Uid] = $"{message.Flags}|{message.IsRead}";
+        foreach (var message in orderedMessages) _selectedFlagsSnapshot[message.Uid] = FlagsSnapshot(message.Flags, message.IsRead);
         var firstUnseen = orderedMessages.FindIndex(m => !m.IsRead && !m.Flags.Contains("\\Seen", StringComparison.OrdinalIgnoreCase));
         var folderPath = await GetFolderPathAsync(folder, cancellationToken);
         var hasChildren = await _dbContext.Folders.AnyAsync(candidate => candidate.TenantId == TenantId && candidate.ParentId == folder.Id, cancellationToken);
@@ -1203,7 +1259,7 @@ public sealed partial class ImapSession
                         var parent = folders.FirstOrDefault(candidate => candidate.Id == parentId);
                         if (parent is null) break;
                         var parentName = FullName(parent);
-                        if (!visibleNames.Contains(parentName)) childInfoNames.Add(parentName);
+                        if (!Regex.IsMatch(FullName(folder), regex, RegexOptions.IgnoreCase)) childInfoNames.Add(parentName);
                         visibleNames.Add(parentName);
                         cursor = parent;
                     }
@@ -1228,9 +1284,7 @@ public sealed partial class ImapSession
             var isRecursiveParent = recursiveMatch && childInfoNames.Contains(pair.Name);
             var attributes = pair.Folder is null
                 ? new List<string> { "\\Noselect", "\\HasChildren" }
-                : (subscribed || isRecursiveParent) && !pair.IsSubscribed
-                    ? new List<string> { "\\Noselect", hasChildren ? "\\HasChildren" : "\\HasNoChildren" }
-                    : new List<string> { hasChildren ? "\\HasChildren" : "\\HasNoChildren" };
+                : new List<string> { hasChildren ? "\\HasChildren" : "\\HasNoChildren" };
             var special = pair.Folder?.Role.ToLowerInvariant() switch
             {
                 "sent" => "\\Sent", "drafts" => "\\Drafts", "trash" => "\\Trash", "junk" => "\\Junk", "archive" => "\\Archive", _ => null
@@ -1791,11 +1845,13 @@ public sealed partial class ImapSession
                 {
                     var mailboxId = SelectedFolder.MailboxId;
                     await _messageService.SetImapFlagsAsync(tenantId, userId, mailboxId, message.Id, seenFlags, cancellationToken);
+                    _selectedFlagsSnapshot[message.Uid] = FlagsSnapshot(string.Join(' ', seenFlags), true);
                 }
                 else
                 {
                     await _dbContext.Messages.Where(m => m.TenantId == TenantId && m.MailboxId == SelectedFolder!.MailboxId && m.Id == message.Id)
                         .ExecuteUpdateAsync(update => update.SetProperty(m => m.IsRead, true).SetProperty(m => m.Flags, string.Join(' ', seenFlags)), cancellationToken);
+                    _selectedFlagsSnapshot[message.Uid] = FlagsSnapshot(string.Join(' ', seenFlags), true);
                 }
                 if (!values.Any(v => v.Name == "FLAGS")) values.Add(("FLAGS", null, $"({string.Join(' ', seenFlags)})", null));
             }
@@ -1838,6 +1894,7 @@ public sealed partial class ImapSession
     }
 
     private static IEnumerable<string> ParseFlags(string flags) => flags.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    private static string FlagsSnapshot(string flags, bool isRead) => $"{string.Join(' ', ParseFlags(flags).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(flag => flag, StringComparer.OrdinalIgnoreCase))}|{isRead}";
     private static string FormatFlags(string flags, bool isRead, bool isRecent = false) => string.Join(' ', ParseFlags(flags)
         .Concat(isRead ? new[] { "\\Seen" } : Array.Empty<string>())
         .Concat(isRecent ? new[] { "\\Recent" } : Array.Empty<string>())
