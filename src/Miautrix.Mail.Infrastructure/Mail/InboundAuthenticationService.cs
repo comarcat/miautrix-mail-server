@@ -30,20 +30,30 @@ public sealed class InboundAuthenticationService : IInboundAuthenticationService
 
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         budget.CancelAfter(TimeSpan.FromSeconds(10));
-        var spf = await _spfEvaluator.EvaluateAsync(input.ClientIp, input.Helo, input.MailFrom, budget.Token);
-        if (input.Path == InboundMailPath.CloudflareWebhook)
+        try
         {
-            var cloudflareResults = input.CloudflareAuthenticationResults ?? ReadCloudflareAuthenticationResults(input.RawMessage);
-            if (TryReadSpf(cloudflareResults, out var cloudflareSpf)) spf = cloudflareSpf;
+            var spf = await _spfEvaluator.EvaluateAsync(input.ClientIp, input.Helo, input.MailFrom, budget.Token);
+            if (input.Path == InboundMailPath.CloudflareWebhook)
+            {
+                var cloudflareResults = input.CloudflareAuthenticationResults ?? ReadCloudflareAuthenticationResults(input.RawMessage);
+                if (TryReadSpf(cloudflareResults, out var cloudflareSpf)) spf = cloudflareSpf;
+            }
+            var dkim = await EvaluateDkim(input.RawMessage, budget.Token);
+            var message = MimeMessage.Load(new MemoryStream(Encoding.UTF8.GetBytes(input.RawMessage)));
+            var fromDomains = message.From.Mailboxes.Select(m => m.Domain.ToLowerInvariant()).Distinct().ToArray();
+            var dmarc = await EvaluateDmarc(fromDomains, spf, dkim, budget.Token);
+            var auth = $"{options.AuthservId}; spf={spf.Result} smtp.mailfrom={(spf.Domain ?? "unknown")}; " +
+                       (dkim.Count == 0 ? "dkim=none" : string.Join("; ", dkim.Select(x => $"dkim={x.Result} header.d={x.Domain ?? "unknown"}"))) +
+                       $"; dmarc={dmarc.Result} header.from={dmarc.Domain ?? "unknown"} policy.dmarc={dmarc.Disposition ?? "none"}";
+            return new(spf, dkim, dmarc, auth);
         }
-        var dkim = await EvaluateDkim(input.RawMessage, budget.Token);
-        var message = MimeMessage.Load(new MemoryStream(Encoding.UTF8.GetBytes(input.RawMessage)));
-        var fromDomains = message.From.Mailboxes.Select(m => m.Domain.ToLowerInvariant()).Distinct().ToArray();
-        var dmarc = await EvaluateDmarc(fromDomains, spf, dkim, budget.Token);
-        var auth = $"{options.AuthservId}; spf={spf.Result} smtp.mailfrom={(spf.Domain ?? "unknown")}; " +
-                   (dkim.Count == 0 ? "dkim=none" : string.Join("; ", dkim.Select(x => $"dkim={x.Result} header.d={x.Domain ?? "unknown"}"))) +
-                   $"; dmarc={dmarc.Result} header.from={dmarc.Domain ?? "unknown"} policy.dmarc={dmarc.Disposition ?? "none"}";
-        return new(spf, dkim, dmarc, auth);
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            var tempSpf = new SpfAuthenticationResult("temperror", input.MailFrom);
+            var tempDkim = new[] { new DkimAuthenticationResult(null, null, "temperror", "DNS lookup timeout") };
+            var tempDmarc = new DmarcAuthenticationResult("temperror", null, null, "none", []);
+            return new(tempSpf, tempDkim, tempDmarc, $"{options.AuthservId}; spf=temperror; dkim=temperror; dmarc=temperror");
+        }
     }
 
     private static string? ReadCloudflareAuthenticationResults(string raw)
@@ -150,6 +160,7 @@ public sealed class InboundAuthenticationService : IInboundAuthenticationService
                 result.Add(new(domain, selector, passed ? "pass" : "fail", passed && tags.ContainsKey("l") ? "l= body length limits signed body coverage" : null));
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested) { result.Add(new(domain, selector, "temperror", "DNS lookup timeout")); }
+            catch (TimeoutException) { result.Add(new(domain, selector, "temperror", "DNS lookup timeout")); }
             catch (Exception ex) { result.Add(new(domain, selector, ex is FormatException ? "permerror" : "fail", ex.GetType().Name + ": " + ex.Message)); }
         }
         return result;

@@ -47,6 +47,17 @@ public sealed class DkimInboundAuthenticationTests
     }
 
     [Fact]
+    public async Task Dns_timeout_is_reported_as_temperror()
+    {
+        using var key = RSA.Create(2048);
+        var dns = new FakeDnsResolver { Timeout = true };
+        var timedOut = await new InboundAuthenticationService(dns, Options)
+            .EvaluateAsync(new(null, null, "sender@example.test", Sign(key, "s1"), InboundMailPath.CloudflareWebhook));
+        Assert.Equal("temperror", timedOut.Dkim.Single().Result);
+        Assert.Equal("temperror", timedOut.Dmarc.Result);
+    }
+
+    [Fact]
     public async Task Two_signatures_are_reported_individually()
     {
         using var key = RSA.Create(2048);
