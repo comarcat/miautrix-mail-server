@@ -31,8 +31,9 @@ scripts/deploy-release.ps1 -Status
 After the deploy, backfill drafts saved by IMAP clients before v2.1 (TROUBLESHOOTING §18; load `/opt/miautrix-mail/.env` as in §7):
 
 ```bash
-/opt/miautrix-mail/cli/Miautrix.Mail.Cli messages reparse --tenant all --dry-run
-/opt/miautrix-mail/cli/Miautrix.Mail.Cli messages reparse --tenant all
+# The CLI does not read .env itself; load it in a subshell (nothing is printed or kept).
+( while IFS= read -r l; do [[ -z $l || $l == \#* ]] && continue; k=${l%%=*}; v=${l#*=}; v=${v#\"}; v=${v%\"}; export "$k=$v"; done < /opt/miautrix-mail/.env; /opt/miautrix-mail/cli/Miautrix.Mail.Cli messages reparse --tenant all --dry-run )
+# then the same line without --dry-run
 ```
 
 Rollback: `scripts/deploy-release.ps1 -Rollback` (no schema change, so it is a plain binary rollback).
