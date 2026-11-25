@@ -125,6 +125,76 @@ public sealed class DirectSmtpSocketTests
     }
 
     [Fact]
+    public async Task Validated_dane_ee_spki_sha256_match_delivers()
+    {
+        using var certificate = CreateCertificate();
+        await using var server = new ScriptedSmtpServer(1, (client, _, record) => ScriptedSmtpServer.AcceptTlsMessageAsync(client, certificate, record));
+        var spki = certificate.GetRSAPublicKey()!.ExportSubjectPublicKeyInfo();
+        var answer = new ValidatedTlsaAnswer(true, [new TlsaRecord(3, 1, 1, SHA256.HashData(spki))]);
+        var transport = CreateDaneTransport(server.Port, answer);
+
+        var result = await transport.SendAsync(Message());
+
+        Assert.True(result.IsSuccess);
+        Assert.Contains("STARTTLS", server.Commands);
+    }
+
+    [Fact]
+    public async Task Validated_dane_mismatch_fails_without_plaintext_fallback()
+    {
+        using var certificate = CreateCertificate();
+        await using var server = new ScriptedSmtpServer(1, (client, _, record) => ScriptedSmtpServer.AcceptTlsMessageAsync(client, certificate, record));
+        var answer = new ValidatedTlsaAnswer(true, [new TlsaRecord(3, 1, 1, new byte[32])]);
+        var result = await CreateDaneTransport(server.Port, answer).SendAsync(Message());
+
+        Assert.False(result.IsSuccess);
+        Assert.False(result.IsPermanentFailure);
+        Assert.DoesNotContain(server.Commands, command => command.StartsWith("MAIL FROM", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task Unvalidated_dane_answer_is_ignored()
+    {
+        await using var server = new ScriptedSmtpServer(1, (client, _, record) => ScriptedSmtpServer.AcceptMessageAsync(client, offerStartTls: false, 250, record));
+        var answer = new ValidatedTlsaAnswer(false, [new TlsaRecord(3, 1, 1, new byte[32])]);
+        var result = await CreateDaneTransport(server.Port, answer).SendAsync(Message());
+        Assert.True(result.IsSuccess);
+        Assert.DoesNotContain("STARTTLS", server.Commands);
+    }
+
+    [Fact]
+    public async Task No_tlsa_keeps_opportunistic_tls_behavior()
+    {
+        await using var server = new ScriptedSmtpServer(1, (client, _, record) => ScriptedSmtpServer.AcceptMessageAsync(client, offerStartTls: false, 250, record));
+        var answer = new ValidatedTlsaAnswer(true, []);
+        var result = await CreateDaneTransport(server.Port, answer).SendAsync(Message());
+        Assert.True(result.IsSuccess);
+        Assert.DoesNotContain("STARTTLS", server.Commands);
+    }
+
+    [Fact]
+    public async Task Dane_mode_off_ignores_tlsa()
+    {
+        await using var server = new ScriptedSmtpServer(1, (client, _, record) => ScriptedSmtpServer.AcceptMessageAsync(client, offerStartTls: false, 250, record));
+        var result = await CreateDaneTransport(server.Port, new ValidatedTlsaAnswer(true, [new TlsaRecord(3, 1, 1, new byte[32])]), DaneMode.Off).SendAsync(Message());
+        Assert.True(result.IsSuccess);
+        Assert.DoesNotContain("STARTTLS", server.Commands);
+    }
+
+    private static X509Certificate2 CreateCertificate()
+    {
+        using var rsa = RSA.Create(2048);
+        var request = new CertificateRequest("CN=mx.test", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        var san = new SubjectAlternativeNameBuilder(); san.AddDnsName("mx.test"); request.CertificateExtensions.Add(san.Build());
+        using var generated = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
+        return X509CertificateLoader.LoadPkcs12(generated.Export(X509ContentType.Pfx, "smtp-test"), "smtp-test", X509KeyStorageFlags.Exportable | X509KeyStorageFlags.UserKeySet);
+    }
+
+    private static DirectSmtpMailTransport CreateDaneTransport(int port, ValidatedTlsaAnswer answer, DaneMode mode = DaneMode.Opportunistic) =>
+        new(new FakeDns([new MxHost("mx.test", 0)], new Dictionary<string, IPAddress> { ["mx.test"] = IPAddress.Loopback }),
+            new DirectSmtpOptions { EhloName = "sender.test", Port = port, DaneMode = mode, DaneResolver = new FixedDaneResolver(answer) }, new FixedPolicyProvider(null));
+
+    [Fact]
     public async Task Mta_sts_enforce_rejects_mx_names_outside_the_published_policy()
     {
         var transport = new DirectSmtpMailTransport(new FakeDns([new MxHost("bad.mx.test", 0)]),
@@ -220,6 +290,11 @@ public sealed class DirectSmtpSocketTests
     private sealed class FixedPolicyProvider(MtaStsPolicy? policy) : IMtaStsPolicyProvider
     {
         public Task<MtaStsPolicy?> GetPolicyAsync(string domain, CancellationToken ct = default) => Task.FromResult(policy);
+    }
+
+    private sealed class FixedDaneResolver(ValidatedTlsaAnswer answer) : IDaneResolver
+    {
+        public Task<ValidatedTlsaAnswer> GetTlsaAsync(string mxHost, CancellationToken ct = default) => Task.FromResult(answer);
     }
 
     private sealed class SingleClientFactory(HttpMessageHandler handler) : IHttpClientFactory
@@ -322,11 +397,15 @@ public sealed class DirectSmtpSocketTests
                 ServerCertificate = certificate,
                 EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13
             });
-            using var tlsReader = new StreamReader(tls, leaveOpen: true);
-            using var tlsWriter = new StreamWriter(tls, leaveOpen: true) { NewLine = "\r\n", AutoFlush = true };
-            record((await tlsReader.ReadLineAsync())!);
-            await tlsWriter.WriteLineAsync("250 mx.test secured");
-            await ReceiveAndAcceptAsync(tlsReader, tlsWriter, record);
+            try
+            {
+                using var tlsReader = new StreamReader(tls, leaveOpen: true);
+                using var tlsWriter = new StreamWriter(tls, leaveOpen: true) { NewLine = "\r\n", AutoFlush = true };
+                record((await tlsReader.ReadLineAsync())!);
+                await tlsWriter.WriteLineAsync("250 mx.test secured");
+                await ReceiveAndAcceptAsync(tlsReader, tlsWriter, record);
+            }
+            catch (IOException) { /* The client is expected to abort on a DANE certificate mismatch. */ }
         }
 
         private static async Task ReceiveAndAcceptAsync(StreamReader reader, StreamWriter writer, Action<string> record)

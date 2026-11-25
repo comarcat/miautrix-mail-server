@@ -42,6 +42,14 @@ public static class MimeMessageBuilder
         {
             MimeEncoders.RejectHeaderInjection(recipient, "recipient");
         }
+        foreach (var attachment in request.Attachments ?? Array.Empty<MimeAttachment>())
+        {
+            MimeEncoders.RejectHeaderInjection(attachment.FileName, "filename");
+            MimeEncoders.RejectHeaderInjection(attachment.ContentType, "content type");
+            MimeEncoders.RejectHeaderInjection(attachment.Method, "attachment method");
+            MimeEncoders.RejectHeaderInjection(attachment.Component, "attachment component");
+            MimeEncoders.RejectHeaderInjection(attachment.ContentId, "content ID");
+        }
     }
 
     private static string BuildHeaders(MimeMessageRequest request, string messageId, string contentType)
@@ -59,8 +67,8 @@ public static class MimeMessageBuilder
         if (request.IncludeBccHeader && request.Bcc is { Count: > 0 })
             headers.Add(MimeEncoders.Header("Bcc", MimeEncoders.FormatAddressList(request.Bcc)));
 
-        headers.Add(MimeEncoders.Header("Subject", string.IsNullOrWhiteSpace(request.Subject) ? "(No Subject)" : request.Subject));
-        headers.Add($"Date: {request.Date:R}");
+        headers.Add(MimeEncoders.Header("Subject", MimeEncoders.EncodeHeaderValue(string.IsNullOrWhiteSpace(request.Subject) ? "(No Subject)" : request.Subject)));
+        headers.Add($"Date: {request.Date.ToUniversalTime().ToString("ddd, dd MMM yyyy HH:mm:ss +0000", System.Globalization.CultureInfo.InvariantCulture)}");
         headers.Add($"Message-ID: {messageId}");
         if (!string.IsNullOrWhiteSpace(request.InReplyTo))
         {
@@ -162,10 +170,14 @@ public static class MimeMessageBuilder
             builder.Append("; component=").Append(attachment.Component);
         }
 
-        builder.Append("; name=\"").Append(EscapeQuoted(attachment.FileName)).Append("\"\r\n");
+        foreach (var parameter in MimeEncoders.FilenameParameters("name", attachment.FileName))
+            builder.Append(";\r\n\t").Append(parameter);
+        builder.Append("\r\n");
         builder.Append("Content-Transfer-Encoding: base64\r\n");
-        builder.Append("Content-Disposition: ").Append(attachment.Inline ? "inline" : "attachment").Append("; ")
-            .Append(MimeEncoders.ContentDispositionFilename(attachment.FileName)).Append("\r\n");
+        builder.Append("Content-Disposition: ").Append(attachment.Inline ? "inline" : "attachment");
+        foreach (var parameter in MimeEncoders.FilenameParameters("filename", attachment.FileName))
+            builder.Append(";\r\n\t").Append(parameter);
+        builder.Append("\r\n");
         if (!string.IsNullOrWhiteSpace(attachment.ContentId))
         {
             builder.Append("Content-ID: <").Append(EscapeQuoted(attachment.ContentId)).Append(">\r\n");
@@ -197,12 +209,9 @@ public static class MimeMessageBuilder
 
     private static string BuildMessageId(string from)
     {
-        var domain = "miautrix.local";
-        var at = from.LastIndexOf('@');
-        if (at >= 0 && at + 1 < from.Length)
-        {
-            domain = from[(at + 1)..].Trim('>', ' ', '\t');
-        }
+        var parsed = new System.Net.Mail.MailAddress(from.Trim());
+        var at = parsed.Address.LastIndexOf('@');
+        var domain = at >= 0 && at + 1 < parsed.Address.Length ? parsed.Address[(at + 1)..] : "localhost";
 
         return $"<{Guid.NewGuid():N}@{domain}>";
     }

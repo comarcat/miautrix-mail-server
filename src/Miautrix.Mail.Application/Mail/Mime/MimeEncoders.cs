@@ -23,7 +23,10 @@ internal static class MimeEncoders
     public static string FormatAddress(string raw)
     {
         RejectHeaderInjection(raw, "address");
-        return new MailAddress(raw.Trim()).ToString();
+        var address = new MailAddress(raw.Trim());
+        if (address.DisplayName.Any(c => c > 127))
+            return EncodeHeaderValue(address.DisplayName) + " <" + address.Address + ">";
+        return address.ToString();
     }
 
     public static string FormatAddressList(IEnumerable<string> addresses) =>
@@ -37,7 +40,7 @@ internal static class MimeEncoders
         }
     }
 
-    public static string Header(string name, string value) => FoldHeader(name, EncodeHeaderValue(value));
+    public static string Header(string name, string value) => FoldHeader(name, value);
 
     public static string FoldHeader(string name, string value)
     {
@@ -55,9 +58,9 @@ internal static class MimeEncoders
         {
             var separator = current.EndsWith(":", StringComparison.Ordinal) ? " " : " ";
             var candidate = current + separator + word;
-            if (Encoding.UTF8.GetByteCount(candidate) > MaxHeaderLineBytes && current != prefix.TrimEnd())
+            if (Encoding.UTF8.GetByteCount(candidate) > MaxHeaderLineBytes)
             {
-                lines.Add(current);
+                if (current != prefix.TrimEnd() || lines.Count == 0) lines.Add(current);
                 current = " " + word;
             }
             else
@@ -73,26 +76,55 @@ internal static class MimeEncoders
     public static string EncodeHeaderValue(string value)
     {
         RejectHeaderInjection(value, "header");
-        if (value.All(c => c <= 127))
+        if (value.All(c => c <= 127) && value.Split(' ').All(word => Encoding.UTF8.GetByteCount(word) <= 60))
         {
             return value;
         }
 
-        var base64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(value));
-        return $"=?UTF-8?B?{base64}?=";
+        var words = new List<string>();
+        var chunk = new StringBuilder();
+        var chunkBytes = 0;
+        foreach (var rune in value.EnumerateRunes())
+        {
+            var runeBytes = Encoding.UTF8.GetByteCount(rune.ToString());
+            if (chunkBytes + runeBytes > 45 && chunk.Length > 0)
+            {
+                words.Add(ToEncodedWord(chunk.ToString()));
+                chunk.Clear();
+                chunkBytes = 0;
+            }
+            chunk.Append(rune.ToString());
+            chunkBytes += runeBytes;
+        }
+        if (chunk.Length > 0) words.Add(ToEncodedWord(chunk.ToString()));
+        return string.Join(" ", words);
     }
 
-    public static string ContentDispositionFilename(string fileName)
+    public static IReadOnlyList<string> FilenameParameters(string parameterName, string fileName)
     {
         var safe = string.IsNullOrWhiteSpace(fileName) ? "attachment" : Path.GetFileName(fileName.Trim());
         RejectHeaderInjection(safe, "filename");
-        if (safe.All(c => c is >= '!' and <= '~' && c != '"' && c != '\\'))
+        if (safe.Length <= 40 && safe.All(c => c is >= '!' and <= '~' && c != '"' && c != '\\'))
         {
-            return $"filename=\"{safe}\"";
+            return [$"{parameterName}=\"{safe}\""];
         }
-
-        return $"filename*=UTF-8''{Uri.EscapeDataString(safe)}";
+        var escaped = Uri.EscapeDataString(safe);
+        var segments = new List<string>();
+        while (escaped.Length > 0)
+        {
+            var take = Math.Min(45, escaped.Length);
+            while (take > 0 && take < escaped.Length && escaped[take - 1] == '%') take--;
+            while (take > 1 && take < escaped.Length && escaped[take - 2] == '%') take -= 2;
+            if (take == 0) take = Math.Min(3, escaped.Length);
+            segments.Add(escaped[..take]);
+            escaped = escaped[take..];
+        }
+        return segments.Select((part, index) => index == 0
+            ? $"{parameterName}*0*=UTF-8''{part}"
+            : $"{parameterName}*{index}*={part}").ToArray();
     }
+
+    private static string ToEncodedWord(string value) => $"=?UTF-8?B?{Convert.ToBase64String(Encoding.UTF8.GetBytes(value))}?=";
 
     public static string Base64Block(byte[] bytes)
     {

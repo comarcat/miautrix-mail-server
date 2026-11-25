@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Authentication;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Net.Security;
 using System.Text;
@@ -18,6 +19,29 @@ public interface IDnsResolver
     Task<IReadOnlyList<IPAddress>> GetAddressesAsync(string host, CancellationToken ct = default);
     Task<IReadOnlyList<string>> GetTxtAsync(string name, CancellationToken ct = default);
 }
+
+public sealed record TlsaRecord(byte Usage, byte Selector, byte MatchingType, byte[] AssociationData);
+public sealed record ValidatedTlsaAnswer(bool DnssecValidated, IReadOnlyList<TlsaRecord> Records);
+public interface IDaneResolver
+{
+    Task<ValidatedTlsaAnswer> GetTlsaAsync(string mxHost, CancellationToken ct = default);
+}
+
+/// <summary>Queries TLSA through the operator-selected validating resolver. AD is trusted only because the operator explicitly chose this resolver.</summary>
+public sealed class DnsSecTlsaResolver(IPAddress resolverAddress) : IDaneResolver
+{
+    private readonly LookupClient _client = new(new LookupClientOptions(resolverAddress) { RequestDnsSecRecords = true, UseCache = false });
+    public async Task<ValidatedTlsaAnswer> GetTlsaAsync(string mxHost, CancellationToken ct = default)
+    {
+        var response = await _client.QueryAsync($"_25._tcp.{mxHost}", QueryType.TLSA, cancellationToken: ct);
+        var validated = response.Header.IsAuthenticData;
+        var records = response.Answers.TlsaRecords().Select(x => new TlsaRecord((byte)x.CertificateUsage, (byte)x.Selector,
+            (byte)x.MatchingType, x.CertificateAssociationData.ToArray())).ToArray();
+        return new ValidatedTlsaAnswer(validated, records);
+    }
+}
+
+public enum DaneMode { Off, Opportunistic }
 
 public sealed class DnsClientResolver : IDnsResolver
 {
@@ -52,6 +76,8 @@ public sealed class DirectSmtpOptions
     public int ConnectTimeoutSeconds { get; init; } = 20;
     public int CommandTimeoutSeconds { get; init; } = 30;
     public int Port { get; init; } = 25;
+    public DaneMode DaneMode { get; init; } = DaneMode.Off;
+    public IDaneResolver? DaneResolver { get; init; }
     internal RemoteCertificateValidationCallback? TestCertificateValidationCallback { get; init; }
 
     public static DirectSmtpOptions FromEnvironment()
@@ -63,7 +89,21 @@ public sealed class DirectSmtpOptions
             throw new InvalidOperationException("OUTBOUND_EHLO_NAME (or MIAUTRIX_HOSTNAME) must be a valid DNS hostname.");
         var connect = ReadTimeout("OUTBOUND_SMTP_CONNECT_TIMEOUT_SECONDS", 20);
         var command = ReadTimeout("OUTBOUND_SMTP_COMMAND_TIMEOUT_SECONDS", 30);
-        return new DirectSmtpOptions { EhloName = name, ConnectTimeoutSeconds = connect, CommandTimeoutSeconds = command };
+        var modeRaw = Environment.GetEnvironmentVariable("OUTBOUND_DNSSEC_RESOLVER");
+        IPAddress? resolver = null;
+        if (modeRaw is not null && (!IPAddress.TryParse(modeRaw, out resolver) || resolver.AddressFamily is not (AddressFamily.InterNetwork or AddressFamily.InterNetworkV6)))
+            throw new InvalidOperationException("OUTBOUND_DNSSEC_RESOLVER must be an IP address.");
+        var daneRaw = Environment.GetEnvironmentVariable("OUTBOUND_DANE_MODE") ?? "off";
+        var daneMode = daneRaw.Trim().ToLowerInvariant() switch
+        {
+            "off" => DaneMode.Off,
+            "opportunistic" => DaneMode.Opportunistic,
+            _ => throw new InvalidOperationException("OUTBOUND_DANE_MODE must be off or opportunistic.")
+        };
+        if (daneMode == DaneMode.Opportunistic && resolver is null)
+            System.Diagnostics.Trace.TraceWarning("OUTBOUND_DANE_MODE is opportunistic but OUTBOUND_DNSSEC_RESOLVER is unset; DANE is inactive.");
+        return new DirectSmtpOptions { EhloName = name, ConnectTimeoutSeconds = connect, CommandTimeoutSeconds = command,
+            DaneMode = daneMode, DaneResolver = resolver is null ? null : new DnsSecTlsaResolver(resolver) };
     }
 
     /// <summary>OUTBOUND_EHLO_NAME when set, otherwise MIAUTRIX_HOSTNAME.</summary>
@@ -130,16 +170,25 @@ public sealed class DirectSmtpMailTransport(IDnsResolver dns, DirectSmtpOptions 
             if (targets.Count == 0) return TransportSendResult.Fail("Recipient MX hosts have no address records.", 451);
         }
 
+        var daneByTarget = new Dictionary<string, IReadOnlyList<TlsaRecord>>(StringComparer.OrdinalIgnoreCase);
+        if (options.DaneMode == DaneMode.Opportunistic && options.DaneResolver is not null)
+        {
+            foreach (var host in targets.Select(t => t.PolicyHost).Distinct(StringComparer.OrdinalIgnoreCase))
+                daneByTarget[host] = await GetUsableDaneRecordsAsync(host, ct);
+        }
+
         MtaStsPolicy? policy;
         try { policy = await policyProvider.GetPolicyAsync(recipientDomain, ct); }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return TransportSendResult.Fail("MTA-STS policy lookup failed: " + ex.GetType().Name, 451);
+            if (daneByTarget.Values.All(records => records.Count == 0))
+                return TransportSendResult.Fail("MTA-STS policy lookup failed: " + ex.GetType().Name, 451);
+            policy = null; // DNSSEC-validated DANE takes precedence over MTA-STS (RFC 8461 §2).
         }
 
         if (policy?.Mode == MtaStsMode.Enforce)
         {
-            targets = targets.Where(target => policy.MatchesMx(target.PolicyHost)).ToList();
+            targets = targets.Where(target => daneByTarget.GetValueOrDefault(target.PolicyHost)?.Count > 0 || policy.MatchesMx(target.PolicyHost)).ToList();
             if (targets.Count == 0)
                 return TransportSendResult.Fail("MTA-STS enforce policy has no matching MX host.", 451);
         }
@@ -153,7 +202,9 @@ public sealed class DirectSmtpMailTransport(IDnsResolver dns, DirectSmtpOptions 
         {
             try
             {
-                await SendToHostAsync(target.ConnectAddress, target.PolicyHost, sender, recipient, message.RawMessage, requireTls, ct);
+                var daneRecords = daneByTarget.GetValueOrDefault(target.PolicyHost) ?? [];
+                var daneRequired = daneRecords.Count > 0;
+                await SendToHostAsync(target.ConnectAddress, target.PolicyHost, sender, recipient, message.RawMessage, requireTls || daneRequired, daneRecords, ct);
                 return TransportSendResult.Ok(250);
             }
             catch (SmtpReplyException ex)
@@ -170,7 +221,24 @@ public sealed class DirectSmtpMailTransport(IDnsResolver dns, DirectSmtpOptions 
         return TransportSendResult.Fail(transient ? "All recipient MX hosts failed temporarily or could not be reached." : "Delivery failed.", temporaryCode ?? 451);
     }
 
-    private async Task SendToHostAsync(string connectAddress, string tlsTargetHost, string sender, string recipient, string rawMessage, bool requireTls, CancellationToken ct)
+    private async Task<IReadOnlyList<TlsaRecord>> GetUsableDaneRecordsAsync(string mxHost, CancellationToken ct)
+    {
+        if (options.DaneMode != DaneMode.Opportunistic || options.DaneResolver is null) return [];
+        try
+        {
+            var answer = await options.DaneResolver.GetTlsaAsync(mxHost, ct);
+            if (!answer.DnssecValidated) return [];
+            // PKIX-TA/EE usages are not usable for SMTP DANE (RFC 7672 §3.1.3).
+            return answer.Records.Where(r => r.Usage is 2 or 3 && r.Selector is 0 or 1 && r.MatchingType is 0 or 1 or 2).ToArray();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            System.Diagnostics.Trace.TraceWarning("DANE TLSA lookup failed for {0}: {1}", mxHost, ex.GetType().Name);
+            return [];
+        }
+    }
+
+    private async Task SendToHostAsync(string connectAddress, string tlsTargetHost, string sender, string recipient, string rawMessage, bool requireTls, IReadOnlyList<TlsaRecord> daneRecords, CancellationToken ct)
     {
         using var tcp = new TcpClient();
         using (var connectTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct))
@@ -197,7 +265,9 @@ public sealed class DirectSmtpMailTransport(IDnsResolver dns, DirectSmtpOptions 
                     TargetHost = tlsTargetHost,
                     EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
                     CertificateRevocationCheckMode = X509RevocationMode.Online,
-                    RemoteCertificateValidationCallback = options.TestCertificateValidationCallback
+                    RemoteCertificateValidationCallback = options.TestCertificateValidationCallback ?? (daneRecords.Count > 0
+                        ? (_, certificate, chain, errors) => ValidateDaneCertificate(certificate, chain, errors, daneRecords)
+                        : null)
                 }, timeout.Token);
                 stream = tls;
                 reader.Dispose(); writer.Dispose();
@@ -209,6 +279,43 @@ public sealed class DirectSmtpMailTransport(IDnsResolver dns, DirectSmtpOptions 
         }
         else if (requireTls) throw new SmtpReplyException(450);
         await EnvelopeAndDataAsync(reader, writer, sender, recipient, rawMessage, timeout.Token);
+    }
+
+    private static bool ValidateDaneCertificate(X509Certificate? certificate, X509Chain? chain, SslPolicyErrors errors, IReadOnlyList<TlsaRecord> records)
+    {
+        if (certificate is null || (errors & SslPolicyErrors.RemoteCertificateNameMismatch) != 0) return false;
+        using var leaf = new X509Certificate2(certificate);
+        foreach (var record in records)
+        {
+            IEnumerable<X509Certificate2> candidates = record.Usage == 3
+                ? [leaf]
+                : (chain?.ChainElements.Cast<X509ChainElement>().Select(e => e.Certificate) ?? []).ToArray();
+            foreach (var candidate in candidates)
+            {
+                byte[] selected;
+                try
+                {
+                    if (record.Selector == 0) selected = candidate.RawData;
+                    else using (var rsa = candidate.GetRSAPublicKey())
+                    using (var ecdsa = rsa is null ? candidate.GetECDsaPublicKey() : null)
+                        selected = rsa?.ExportSubjectPublicKeyInfo() ?? ecdsa?.ExportSubjectPublicKeyInfo() ?? [];
+                }
+                catch (CryptographicException) { continue; }
+                byte[] actual = record.MatchingType switch
+                {
+                    0 => selected,
+                    1 => SHA256.HashData(selected),
+                    2 => SHA512.HashData(selected),
+                    _ => []
+                };
+                if (actual.Length > 0 && CryptographicOperations.FixedTimeEquals(actual, record.AssociationData))
+                {
+                    // DANE-EE/TA relaxes PKIX trust, never the MX reference-name check.
+                    return (errors & ~SslPolicyErrors.RemoteCertificateChainErrors) == SslPolicyErrors.None;
+                }
+            }
+        }
+        return false;
     }
 
     private async Task SendAfterTlsAsync(Stream stream, string sender, string recipient, string rawMessage, CancellationToken ct)
