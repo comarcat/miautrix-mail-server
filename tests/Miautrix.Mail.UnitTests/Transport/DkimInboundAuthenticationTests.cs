@@ -68,6 +68,20 @@ public sealed class DkimInboundAuthenticationTests
         Assert.Contains(result.Dkim, item => item.Selector == "bad" && item.Result == "fail");
     }
 
+    [Fact]
+    public async Task Webhook_without_ip_still_checks_dkim_and_accepts_only_explicit_cloudflare_spf_result()
+    {
+        using var key = RSA.Create(2048);
+        var message = Sign(key, "s1");
+        var dns = new FakeDnsResolver(); dns.Txt["s1._domainkey." + Domain] = [PublicRecord(key)];
+        var service = new InboundAuthenticationService(dns, Options);
+        var legacy = await service.EvaluateAsync(new(null, null, "sender@example.test", message, InboundMailPath.CloudflareWebhook));
+        Assert.Equal("none", legacy.Spf.Result);
+        Assert.Equal("pass", legacy.Dkim.Single().Result);
+        var withCloudflare = await service.EvaluateAsync(new(null, null, "sender@example.test", message, InboundMailPath.CloudflareWebhook, "cloudflare; spf=pass smtp.mailfrom=example.test"));
+        Assert.Equal("pass", withCloudflare.Spf.Result);
+    }
+
     private static async Task<InboundAuthenticationResult> Evaluate(string raw, RSA key, string selector)
     {
         var dns = new FakeDnsResolver(); dns.Txt[$"{selector}._domainkey.{Domain}"] = [PublicRecord(key)];

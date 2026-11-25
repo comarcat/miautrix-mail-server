@@ -7,6 +7,7 @@ using System.Globalization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Miautrix.Mail.Application.Transport;
 using Miautrix.Mail.Protocols.Smtp;
 
 namespace Miautrix.Mail.Worker;
@@ -169,6 +170,8 @@ public class SmtpListenerService : BackgroundService
         var inboundHandler = scope.ServiceProvider.GetRequiredService<ISmtpInboundHandler>();
 
         // State
+        var clientIp = (client.Client.RemoteEndPoint as IPEndPoint)?.Address;
+        string? heloName = null;
         string? authenticatedUsername = null;
         Guid? tenantId = null;
         Guid? userId = null;
@@ -208,6 +211,7 @@ public class SmtpListenerService : BackgroundService
                 }
                 mailFrom = null;
                 recipients.Clear();
+                heloName = line[(commandEnd + 1)..].Trim();
                 greeted = true;
                 extendedSmtp = command == "EHLO";
                 if (!extendedSmtp)
@@ -543,7 +547,8 @@ public class SmtpListenerService : BackgroundService
                     if (_mode == SmtpListenerMode.Inbound)
                     {
                         var (resp, _) = await inboundHandler.HandleDataAsync(
-                            recipient.TenantId, mailFrom!, recipient.Address, rawMessage, cancellationToken: ct);
+                            recipient.TenantId, mailFrom!, recipient.Address, rawMessage, cancellationToken: ct,
+                            path: InboundMailPath.Smtp25, clientIp: clientIp, helo: heloName);
                         if (!resp.IsSuccess) { response = resp; break; }
                     }
                     else

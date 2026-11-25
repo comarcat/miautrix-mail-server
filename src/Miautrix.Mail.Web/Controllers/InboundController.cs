@@ -4,6 +4,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Miautrix.Mail.Identity;
+using Miautrix.Mail.Application.Transport;
 using Miautrix.Mail.Protocols.Smtp;
 using Miautrix.Mail.Web.Contracts;
 using Miautrix.Mail.Web.Infrastructure;
@@ -25,6 +26,7 @@ public sealed class InboundController : ControllerBase
     private const string TokenHeader = "X-Miautrix-Inbound-Token";
     private const string EnvelopeFromHeader = "X-Miautrix-Envelope-From";
     private const string EnvelopeToHeader = "X-Miautrix-Envelope-To";
+    private const string CloudflareAuthResultsHeader = "X-Miautrix-Cloudflare-Authentication-Results";
 
     private readonly InboundWebhookOptions _options;
     private readonly ISmtpDomainValidator _domainValidator;
@@ -133,7 +135,11 @@ public sealed class InboundController : ControllerBase
             envelopeTo,
             rawMime,
             subject: null,
-            cancellationToken);
+            cancellationToken,
+            path: InboundMailPath.CloudflareWebhook,
+            clientIp: null,
+            helo: null,
+            cloudflareAuthenticationResults: Request.Headers[CloudflareAuthResultsHeader].FirstOrDefault());
 
         if (!response.IsSuccess)
         {

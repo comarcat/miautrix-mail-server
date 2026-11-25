@@ -297,6 +297,7 @@ public sealed class CloudflareTransportTests : IClassFixture<WebApplicationFacto
             Assert.Equal($"user@{LocalDomain}", queued.Recipient);
             Assert.Equal("Pending", queued.Status);
             Assert.Contains("Hello.", queued.RawMessage);
+            Assert.Contains("Authentication-Results:", queued.RawMessage);
         }
         finally
         {

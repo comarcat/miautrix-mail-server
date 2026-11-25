@@ -31,6 +31,11 @@ public sealed class InboundAuthenticationService : IInboundAuthenticationService
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         budget.CancelAfter(TimeSpan.FromSeconds(10));
         var spf = await _spfEvaluator.EvaluateAsync(input.ClientIp, input.Helo, input.MailFrom, budget.Token);
+        if (input.Path == InboundMailPath.CloudflareWebhook)
+        {
+            var cloudflareResults = input.CloudflareAuthenticationResults ?? ReadCloudflareAuthenticationResults(input.RawMessage);
+            if (TryReadSpf(cloudflareResults, out var cloudflareSpf)) spf = cloudflareSpf;
+        }
         var dkim = await EvaluateDkim(input.RawMessage, budget.Token);
         var message = MimeMessage.Load(new MemoryStream(Encoding.UTF8.GetBytes(input.RawMessage)));
         var fromDomains = message.From.Mailboxes.Select(m => m.Domain.ToLowerInvariant()).Distinct().ToArray();
@@ -39,6 +44,33 @@ public sealed class InboundAuthenticationService : IInboundAuthenticationService
                    (dkim.Count == 0 ? "dkim=none" : string.Join("; ", dkim.Select(x => $"dkim={x.Result} header.d={x.Domain ?? "unknown"}"))) +
                    $"; dmarc={dmarc.Result} header.from={dmarc.Domain ?? "unknown"}";
         return new(spf, dkim, dmarc, auth);
+    }
+
+    private static string? ReadCloudflareAuthenticationResults(string raw)
+    {
+        var headerEnd = raw.IndexOf("\r\n\r\n", StringComparison.Ordinal);
+        var headers = headerEnd >= 0 ? raw[..headerEnd] : raw.Split(new[] { "\n\n" }, StringSplitOptions.None)[0];
+        foreach (var line in headers.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None))
+            if (line.StartsWith("Authentication-Results:", StringComparison.OrdinalIgnoreCase) && line.Contains("cloudflare", StringComparison.OrdinalIgnoreCase))
+                return line[(line.IndexOf(':') + 1)..].Trim();
+        return null;
+    }
+
+    private static bool TryReadSpf(string? authResults, out SpfAuthenticationResult result)
+    {
+        result = new("none", null);
+        if (string.IsNullOrWhiteSpace(authResults)) return false;
+        var segments = authResults.Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length < 2 || !segments[0].Contains("cloudflare", StringComparison.OrdinalIgnoreCase)) return false;
+        var spf = segments.Skip(1).FirstOrDefault(x => x.StartsWith("spf=", StringComparison.OrdinalIgnoreCase));
+        if (spf is null) return false;
+        var pair = spf.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        var status = pair[0][4..].ToLowerInvariant();
+        if (status is not ("pass" or "fail" or "softfail" or "neutral" or "temperror" or "permerror" or "none")) return false;
+        var domain = pair.FirstOrDefault(x => x.StartsWith("smtp.mailfrom=", StringComparison.OrdinalIgnoreCase))?[14..].Trim('<', '>');
+        if (domain?.Contains('@') == true) domain = domain[(domain.LastIndexOf('@') + 1)..];
+        result = new(status, domain, "Cloudflare-authenticated webhook result");
+        return true;
     }
 
     private async Task<DmarcAuthenticationResult> EvaluateDmarc(string[] fromDomains, SpfAuthenticationResult spf, IReadOnlyList<DkimAuthenticationResult> dkim, CancellationToken ct)
