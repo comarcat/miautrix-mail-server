@@ -162,6 +162,14 @@ internal static class CalendarTestHelpers
             UpdatedAt = now
         });
 
+        context.Folders.AddRange(
+            new Folder { Id = Guid.NewGuid(), TenantId = tenantId, MailboxId = mailboxId, Name = "INBOX", Role = "inbox", UidNext = 1, CreatedAt = now, UpdatedAt = now },
+            new Folder { Id = Guid.NewGuid(), TenantId = tenantId, MailboxId = mailboxId, Name = "Sent", Role = "sent", UidNext = 1, CreatedAt = now, UpdatedAt = now },
+            new Folder { Id = Guid.NewGuid(), TenantId = tenantId, MailboxId = mailboxId, Name = "Drafts", Role = "drafts", UidNext = 1, CreatedAt = now, UpdatedAt = now },
+            new Folder { Id = Guid.NewGuid(), TenantId = tenantId, MailboxId = mailboxId, Name = "Archive", Role = "archive", UidNext = 1, CreatedAt = now, UpdatedAt = now },
+            new Folder { Id = Guid.NewGuid(), TenantId = tenantId, MailboxId = mailboxId, Name = "Junk", Role = "junk", UidNext = 1, CreatedAt = now, UpdatedAt = now },
+            new Folder { Id = Guid.NewGuid(), TenantId = tenantId, MailboxId = mailboxId, Name = "Trash", Role = "trash", UidNext = 1, CreatedAt = now, UpdatedAt = now });
+
         await context.SaveChangesAsync();
         return mailboxId;
     }

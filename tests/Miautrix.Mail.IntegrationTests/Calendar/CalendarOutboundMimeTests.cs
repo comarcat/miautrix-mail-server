@@ -59,11 +59,13 @@ public sealed class CalendarOutboundMimeTests : IClassFixture<WebApplicationFact
             var raw = await LoadQueuedMessageAsync(tenantId, ExternalInvitee);
 
             Assert.Contains("multipart/mixed", raw, StringComparison.OrdinalIgnoreCase);
+            var unfoldedRaw = raw.Replace("\r\n\t", " ", StringComparison.Ordinal)
+                .Replace("\r\n ", " ", StringComparison.Ordinal);
             Assert.Contains(
                 "Content-Type: text/calendar; charset=utf-8; method=REQUEST; component=VEVENT; name=\"invitation.ics\"",
-                raw,
+                unfoldedRaw,
                 StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("Content-Disposition: attachment; filename=\"invitation.ics\"", raw, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Content-Disposition: attachment; filename=\"invitation.ics\"", unfoldedRaw, StringComparison.OrdinalIgnoreCase);
 
             var ical = CalendarTestHelpers.UnfoldCalendar(
                 CalendarTestHelpers.ExtractDecodedPart(raw, "filename=\"invitation.ics\""));

@@ -167,7 +167,7 @@ public sealed class MessageUidAllocatorTests : IClassFixture<UidPostgresFixture>
 /// <summary>
 /// Provides a throwaway PostgreSQL server. When MIAUTRIX_TEST_SERVER_CONNECTION is set (a role with
 /// CREATEDB on a NON-production server, connected to its maintenance database), each test creates its
-/// own uidtest_* database there and every one of them is dropped afterwards; otherwise Testcontainers
+/// own miautrix_test_fixtures_uid_* database there and every one of them is dropped afterwards; otherwise Testcontainers
 /// starts a disposable PostgreSQL 18 container (requires Docker).
 /// </summary>
 public sealed class UidPostgresFixture : IAsyncLifetime
@@ -219,7 +219,7 @@ public sealed class UidPostgresFixture : IAsyncLifetime
 
     public async Task<string> CreateDatabaseAsync()
     {
-        var database = "uidtest_" + Guid.NewGuid().ToString("N");
+        var database = "miautrix_test_fixtures_uid_" + Guid.NewGuid().ToString("N");
         await using var connection = new NpgsqlConnection(ServerConnection);
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
