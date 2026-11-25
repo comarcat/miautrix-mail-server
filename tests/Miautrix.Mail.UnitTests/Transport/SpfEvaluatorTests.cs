@@ -23,6 +23,8 @@ public sealed class SpfEvaluatorTests
         {"v=spf1 exists:%{h}.example.test -all", null, "pass"}, {"v=spf1 exists:%{c}.example.test -all", null, "pass"},
         {"v=spf1 exists:%{v}.example.test -all", null, "pass"}, {"v=spf1 exists:%{r}.example.test -all", null, "pass"},
         {"v=spf1 exists:%{t}.example.test -all", null, "pass"}, {"v=spf1 exists:%%%{i}.example.test -all", null, "pass"},
+        {"v=spf1 exists:%{d2}.example.test -all", null, "pass"}, {"v=spf1 exists:%{d1r}.example.test -all", null, "pass"},
+        {"v=spf1 exists:%{S}.example.test -all", null, "pass"}, {"v=spf1 exists:%{p}.example.test -all", null, "pass"},
         {"v=spf1", null, "neutral"},
     };
 

@@ -18,6 +18,10 @@ public interface IDnsResolver
     Task<IReadOnlyList<IPAddress>> GetAddressesAsync(string host, CancellationToken ct = default);
     Task<IReadOnlyList<string>> GetTxtAsync(string name, CancellationToken ct = default);
     Task<IReadOnlyList<string>> GetPtrAsync(IPAddress address, CancellationToken ct = default);
+    async Task<IReadOnlyList<IPAddress>> GetAAsync(string host, CancellationToken ct = default) =>
+        (await GetAddressesAsync(host, ct)).Where(address => address.AddressFamily == AddressFamily.InterNetwork).ToArray();
+    async Task<IReadOnlyList<IPAddress>> GetAaaaAsync(string host, CancellationToken ct = default) =>
+        (await GetAddressesAsync(host, ct)).Where(address => address.AddressFamily == AddressFamily.InterNetworkV6).ToArray();
 }
 
 public sealed class DnsClientResolver : IDnsResolver
@@ -38,6 +42,18 @@ public sealed class DnsClientResolver : IDnsResolver
         var aaaa = await _client.QueryAsync(host, QueryType.AAAA, cancellationToken: ct);
         result.AddRange(aaaa.Answers.AaaaRecords().Select(r => r.Address));
         return result;
+    }
+
+    public async Task<IReadOnlyList<IPAddress>> GetAAsync(string host, CancellationToken ct = default)
+    {
+        var response = await _client.QueryAsync(host, QueryType.A, cancellationToken: ct);
+        return response.Answers.ARecords().Select(record => record.Address).ToArray();
+    }
+
+    public async Task<IReadOnlyList<IPAddress>> GetAaaaAsync(string host, CancellationToken ct = default)
+    {
+        var response = await _client.QueryAsync(host, QueryType.AAAA, cancellationToken: ct);
+        return response.Answers.AaaaRecords().Select(record => record.Address).ToArray();
     }
 
     public async Task<IReadOnlyList<string>> GetTxtAsync(string name, CancellationToken ct = default)

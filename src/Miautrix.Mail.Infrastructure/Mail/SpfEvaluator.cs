@@ -66,7 +66,8 @@ public sealed class SpfEvaluator(IDnsResolver dns)
         }
         if (redirect is not null)
         {
-            var target = Expand(redirect, s, domain);
+            if (!CountLookup(s)) return "permerror";
+            var target = await ExpandAsync(redirect, s, domain);
             var redirected = await EvalDomain(s, target, depth + 1);
             return redirected == "none" ? "permerror" : redirected;
         }
@@ -89,15 +90,15 @@ public sealed class SpfEvaluator(IDnsResolver dns)
         if (mech.StartsWith("include:", StringComparison.OrdinalIgnoreCase))
         {
             if (!CountLookup(s)) return "permerror";
-            var target = Expand(mech[8..], s, domain);
+            var target = await ExpandAsync(mech[8..], s, domain);
             var result = await EvalDomain(s, target, depth + 1);
             return result switch { "pass" => "pass", "fail" or "softfail" or "neutral" => "nomatch", "none" => "permerror", _ => result };
         }
         if (mech.StartsWith("exists:", StringComparison.OrdinalIgnoreCase))
         {
             if (!CountLookup(s)) return "permerror";
-            var name = Expand(mech[7..], s, domain);
-            var ips = await s.Dns.GetAddressesAsync(name, s.Token);
+            var name = await ExpandAsync(mech[7..], s, domain);
+            var ips = await s.Dns.GetAAsync(name, s.Token);
             if (ips.Count == 0 && !Void(s)) return "permerror";
             return ips.Count > 0 ? "pass" : "nomatch";
         }
@@ -108,7 +109,7 @@ public sealed class SpfEvaluator(IDnsResolver dns)
         if (!CountLookup(s)) return "permerror";
         var arg = mech[(isA ? 1 : isMx ? 2 : 3)..];
         var segments = arg.Split('/', StringSplitOptions.None);
-        var host = segments[0].StartsWith(':') ? Expand(segments[0][1..], s, domain) : string.IsNullOrEmpty(segments[0]) ? domain : Expand(segments[0], s, domain);
+        var host = segments[0].StartsWith(':') ? await ExpandAsync(segments[0][1..], s, domain) : string.IsNullOrEmpty(segments[0]) ? domain : await ExpandAsync(segments[0], s, domain);
         var cidr4 = 32; var cidr6 = 128;
         var slash = mech.IndexOf('/');
         if (slash >= 0)
@@ -118,21 +119,32 @@ public sealed class SpfEvaluator(IDnsResolver dns)
             if (cidrs.Length == 2 && (!int.TryParse(cidrs[1], out cidr6) || cidr6 is < 0 or > 128)) return "permerror";
         }
         var addresses = new List<IPAddress>();
-        if (isA) addresses.AddRange(await s.Dns.GetAddressesAsync(host, s.Token));
+        if (isA) addresses.AddRange(s.Ip.AddressFamily == AddressFamily.InterNetwork
+            ? await s.Dns.GetAAsync(host, s.Token)
+            : await s.Dns.GetAaaaAsync(host, s.Token));
         else if (isMx)
         {
             var mx = await s.Dns.GetMxAsync(host, s.Token);
             if (mx.Count == 0 && !Void(s)) return "permerror";
             if (mx.Count > 10) return "permerror";
-            foreach (var server in mx) addresses.AddRange(await s.Dns.GetAddressesAsync(server.Host, s.Token));
+            foreach (var server in mx)
+            {
+                var hostAddresses = s.Ip.AddressFamily == AddressFamily.InterNetwork
+                    ? await s.Dns.GetAAsync(server.Host, s.Token)
+                    : await s.Dns.GetAaaaAsync(server.Host, s.Token);
+                if (hostAddresses.Count == 0 && !Void(s)) return "permerror";
+                addresses.AddRange(hostAddresses);
+            }
         }
         else
         {
             var ptrs = await s.Dns.GetPtrAsync(s.Ip, s.Token);
+            if (ptrs.Count == 0 && !Void(s)) return "permerror";
             foreach (var ptr in ptrs.Take(10))
-                if ((ptr.Equals(host, StringComparison.OrdinalIgnoreCase) || ptr.EndsWith("." + host, StringComparison.OrdinalIgnoreCase)) && (await s.Dns.GetAddressesAsync(ptr, s.Token)).Contains(s.Ip)) return "pass";
+                if ((ptr.Equals(host, StringComparison.OrdinalIgnoreCase) || ptr.EndsWith("." + host, StringComparison.OrdinalIgnoreCase)) &&
+                    (s.Ip.AddressFamily == AddressFamily.InterNetwork ? await s.Dns.GetAAsync(ptr, s.Token) : await s.Dns.GetAaaaAsync(ptr, s.Token)).Contains(s.Ip)) return "pass";
         }
-        if (addresses.Count == 0 && !isPtr && !Void(s)) return "permerror";
+        if (addresses.Count == 0 && !isPtr && !isMx && !Void(s)) return "permerror";
         return addresses.Any(ip => InNetwork(s.Ip, ip, ip.AddressFamily == AddressFamily.InterNetwork ? cidr4 : cidr6)) ? "pass" : "nomatch";
     }
 
@@ -147,7 +159,7 @@ public sealed class SpfEvaluator(IDnsResolver dns)
         return true;
     }
 
-    private static string Expand(string input, State s, string domain)
+    private static async Task<string> ExpandAsync(string input, State s, string domain)
     {
         var output = new StringBuilder();
         for (var i = 0; i < input.Length; i++)
@@ -158,32 +170,58 @@ public sealed class SpfEvaluator(IDnsResolver dns)
             else if (input[i] == '{')
             {
                 var end = input.IndexOf('}', i + 1); if (end < 0) throw new FormatException("unterminated SPF macro");
-                output.Append(Macro(input[(i + 1)..end], s, domain)); i = end;
+                output.Append(await MacroAsync(input[(i + 1)..end], s, domain)); i = end;
             }
             else throw new FormatException("invalid SPF macro");
         }
         return output.ToString().TrimEnd('.').ToLowerInvariant();
     }
 
-    private static string Macro(string body, State s, string domain)
+    private static async Task<string> MacroAsync(string body, State s, string domain)
     {
         if (body.Length == 0) throw new FormatException("empty SPF macro");
         var p = 1;
         while (p < body.Length && char.IsDigit(body[p])) p++;
         var count = p == 1 ? int.MaxValue : int.Parse(body[1..p]);
         var reverse = p < body.Length && body[p] is 'r' or 'R'; if (reverse) p++;
-        var delimiters = p == body.Length ? ".-+," : body[p..];
+        var delimiters = p == body.Length ? ".-+" : body[p..];
         var code = body.Length > 0 ? char.ToLowerInvariant(body[0]) : throw new FormatException();
         var value = code switch
         {
             's' => s.Sender, 'l' => s.Sender.Split('@')[0], 'o' => s.Sender.Contains('@') ? s.Sender[(s.Sender.LastIndexOf('@') + 1)..] : domain,
-            'd' => domain, 'i' => s.Ip.ToString(), 'p' => "unknown", 'v' => s.Ip.AddressFamily == AddressFamily.InterNetworkV6 ? "ip6" : "in-addr", 'h' => s.Helo,
+            'd' => domain, 'i' => FormatIp(s.Ip), 'p' => await ValidatedPtrName(s, domain), 'v' => s.Ip.AddressFamily == AddressFamily.InterNetworkV6 ? "ip6" : "in-addr", 'h' => s.Helo,
             'c' => s.Ip.ToString(), 'r' => "unknown", 't' => DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(), _ => throw new FormatException("unknown SPF macro")
         };
         var pieces = value.Split(delimiters.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+        if (count != int.MaxValue) pieces = pieces.TakeLast(count).ToArray();
         if (reverse) Array.Reverse(pieces);
-        if (count != int.MaxValue) pieces = pieces.Take(count).ToArray();
         var transformed = string.Join('.', pieces);
         return body.Length > 0 && char.IsUpper(body[0]) ? Uri.EscapeDataString(transformed) : transformed;
+    }
+
+    private static string FormatIp(IPAddress ip)
+    {
+        if (ip.AddressFamily == AddressFamily.InterNetwork) return ip.ToString();
+        var hex = Convert.ToHexString(ip.GetAddressBytes()).ToLowerInvariant();
+        return string.Join('.', hex.Reverse());
+    }
+
+    private static async Task<string> ValidatedPtrName(State s, string currentDomain)
+    {
+        if (!CountLookup(s)) throw new FormatException("SPF lookup limit exceeded during p macro expansion.");
+        var ptrs = await s.Dns.GetPtrAsync(s.Ip, s.Token);
+        if (ptrs.Count == 0) { if (!Void(s)) throw new FormatException("SPF void lookup limit exceeded."); return "unknown"; }
+        var valid = new List<string>();
+        foreach (var ptr in ptrs.Take(10))
+        {
+            var addresses = s.Ip.AddressFamily == AddressFamily.InterNetwork
+                ? await s.Dns.GetAAsync(ptr, s.Token)
+                : await s.Dns.GetAaaaAsync(ptr, s.Token);
+            if (addresses.Contains(s.Ip)) valid.Add(ptr.TrimEnd('.').ToLowerInvariant());
+        }
+        return valid.FirstOrDefault(name => name.Equals(currentDomain, StringComparison.OrdinalIgnoreCase) || name.EndsWith("." + currentDomain, StringComparison.OrdinalIgnoreCase))
+            ?? valid.FirstOrDefault(name => name.Equals(s.Helo, StringComparison.OrdinalIgnoreCase) || name.EndsWith("." + s.Helo, StringComparison.OrdinalIgnoreCase))
+            ?? valid.FirstOrDefault()
+            ?? "unknown";
     }
 }
