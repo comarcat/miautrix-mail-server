@@ -1,4 +1,5 @@
 using System;
+using System.Net;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -8,10 +9,12 @@ using Miautrix.Mail.Domain;
 using Miautrix.Mail.Persistence;
 using Miautrix.Mail.Storage;
 using Miautrix.Mail.Worker;
+using Miautrix.Mail.Protocols.Smtp;
 using Miautrix.Mail.Application.Transport;
 using Miautrix.Mail.Application.Mail;
 using Miautrix.Mail.Application.Mail.Mime;
 using Miautrix.Mail.Infrastructure.Mail;
+using Miautrix.Mail.Queue;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -161,6 +164,40 @@ public sealed class InboundQueueDispatcherTests
         finally { await CleanupAsync(tenantId); }
     }
 
+    [Fact]
+    public async Task Webhook_without_trusted_spf_or_dkim_is_accepted_and_delivered_to_inbox()
+    {
+        var tenantId = await SeedTenantAsync();
+        try
+        {
+            var recipient = $"user@{TestDomain}";
+            var mailboxId = await SeedDomainAndMailboxAsync(tenantId, recipient);
+            var authOptions = new InboundAuthenticationOptions { Mode = AuthenticationMode.Enforce, AuthservId = "localhost" };
+            var authService = new InboundAuthenticationService(new WebhookPolicyDnsResolver(), authOptions);
+            var queue = new CapturingQueueManager();
+            var handler = new SmtpInboundHandler(new LocalDomainValidator(recipient, tenantId), queue, authService, authOptions);
+            var raw = $"From: sender@{TestDomain}\r\nSubject: webhook sender spoof\r\n\r\nbody\r\n";
+
+            var (response, accepted) = await handler.HandleDataAsync(tenantId, $"sender@{TestDomain}", recipient, raw,
+                cancellationToken: CancellationToken.None, path: InboundMailPath.CloudflareWebhook);
+
+            Assert.True(response.IsSuccess);
+            Assert.NotNull(accepted);
+            Assert.Contains("spf=none", accepted.RawMessage);
+            Assert.Contains("dmarc=fail", accepted.RawMessage);
+            Assert.Contains("policy.dmarc=none", accepted.RawMessage);
+            Assert.Contains("reason=\"spf unavailable\"", accepted.RawMessage);
+
+            var queueItemId = await SeedQueueItemAsync(tenantId, recipient, accepted.RawMessage);
+            await RunOnePassAsync(inboundAuthenticationOptions: authOptions);
+            await using var context = CreateContext();
+            Assert.Equal("Delivered", (await context.SmtpQueue.AsNoTracking().FirstAsync(item => item.Id == queueItemId)).Status);
+            var stored = await context.Messages.AsNoTracking().FirstAsync(message => message.MailboxId == mailboxId);
+            Assert.Equal("inbox", (await context.Folders.AsNoTracking().FirstAsync(folder => folder.Id == stored.FolderId)).Role);
+        }
+        finally { await CleanupAsync(tenantId); }
+    }
+
     [Theory]
     [InlineData("body", "From: sender@example.test\r\nSubject: body spoof\r\n\r\nThe literal text dmarc=fail policy.dmarc=quarantine is not a verdict.")]
     [InlineData("foreign-header", "From: sender@example.test\r\nSubject: forwarded spoof\r\nAuthentication-Results: forwarder.example; dmarc=fail header.from=example.test policy.dmarc=quarantine\r\n\r\nbody")]
@@ -281,6 +318,34 @@ public sealed class InboundQueueDispatcherTests
             inboundAuthenticationOptions);
 
         await dispatcher.ProcessPendingMessagesAsync(CancellationToken.None);
+    }
+
+    private sealed class WebhookPolicyDnsResolver : IDnsResolver
+    {
+        public Task<IReadOnlyList<MxHost>> GetMxAsync(string domain, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<MxHost>>([]);
+        public Task<IReadOnlyList<IPAddress>> GetAddressesAsync(string host, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<IPAddress>>([]);
+        public Task<IReadOnlyList<string>> GetPtrAsync(IPAddress address, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<string>>([]);
+        public Task<IReadOnlyList<string>> GetTxtAsync(string name, CancellationToken ct = default)
+        {
+            IReadOnlyList<string> result = name.Equals("_dmarc." + TestDomain, StringComparison.OrdinalIgnoreCase) ? ["v=DMARC1; p=reject"] : [];
+            return Task.FromResult(result);
+        }
+    }
+
+    private sealed class LocalDomainValidator(string recipient, Guid tenantId) : ISmtpDomainValidator
+    {
+        public bool IsDomainLocal(string address, out Guid resolvedTenantId)
+        {
+            resolvedTenantId = tenantId;
+            return address.Equals(recipient, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    private sealed class CapturingQueueManager : ISmtpQueueManager
+    {
+        public Task<SmtpQueueItem> EnqueueAsync(Guid tenantId, string sender, string recipient, string rawMessage, QueueDirection direction, string? subject = null, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new SmtpQueueItem { Id = Guid.NewGuid(), TenantId = tenantId, Direction = direction, Sender = sender, Recipient = recipient, RawMessage = rawMessage, Status = "Pending" });
+        public Task<SmtpDeliveryAttempt> RecordDeliveryAttemptAsync(Guid queueItemId, bool success, string? errorMessage = null, int? responseCode = null, CancellationToken cancellationToken = default, bool permanentFailure = false) => throw new NotSupportedException();
     }
 
     private static string GetConnectionString()
