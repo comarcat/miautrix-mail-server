@@ -6,8 +6,9 @@ Self-hosted, multi-tenant mail platform designed as a modular monolith in .NET 1
 
 - **Architecture Diagram:** [`architecture.html`](architecture.html) (interactive diagram with showcase quality profile)
 - **Architecture Blueprint:** [`blueprints/miautrix-mail-server/blueprint.md`](blueprints/miautrix-mail-server/blueprint.md)
-- **Charter & Plan:** [`PMI_Project_Charter_and_Plan.md`](PMI_Project_Charter_and_Plan.md) — Version 1.0 complete (2026-10-03); Version 2.0 implemented, pending validation (M5)
-- **Session handoff (v2.0):** [`docs/HANDOFF-v2.0.md`](docs/HANDOFF-v2.0.md) — start here to catch up
+- **Charter & Plan:** [`PMI_Project_Charter_and_Plan.md`](PMI_Project_Charter_and_Plan.md) — Version 1.0 complete (2026-10-03); **Version 2.0.0 released 2026-11-24** (M5 closed)
+- **Handoff (v2.0.0 release):** [`docs/HANDOFF-v2.0.0-release.md`](docs/HANDOFF-v2.0.0-release.md) — **start here to catch up**. Full history: [`docs/HANDOFF-v2.0.md`](docs/HANDOFF-v2.0.md)
+- **IMAP:** [`docs/IMAP.md`](docs/IMAP.md) — capabilities, `Shared/` namespace, client setup; Send As model: [`docs/SMTP-SendAs-Report.md`](docs/SMTP-SendAs-Report.md)
 - **Deployment:** [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — versioned deploy, storage preflight, rollback and cleanup
 - **Troubleshooting:** [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) — deployment, service, mail and IMAP diagnostics
 - **Changelog:** [`CHANGELOG.md`](CHANGELOG.md)
@@ -17,7 +18,7 @@ Self-hosted, multi-tenant mail platform designed as a modular monolith in .NET 1
 
 ## 🚀 Project Status
 
-**Version 2.0 implementation is in progress (2026-11-24).** .NET 10, MIME parsing/backfill, webmail isolation, IMAP review fixes, and versioned deployment tooling are implemented locally. Database-backed protocol tests, production deployment and external validation remain pending owner action.
+**Version 2.0.0 is released and running in production (2026-11-24).** It brings .NET 10, MIME parsing and backfill, webmail isolation, full IMAP4rev1 with shared mailboxes, Send As / Send on Behalf, and versioned deployment with rollback. Next: IMAP4rev2 (phase 2).
 
 Build and run with the .NET 10 SDK (`global.json` pins 10.0.403). The `messages reparse` command can backfill stored messages after deployment. Without `--user`, it trusts the local host operator, matching the existing CLI local-access model.
 

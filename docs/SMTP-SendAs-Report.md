@@ -1,6 +1,6 @@
 # SMTP Send As / Send on Behalf
 
-## Status: implementation updated; full verification pending
+## Status: deployed and validated on production 2026-11-24 (v2.0.0, `76c8e7c`)
 
 Implemented a shared Application sender policy and wired it into SMTP submission and webmail. The delegate model and API contract now expose independent `CanSendAs` and `CanSendOnBehalf` flags, defaulting false; Full Access (`AccessLevel=write`) grants neither sending permission. The admin picker exposes separate checkboxes. SMTP rejects invalid envelope senders at MAIL FROM and invalid From headers after DATA with `550 5.7.1`, does not disclose cross-tenant mailbox existence, and records denial actor, attempted address domain, and reason in `audit_logs` without recording message content. Send As strips any supplied Sender header; Send on Behalf overwrites it with the authenticated user's mailbox address and requires the user's own envelope sender. Missing/malformed From and null envelope senders are rejected.
 

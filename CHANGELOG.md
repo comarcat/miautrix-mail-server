@@ -2,7 +2,9 @@
 
 All notable changes to this project are documented here.
 
-## [2.0.0] - 2026-11-23
+## [2.0.0] - 2026-11-24
+
+**Released:** deployed to production on 2026-11-24 from commit `76c8e7c` and validated by the owner (imaplib, Himalaya, Thunderbird and SMTP Send As). Handoff: `docs/HANDOFF-v2.0.0-release.md`.
 
 ### Added
 - **IMAP shared mailboxes (IMAP-009):** delegated mailboxes appear under `Shared/<address>/<folder>`; authorization re-checked on every command; revocation applies to open sessions. See `docs/IMAP.md`.

@@ -104,7 +104,7 @@ The raw listener test exercises personal, write-delegated, read-delegated, Send 
 | UID allocator integration filter | PASS, 3/3 |
 | `dotnet test tests/Miautrix.Mail.UnitTests` | PASS, 101/101 |
 | External Python syntax parse | PASS |
-| Deployed-client validation (imaplib/Himalaya/Thunderbird) | BLOCKED by scope: no production or deployed instance access was used |
+| Deployed-client validation (imaplib/Himalaya/Thunderbird) | PASS: owner validated on production 2026-11-24 (v2.0.0, `76c8e7c`), including `Shared/sales` and Send As |
 
 ## F–H. External validation, documentation and final state
 

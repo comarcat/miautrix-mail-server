@@ -157,6 +157,11 @@ PGPASSFILE=/root/.pgpass pg_restore --clean --if-exists --no-owner -h 10.11.1.52
 
 The manual form requires a valid protected PGPASSFILE. Never restore merely because the application rollback occurred; code rollback does not restore the database.
 
+**Migration-aware rollback.** Before any rollback, check which migrations the target release predates (`db-inspect.sh` lists the applied history).
+- **Example:** rolling v2.0.0 (`76c8e7c`) back to `fb534f1` crosses six migrations: delegate send flags, IMAP subscriptions, `\Recent` and the UIDVALIDITY sequence.
+- **Code-only rollback:** the new columns have defaults, so the old code should run against them. It is untested, though, and it **re-opens sender spoofing** (ERRORS §13.13).
+- **Release before `fb534f1`:** that release writes UID 0. It needs the pre-migration dump restored (owner approval; mail received since the deploy is lost).
+
 **Verify.** Run `./scripts/deploy-release.ps1 -Status`, check both services and local IMAP/Kestrel health, then confirm the expected release ID. After an approved restore, verify application data against the selected recovery point.
 
 **Rollback/escalate.** There is no safe automatic undo for a destructive `pg_restore`. Stop and escalate if the dump, database, or migration state is uncertain. Cleanup syntax is `cleanup --keep 2 --dry-run` to preview and `cleanup --keep 2` to apply; the latter deletes eligible old release/backup sets and is **changes data**. Use `-SkipCleanup` on deploy to preserve older material.
@@ -263,7 +268,25 @@ himalaya --account miautrix-sales envelope list
 
 **Verify.** Run `python scripts/imap-external-validation.py` and check all reported tests, then test Thunderbird and both Himalaya commands. UID FETCH/SEARCH and EXPUNGE should be checked with an approved test mailbox.
 
-**Rollback/escalate.** IMAP-006 (UID 0) is fixed in v2.0 by the UID migration; after the deploy clients may resync once because UIDVALIDITY changed. **TODO(coordinator): confirm after validation.** If UID 0 persists or UID changes without UIDVALIDITY changing, stop and escalate with sanitized protocol evidence; do not delete/recreate mailboxes to mask the issue.
+**Shared mailboxes.** Delegated mailboxes appear at `Shared/<address>/<folder>`, for example `Shared/sales@<domain>/INBOX`. `INBOX` is always the logged-in user's own inbox. The full design and client setup are in `docs/IMAP.md`.
+
+| Symptom | Check |
+|---|---|
+| A shared mailbox is missing from LIST | The user needs a delegate row with `access_level` `read` or `write`. Send As / Send on Behalf alone grant **no** mailbox access. Unauthorized mailboxes look nonexistent (`NO Mailbox does not exist`), by design. |
+| A folder is missing in Thunderbird but present in LIST | Thunderbird shows subscribed folders. Every accessible folder is subscribed by default; an explicit UNSUBSCRIBE stores an opt-out. Re-subscribe in the client (Folder → Subscribe), or check `imap_folder_subscriptions` for `subscribed = false`. |
+| Access was revoked but the client still shows the folder | The next command on it fails, because authorization is checked per command. The client's cached copy remains until it resyncs. |
+| A message deleted in a client is gone, not in Trash | Expected. EXPUNGE deletes permanently (RFC 3501). Clients move a message to Trash before expunging; check the client's delete setting. |
+| Every message shows as new | It shouldn't happen: messages stored before v2.0.0 start not `\Recent`. If you see it, check the `ImapRecentMessages` migration. |
+
+Read-only checks (replace the placeholders, run on the server through `db-inspect`'s connection method):
+
+```sql
+SELECT m.address, d.access_level, d.can_send_as, d.can_send_on_behalf
+FROM mailbox_delegates d JOIN mailboxes m ON m.id = d.mailbox_id
+JOIN users u ON u.id = d.user_id WHERE u.email = '<user-address>';
+```
+
+**Rollback/escalate.** IMAP-006 (UID 0) is fixed and validated in v2.0.0 (2026-11-24): `uid_zero` is 0, and clients resynced once when UIDVALIDITY changed. If UID 0 persists or UID changes without UIDVALIDITY changing, stop and escalate with sanitized protocol evidence; do not delete/recreate mailboxes to mask the issue.
 
 ## 10. Test-tenant cleanup
 
@@ -1425,17 +1448,18 @@ SELECT line FROM (
 
 ### `scripts/imap-external-validation.py`
 
-SHA-256: `c3ba0ce6f1c0cfbe316299cbf7c5259afaf00fa3f92c1da51818af7b8a3f213c`
+SHA-256: `eea509b3c72acc4312efd5e16aa099c6f6002feeb3d7621f9d2a5cb1b264abcf`
 
 ``python
 #!/usr/bin/env python3
-"""External IMAP compliance probe for the IMAP Report defects (IMAP-001..005).
+"""External IMAP compatibility probe, including an optional delegated mailbox.
 
 Host and credentials come from the environment, never from argv:
   MIAUTRIX_IMAP_HOST      hostname that mail clients use (certificate must match)
   MIAUTRIX_IMAP_USER      mailbox address
   MIAUTRIX_IMAP_PASSWORD  mailbox password or application password
   MIAUTRIX_IMAP_INSECURE  optional; "1" skips certificate validation (testing by IP only)
+  MIAUTRIX_IMAP_SHARED_MAILBOX optional; full address to probe under Shared/<address>
 
 Read-only: it uses EXAMINE and BODY.PEEK, so no flags change. It prints counts,
 sizes and status only, never message contents.
@@ -1475,6 +1499,12 @@ with imaplib.IMAP4_SSL(host, 993, ssl_context=context) as client:
     names = [f.decode(errors="replace") for f in (folders or []) if f]
     has_inbox = any('"INBOX"' in n.upper() or n.upper().endswith(" INBOX") for n in names)
     check("IMAP-001 LIST returns folders", status == "OK" and has_inbox, f"{len(names)} folders")
+    status, folders = client.lsub()
+    subscribed_names = [f.decode(errors="replace") for f in (folders or []) if f]
+    subscribed_upper = "\n".join(subscribed_names).upper()
+    special_subscribed = all(name in subscribed_upper for name in ("SENT", "DRAFT", "ARCHIVE", "JUNK", "TRASH"))
+    check("IMAP-009 default folders are subscribed", status == "OK" and special_subscribed,
+          f"{len(subscribed_names)} subscribed folders")
 
     status, data = client.select("INBOX", readonly=True)
     exists = int(data[0]) if status == "OK" and data and data[0] else 0
@@ -1500,7 +1530,7 @@ with imaplib.IMAP4_SSL(host, 993, ssl_context=context) as client:
             if "RFC822.SIZE" in meta:
                 declared = int(meta.split("RFC822.SIZE")[1].split()[0].strip(")"))
         body_len = len(data[0][1]) if ok else 0
-        check("IMAP-004 FETCH full body framing", ok and (declared is None or declared == body_len),
+        check("IMAP-008 RFC822.SIZE equals BODY.PEEK[] octets", ok and declared is not None and declared == body_len,
               f"{body_len} bytes, RFC822.SIZE {declared}")
 
         last = ids[-1].decode() if ids else str(exists)
@@ -1521,6 +1551,41 @@ with imaplib.IMAP4_SSL(host, 993, ssl_context=context) as client:
 
     status, _ = client.close()
     check("CLOSE", status == "OK")
+
+    shared_address = os.environ.get("MIAUTRIX_IMAP_SHARED_MAILBOX")
+    if shared_address:
+        shared_prefix = f"Shared/{shared_address}"
+        status, folders = client.list('""', f'"{shared_prefix}/*"')
+        shared_names = [f.decode(errors="replace") for f in (folders or []) if f]
+        check("IMAP-009 authorized shared LIST", status == "OK" and bool(shared_names),
+              f"{len(shared_names)} folders for configured shared mailbox")
+        status, folders = client.lsub('""', f'"{shared_prefix}/*"')
+        subscribed_shared = [f.decode(errors="replace") for f in (folders or []) if f]
+        check("IMAP-009 shared folders are subscribed by default", status == "OK" and bool(subscribed_shared),
+              f"{len(subscribed_shared)} subscribed shared folders")
+        shared_inbox = f"{shared_prefix}/INBOX"
+        status, data = client.select(shared_inbox, readonly=True)
+        shared_count = int(data[0]) if status == "OK" and data and data[0] else 0
+        check("IMAP-009 shared EXAMINE", status == "OK", f"{shared_count} messages")
+        if status == "OK":
+            status, data = client.search(None, "ALL")
+            shared_ids = data[0].split() if status == "OK" and data and data[0] else []
+            check("IMAP-009 shared SEARCH", status == "OK", f"{len(shared_ids)} ids")
+            if shared_ids:
+                status, data = client.fetch("1", "(UID FLAGS RFC822.SIZE BODY.PEEK[])")
+                ok = status == "OK" and data and isinstance(data[0], tuple)
+                literal_len = len(data[0][1]) if ok else 0
+                declared = None
+                if ok:
+                    meta = data[0][0].decode(errors="replace")
+                    if "RFC822.SIZE" in meta:
+                        declared = int(meta.split("RFC822.SIZE", 1)[1].split()[0].strip(")"))
+                check("IMAP-009 shared FETCH literal and size", ok and declared == literal_len,
+                      f"{literal_len} bytes, RFC822.SIZE {declared}")
+            client.close()
+    else:
+        print("SKIP  IMAP-009 shared checks: MIAUTRIX_IMAP_SHARED_MAILBOX is unset")
+
     client.logout()
 
 print(f"\n{sum(results)}/{len(results)} checks passed")

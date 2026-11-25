@@ -5,9 +5,9 @@
 **Date:** 2026-10-03  
 **Project Sponsor:** Miautrix  
 **Project Lead / Architect:** Cristobal Arboleda  
-**Status:** **Version 1.0 Complete / Approved**
+**Status:** **Version 2.0.0 Released (2026-11-24)** — Version 1.0 Complete / Approved
 
-**Last Updated:** 2026-10-03  
+**Last Updated:** 2026-11-24  
 
 ---
 
@@ -72,7 +72,7 @@ Miautrix Mail Server
 | **M2: Mail Engine** | SMTP In/Out, SPF/DKIM/DMARC, Anti-Spam, IMAP, Sieve, FTS, Rules Engine | ✅ Complete | T7–T13 | `dotnet test --filter Category=Smtp\|Dkim\|Imap\|Rules` |
 | **M3: Surfaces & Client Apps** | OpenAPI REST endpoints, Web Admin, Webmail, CLI | ✅ Complete | T14–T17 | API Integration tests & `pnpm test` |
 | **M4: Operational Readiness** | Desktop Client, Backup/Restore drills, Blue/Green symlink updater, License gates, calendar invitations, Webmail stability | ✅ Complete — Version 1.0 closed 2026-10-03 | T18–T21 | `dotnet build Miautrix.Mail.sln -warnaserror`; calendar invitation unit tests; live/manual verification checklist |
-| **M5: Version 2.0 — Protocol Compliance & Platform Refresh** | .NET 10, shared MimeKit parsing, message backfill, webmail iframe isolation, IMAP compliance, safe release tooling | 🟡 Implemented locally on branch `release/v2.0-imap-mime` (uncommitted, 2026-11-24) — DB protocol tests, owner-operated deploy and external validation remain pending | V2-01–V2-07 | Build, unit/security/webmail gates, DB protocol suite, safe deploy, external clients |
+| **M5: Version 2.0 — Protocol Compliance & Platform Refresh** | .NET 10, shared MimeKit parsing, message backfill, webmail iframe isolation, IMAP compliance, safe release tooling | ✅ **Closed 2026-11-24.** Released as v2.0.0 (`76c8e7c`), deployed and validated by the owner | V2-01–V2-12 | Build, unit/security/protocol/integration/webmail/admin gates, safe deploy, external clients — all passed |
 
 ### Active Execution Phase: Production Integration & Functional Delivery
 
@@ -84,13 +84,16 @@ Miautrix Mail Server
 |---|---|---|
 | V2-01 | .NET 10 retarget and package refresh | Implemented; build passes |
 | V2-02 | Shared MimeKit parser | Implemented; unit coverage passes |
-| V2-03 | Message reparse backfill | Implemented and deployed; production backfill (`messages reparse --dry-run`, then apply) pending owner approval |
+| V2-03 | Message reparse backfill | ✅ Deployed; production backfill applied 2026-11-24 (76 corrected, 0 failed) |
 | V2-04 | Webmail iframe isolation | Implemented; Vitest and production build pass, including iframe load-time resize regression |
-| V2-05 | IMAP-001..005 compliance | Implemented, pending validation. All RFC 3501 commands are dispatched: LIST/LSUB, SELECT/EXAMINE (read-only enforced; read-only delegates are opened read-only), SEARCH/UID SEARCH, FETCH/UID FETCH with exact literal framing, STORE, COPY, EXPUNGE, CLOSE, STATUS, CREATE/DELETE/RENAME and AUTHENTICATE PLAIN. Coordinator review fixes R1–R6 were applied. Open: DB protocol run, external `imaplib`/Himalaya validation, and edge semantics listed in `ERRORS_AND_ISSUES.md` §13.3 |
-| V2-06 | Regression tests | Unit tests pass 70/70 (tokenizer, literals, framing, sequence sets, SEARCH/FETCH parsers, state machine, MIME formatter, rename, raw-socket report sequence). Five MailKit TLS listener scenario tests covering IMAP Report §9 are written and compile, but have not run (no Docker/test DB; see RSK-09) |
+| V2-05 | IMAP-001..005 compliance | ✅ Deployed and validated 2026-11-24. Every RFC 3501 MUST row is implemented and tested (`docs/IMAP-Phase1-Report.md`) |
+| V2-06 | Regression tests | ✅ Unit 101, security 7, protocol 27 (real TLS listener on the dev DB), integration 10, admin 18, webmail 15 |
 | V2-07 | Safe versioned deployment | ✅ Deployed to production 2026-11-24 as `v2.0.0-0394daf-202611241633` (verified: units, ports 25/465/587/993, Kestrel health, net10.0 runtimeconfig, IMAPS greeting). Legacy v1.0 retained as `legacy-net8.0-20261124T155032Z` for rollback; pre-deploy DB dump in `/opt/miautrix-mail/backups`. Two earlier attempts rolled back automatically because of verify-script defects (ERRORS §13.6). |
-| V2-08 | IMAP-006 stable per-folder UIDs | 🟡 Implemented 2026-11-24 (commit baf46ad): atomic allocator on every create/move path; migration `Imap006StableFolderUids` (renumber, uid_next, UIDVALIDITY bump, `uid > 0` check, unique `(folder_id, uid)`); unit tests 81/81. First production deploy attempt (`v2.0.0-7e6cc44-202611241829`) aborted safely at the migration step on migration-history drift (ERRORS §13.10); production unchanged. `AddQueueDirection` made idempotent with a drift regression test. Pending: DB-backed tests on a non-production PostgreSQL (no Docker needed: `MIAUTRIX_TEST_SERVER_CONNECTION`), redeploy with `-RunMigrations`, external validation. |
+| V2-08 | IMAP-006 stable per-folder UIDs | ✅ Deployed 2026-11-24 (migration `Imap006StableFolderUids`, atomic allocator). Validated with external clients |
 | V2-09 | Troubleshooting manual (`docs/TROUBLESHOOTING.md`) | ✅ Written 2026-11-24; §13 migration drift and §14 database tests without Docker added, `db-inspect.sh` in the appendix and zip. 14 symptom → diagnose → fix → verify → rollback sections, hostname placeholders (no hardcoded addresses), and a generated Appendix A plus `docs/TROUBLESHOOTING-scripts.zip` built by `scripts/build-troubleshooting-bundle.ps1` (`-Check` detects drift). The IMAP-006 note is finalized after V2-08 validation; a Windows section follows V2-10. |
+| V2-11 | IMAP-009 shared mailboxes and full IMAP4rev1 (phase 1) | ✅ Deployed and validated 2026-11-24 (`Shared/<address>/<folder>`, per-command authorization, subscriptions, `\Recent`, UIDVALIDITY sequence) |
+| V2-12 | Sender authorization: Send As / Send on Behalf (security fix, ERRORS §13.13) | ✅ Deployed and validated 2026-11-24 |
+| V2-13 | IMAP Phase 2: IMAP4rev2 (RFC 9051) evaluation and implementation | ⏳ Not started; next milestone |
 | V2-10 | Windows server package for real-world testing | 🟡 Built 2026-11-24: `publish/miautrix-mail-win-x64-2.0.0-6086f60.zip` (sha256 ef119ff0…). Windows services, Kestrel HTTPS with the PEM certificate (HTTP on loopback only), registry environment with a restricted ACL, efbundle to the latest schema, secure `users bootstrap-admin`, verify/rollback, `docs/WINDOWS-INSTALL.md` checklist. Pending: the external tester's real-world install and feedback. |
 
 **Version 1.0 closure note (2026-10-03):** Core project scope is complete. The final stabilization pass closed the painful calendar/Webmail defects that blocked signoff: public RSVP actions, reschedule proposal links, explicit UTC schedule wording, and inbox bulk-delete white-screen prevention.
@@ -154,6 +157,7 @@ Each work package carries strict Acceptance Criteria under the EARS standard (*W
 
 | Date | Change | Verification |
 |---|---|---|
+| 2026-11-24 | **Version 2.0.0 released; M5 closed.** Deployed `76c8e7c` with `-RunMigrations` (six migrations). Pre-check found all 5 delegates at `access_level = write`. Merged `release/v2.0-imap-mime` into `main`. Handoff: `docs/HANDOFF-v2.0.0-release.md`. Next: V2-13 (IMAP4rev2). | Owner validation on production: imaplib, Himalaya, Thunderbird (personal and `Shared/sales`), SMTP Send As and rejection, all working. |
 | 2026-11-24 | **IMAP-009 phase 1 and the sender-spoofing fix (ERRORS §13.13), not yet deployed.** Shared mailboxes over IMAP, every RFC 3501 MUST row implemented, Send As / Send on Behalf as a single policy for SMTP and webmail, and 6 idempotent migrations. IMAP4rev2 (phase 2) is not started. | Unit 101, security 7, protocol 27, integration 10, admin 18, webmail 15, build 0/0; migrations proven on dev and throwaway databases. External-client validation is pending after deploy. |
 | 2026-11-24 | **IMAP-007 fixed (not yet deployed; ERRORS §13.12).** The ENVELOPE builder no longer throws on stored messages that do not start with a header, and it is now RFC 3501 compliant (Sender and Reply-To default to From, raw header fields, group syntax, no 8-bit in quoted strings). Also fixed IMAP APPEND failing in production because the listener never passed the UID allocator. Production runs `v2.0.0-fb534f1-202611241923` with all migrations applied. | UnitTests 101/101 (20 new envelope tests); SecurityTests 6/6; ProtocolTests `ImapTests` and `ImapAuthenticatorTests` 8/8 on the dev test DB; build 0/0. Full ProtocolTests suite 25/25 on the dev test DB after the guard was narrowed to `-pro` database names (owner decision) and the test-only defects were fixed. |
 | 2026-11-24 | **Schema comparison and DB-backed test run (ERRORS §13.11).** Production and dev were structurally identical. Both differed from a fresh install: `flag_alert_configurations` was missing, and they carried a legacy queue index. Added the idempotent `ConvergeProductionSchemaDrift` migration and the read-only `db-schema-snapshot.sh`. The DB tests found and fixed a UID allocator crash that would have stopped all delivery after the IMAP-006 deploy, and stale IMAP UIDNEXT. The test run migrated `miautrix-mail-dev`. | `MessageUidAllocatorTests` 3/3 on a throwaway PostgreSQL 18.6; UnitTests 81/81; build 0/0; `has-pending-model-changes`: none. After migration, the dev snapshot equals the fresh-install snapshot (only the legacy history row differs). Production is still unmigrated. |

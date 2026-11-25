@@ -5,7 +5,7 @@
 **Project:** Miautrix Mail Server  
 **Component:** IMAP Server, Mailbox Access, Authorization, Protocol Compliance  
 **Priority:** Critical  
-**Status:** Development Required  
+**Status:** Phase 1 (IMAP4rev1 and shared mailboxes) deployed and validated 2026-11-24, v2.0.0. Phase 2 (IMAP4rev2) pending  
 **Scope:** Shared mailbox implementation + comprehensive IMAP audit and integration testing
 
 ---

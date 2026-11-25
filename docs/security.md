@@ -11,6 +11,11 @@ The Admin Security page now shows real identity/security invariants where they e
 - Session lifetime is read from the session manager.
 - Lockout threshold/duration is centralized in `LockoutOptions`.
 - Domain MFA enforcement is persisted on the `domains.mfa_enforced` column.
+- **Sender authorization (v2.0.0):** SMTP submission and webmail share one policy, `ISenderAuthorizationService`.
+  - Allowed: the user's own address and aliases, plus shared mailboxes where the delegate has Send As (`can_send_as`) or Send on Behalf (`can_send_on_behalf`, server-set `Sender:`).
+  - Everything else is rejected with `550 5.7.1` and audited as `sender.authorization.denied` (domain and reason only).
+  - Send permissions never grant mailbox access.
+- **IMAP delegated access (v2.0.0):** every IMAP command re-checks mailbox access through the authorization helper, so revocation applies to open sessions. Unauthorized or cross-tenant mailboxes are indistinguishable from nonexistent ones.
 
 ## Future implementation items
 

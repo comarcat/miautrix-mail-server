@@ -935,7 +935,7 @@ The root `deploy.ps1` previously included a hardcoded production database passwo
 - **Bug 2, `ImapSession`:** the session keeps one DbContext per connection, so folders came from the change tracker and UIDNEXT/UIDVALIDITY went stale for long-lived clients. The selected folder is now reloaded.
 - **Process note:** the IntegrationTests module initializer migrates `MIAUTRIX_DB_CONNECTION` at start-up, so the test run applied the pending migrations to `miautrix-mail-dev` (and renumbered its UIDs). That database must therefore be a test database.
 
-### 13.12 Fixed (not yet deployed): IMAP-007 — `FETCH n (ENVELOPE)` returns `BAD Internal server error`; IMAP APPEND always `NO` (2026-11-24, High)
+### 13.12 Fixed and deployed (v2.0.0, 2026-11-24): IMAP-007 — `FETCH n (ENVELOPE)` returns `BAD Internal server error`; IMAP APPEND always `NO` (2026-11-24, High)
 
 - **Report:** `FETCH 4 (ENVELOPE)` in INBOX returned `BAD Internal server error`. UID, FLAGS, RFC822.SIZE and `BODY.PEEK[HEADER]` succeeded for the same message.
 - **Root cause (reproduced in unit tests):** `MimeMessage.Load` throws `FormatException` when a stored message does not start with a header line: a blank first line (headerless), a leading continuation line, or a non-header line. `BuildEnvelope` did not catch the exception, so the listener's catch-all turned it into `BAD` for the whole FETCH. `BODY.PEEK[HEADER]` slices bytes without parsing, so it was unaffected. The stored message was not modified.
@@ -961,7 +961,7 @@ The root `deploy.ps1` previously included a hardcoded production database passwo
     - MailKit rejects STORE on a read-only folder client-side;
     - the raw-socket helper sent commands as ASCII, which turned `Café` into `Caf?`.
 
-### 13.13 Fixed (not yet deployed): sender spoofing over SMTP submission and webmail; shared mailboxes invisible over IMAP (2026-11-24, Critical)
+### 13.13 Fixed and deployed (v2.0.0, 2026-11-24): sender spoofing over SMTP submission and webmail; shared mailboxes invisible over IMAP (2026-11-24, Critical)
 
 - **Spoofing:** SMTP submission accepted any `MAIL FROM` and header `From`. Webmail checked write access to the selected mailbox, then accepted any `From`. Any authenticated user could send as any address, including other tenants. There was no Send As / Send on Behalf model.
 - **Fix:** `ISenderAuthorizationService` is the single policy for both paths:
@@ -977,3 +977,5 @@ The root `deploy.ps1` previously included a hardcoded production database passwo
   - delegates with only Send As could change shared mailboxes.
 - **Tests:** unit 101, security 7, protocol 27, integration 10, admin 18, webmail 15; build 0 warnings.
 - **Deploy needs `-RunMigrations`:** six new migrations, all idempotent, proven on dev and fresh databases.
+- **Deployed** 2026-11-24 from `76c8e7c` with `-RunMigrations`. The pre-check found all 5 delegates at `access_level = write`. The owner validated imaplib, Himalaya, Thunderbird (`Shared/sales`) and SMTP Send As / rejection: all working.
+- **Lesson:** worker-reported "green" was not enough. Coordinator review caught three defects that every test passed with: subscriptions defaulting to off, all stored mail marked `\Recent`, and send-only delegates able to modify mailboxes. Review migrations and defaults against existing production data, not only fresh databases.
