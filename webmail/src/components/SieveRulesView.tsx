@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import type { MailSignature, SieveFilterRule } from '../types';
 import { webmailClient } from './WebmailApiClient';
 import { readWorkHours, writeWorkHours } from './workHours';
+import { SieveScriptSettings } from './SieveScriptSettings';
 
 const FLAG_COLORS = ['red', 'blue', 'green', 'orange', 'purple'] as const;
 const WORK_DAY_OPTIONS = [
@@ -234,7 +235,7 @@ export const SieveRulesView: React.FC<SieveRulesViewProps> = ({ initialRules, ma
         <div className="wm-ribbon-group">
           <button type="button" className="btn btn-primary" style={{ padding: '6px 14px', fontSize: '14px' }}>
             <img src="/images/icons/webmail/settings.png" alt="" style={{ width: '14px', filter: 'brightness(0) invert(1)' }} />
-            ManageSieve Active Script
+            Settings
           </button>
         </div>
       </div>
@@ -242,11 +243,13 @@ export const SieveRulesView: React.FC<SieveRulesViewProps> = ({ initialRules, ma
       <div className="wm-body">
         <main className="wm-content" style={{ maxWidth: '1000px', margin: '0 auto' }}>
           <div style={{ marginBottom: '24px' }}>
-            <h1 style={{ fontSize: '2rem', marginBottom: '8px' }}>ManageSieve Filter Rules</h1>
+            <h1 style={{ fontSize: '2rem', marginBottom: '8px' }}>Settings</h1>
             <p style={{ color: 'var(--neutral-body)', margin: 0 }}>
               Server-side Sieve scripts execute automatically upon incoming delivery prior to mailbox storage.
             </p>
           </div>
+
+          <SieveScriptSettings mailboxId={mailboxId} />
 
           <div className="card" style={{ marginBottom: '32px' }}>
             <h3 style={{ fontSize: '1.25rem', marginBottom: '16px' }}>General Settings</h3>

@@ -211,7 +211,7 @@ describe('Webmail SPA UI Flow', () => {
       const rulesTab = screen.getByRole('button', { name: /settings & rules/i });
       fireEvent.click(rulesTab);
 
-      expect(screen.getByRole('heading', { level: 1, name: /managesieve filter rules/i })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { level: 1, name: /^settings$/i })).toBeInTheDocument();
       expect(screen.getAllByText('Move Jira Notifications')[0]).toBeInTheDocument();
     });
 
