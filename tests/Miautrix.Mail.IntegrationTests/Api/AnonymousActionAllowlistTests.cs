@@ -20,7 +20,8 @@ public sealed class AnonymousActionAllowlistTests
         foreach (var action in actions)
         {
             var isAllowlisted = IsReviewedAnonymous(action.Template, action.Method.GetCustomAttributes<HttpMethodAttribute>(true).First().HttpMethods);
-            var isMarked = action.Method.GetCustomAttribute<AllowAnonymousAttribute>(inherit: true) is not null;
+            var isMarked = action.Method.GetCustomAttribute<AllowAnonymousAttribute>(inherit: true) is not null ||
+                           action.Controller.GetCustomAttribute<AllowAnonymousAttribute>(inherit: true) is not null;
             Assert.Equal(isAllowlisted, isMarked);
         }
     }
@@ -32,5 +33,7 @@ public sealed class AnonymousActionAllowlistTests
         (route.Equals("api/v1/auth/login", StringComparison.OrdinalIgnoreCase) && methods.Contains("POST")) ||
         (route.Equals("api/v1/auth/refresh", StringComparison.OrdinalIgnoreCase) && methods.Contains("POST")) ||
         (route.Equals("api/v1/inbound/cloudflare", StringComparison.OrdinalIgnoreCase) && methods.Contains("POST")) ||
-        (route.StartsWith("api/v1/public/calendar/invitations/{token}", StringComparison.OrdinalIgnoreCase));
+        (route.Equals("api/v1/public/calendar/invitations/{token}", StringComparison.OrdinalIgnoreCase) && methods.Contains("GET")) ||
+        (route.Equals("api/v1/public/calendar/invitations/{token}/proposal", StringComparison.OrdinalIgnoreCase) && methods.Contains("GET")) ||
+        (route.Equals("api/v1/public/calendar/invitations/{token}/respond", StringComparison.OrdinalIgnoreCase) && methods.Contains("POST"));
 }
