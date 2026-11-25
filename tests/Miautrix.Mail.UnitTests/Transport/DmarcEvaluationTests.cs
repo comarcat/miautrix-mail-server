@@ -64,6 +64,27 @@ public sealed class DmarcEvaluationTests
         Assert.Equal("permerror", (await Evaluate(dns, "sender@invalid.test", $"From: a@{FromDomain}\r\n\r\nbody\r\n")).Dmarc.Result);
     }
 
+    [Fact]
+    public async Task Webhook_without_spf_result_never_applies_reject_policy()
+    {
+        var dns = new FakeDnsResolver();
+        dns.Txt["_dmarc." + FromDomain] = ["v=DMARC1; p=reject"];
+        var service = new InboundAuthenticationService(dns,
+            new InboundAuthenticationOptions { Mode = AuthenticationMode.Enforce, AuthservId = "mx.example.test" });
+
+        var result = await service.EvaluateAsync(new(null, null, "sender@remote.test",
+            $"From: sender@{FromDomain}\r\n\r\nbody\r\n", InboundMailPath.CloudflareWebhook));
+
+        Assert.Equal("none", result.Spf.Result);
+        Assert.Empty(result.Dkim);
+        Assert.Equal("fail", result.Dmarc.Result);
+        Assert.Equal("reject", result.Dmarc.Policy);
+        Assert.Equal("none", result.Dmarc.Disposition);
+        Assert.Equal("spf unavailable", result.Dmarc.Reason);
+        Assert.Contains("dmarc=fail", result.AuthenticationResults);
+        Assert.Contains("policy.dmarc=none", result.AuthenticationResults);
+    }
+
     private static FakeDnsResolver DnsWithDmarc(string record)
     {
         var dns = new FakeDnsResolver(); dns.Txt["_dmarc." + FromDomain] = [record]; return dns;

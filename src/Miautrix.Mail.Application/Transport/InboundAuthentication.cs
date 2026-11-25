@@ -7,7 +7,7 @@ public enum AuthenticationMode { Off, Monitor, Enforce }
 public sealed record InboundAuthenticationInput(IPAddress? ClientIp, string? Helo, string? MailFrom, string RawMessage, InboundMailPath Path, string? CloudflareAuthenticationResults = null);
 public sealed record SpfAuthenticationResult(string Result, string? Domain, string? Reason = null);
 public sealed record DkimAuthenticationResult(string? Domain, string? Selector, string Result, string? Reason = null);
-public sealed record DmarcAuthenticationResult(string Result, string? Domain, string? Policy, string? Disposition, IReadOnlyList<string> AlignedIdentifiers, string? SubdomainPolicy = null, int Percentage = 100);
+public sealed record DmarcAuthenticationResult(string Result, string? Domain, string? Policy, string? Disposition, IReadOnlyList<string> AlignedIdentifiers, string? SubdomainPolicy = null, int Percentage = 100, string? Reason = null);
 public sealed record InboundAuthenticationResult(SpfAuthenticationResult Spf, IReadOnlyList<DkimAuthenticationResult> Dkim, DmarcAuthenticationResult Dmarc, string AuthenticationResults);
 
 public interface IInboundAuthenticationService

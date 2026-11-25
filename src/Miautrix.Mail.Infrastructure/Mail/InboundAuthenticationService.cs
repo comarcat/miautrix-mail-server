@@ -33,18 +33,26 @@ public sealed class InboundAuthenticationService : IInboundAuthenticationService
         try
         {
             var spf = await _spfEvaluator.EvaluateAsync(input.ClientIp, input.Helo, input.MailFrom, budget.Token);
+            var trustedSpfAvailable = false;
             if (input.Path == InboundMailPath.CloudflareWebhook)
             {
                 var cloudflareResults = input.CloudflareAuthenticationResults ?? ReadCloudflareAuthenticationResults(input.RawMessage);
-                if (TryReadSpf(cloudflareResults, out var cloudflareSpf)) spf = cloudflareSpf;
+                if (TryReadSpf(cloudflareResults, out var cloudflareSpf))
+                {
+                    spf = cloudflareSpf;
+                    trustedSpfAvailable = !cloudflareSpf.Result.Equals("none", StringComparison.OrdinalIgnoreCase);
+                }
             }
             var dkim = await EvaluateDkim(input.RawMessage, budget.Token);
             var message = MimeMessage.Load(new MemoryStream(Encoding.UTF8.GetBytes(input.RawMessage)));
             var fromDomains = message.From.Mailboxes.Select(m => m.Domain.ToLowerInvariant()).Distinct().ToArray();
             var dmarc = await EvaluateDmarc(fromDomains, spf, dkim, budget.Token);
+            if (input.Path == InboundMailPath.CloudflareWebhook && !trustedSpfAvailable && spf.Result == "none")
+                dmarc = dmarc with { Disposition = "none", Reason = "spf unavailable" };
             var auth = $"{options.AuthservId}; spf={spf.Result} smtp.mailfrom={(spf.Domain ?? "unknown")}; " +
                        (dkim.Count == 0 ? "dkim=none" : string.Join("; ", dkim.Select(x => $"dkim={x.Result} header.d={x.Domain ?? "unknown"}"))) +
-                       $"; dmarc={dmarc.Result} header.from={dmarc.Domain ?? "unknown"} policy.dmarc={dmarc.Disposition ?? "none"}";
+                       $"; dmarc={dmarc.Result} header.from={dmarc.Domain ?? "unknown"} policy.dmarc={dmarc.Disposition ?? "none"}" +
+                       (dmarc.Reason is null ? string.Empty : $" reason=\"{dmarc.Reason}\"");
             return new(spf, dkim, dmarc, auth);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
