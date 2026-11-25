@@ -26,9 +26,10 @@ The embedded Public Suffix List is sourced from [publicsuffix.org](https://publi
 
 - `MIAUTRIX_INBOUND_AUTH_MODE`: optional `off`, `monitor` (default), or `enforce`; any other value fails startup.
 - `MIAUTRIX_HOSTNAME`: used as the Authentication-Results authserv-id; when absent, the process machine name is used. Whitespace is rejected.
+- `MIAUTRIX_INBOUND_TRUSTED_AUTHSERV_IDS`: optional comma-separated authserv-id allow-list; empty by default, so Cloudflare results are not trusted unless explicitly configured. Only SPF, DKIM and DMARC results from an exact listed authserv-id are consumed, and only after the webhook's inbound token check.
 - `monitor` records the result, logs only the path and authentication domains/results (never bodies), and never rejects or reroutes.
 - `enforce` rejects only DMARC fail with effective reject policy after `pct`, at the end of SMTP DATA before queueing. DMARC quarantine routes to an existing Junk folder, otherwise Inbox with `\\Flagged`. SPF failure alone never rejects. Authentication temperror never rejects.
-- The authenticated Cloudflare webhook accepts an optional `X-Miautrix-Cloudflare-Authentication-Results` result, or a Cloudflare Authentication-Results field in the raw message. The checked-in Worker contract sends the envelope headers and raw MIME; this new header is optional so legacy requests continue to work. SPF is used only when the result identifies Cloudflare; without an IP or such result SPF is none and DMARC can still pass via DKIM. In enforce mode, a DMARC reject is returned as HTTP 403 with `inbound_processing_failed`.
+- The authenticated Cloudflare webhook accepts an optional `X-Miautrix-Cloudflare-Authentication-Results` result, or the first `Authentication-Results` field in the raw message. The checked-in Worker forwards that field when present; legacy requests still work. Cloudflare documents an incoming header of the form `Authentication-Results: mx.cloudflare.net; spf=pass; dkim=pass; dmarc=pass`, advises checking the first Authentication-Results authserv-id and warns that later fields may be sender-supplied. Configure `mx.cloudflare.net` explicitly in `MIAUTRIX_INBOUND_TRUSTED_AUTHSERV_IDS` only when this authenticated Worker/webhook path is in use. [Cloudflare Workers API: Authentication results](https://developers.cloudflare.com/email-service/api/route-emails/email-handler/). Without a trusted SPF verdict, webhook DMARC keeps its authentication result but forces policy disposition to `none` with `reason="spf unavailable"`; it cannot reject or quarantine on local SPF absence. In enforce mode, a trusted DMARC reject is returned as HTTP 403 with `inbound_processing_failed`.
 - Submission and internal delivery are not evaluated.
 
 ## DNS records for hosted domains
@@ -40,6 +41,21 @@ Publish records for each hosted sending domain and selector. Replace every place
 3. DMARC at `_dmarc.<hosted-domain>`: begin with `v=DMARC1; p=none; pct=100; rua=mailto:<aggregate-report-address>`. Review aligned SPF and DKIM results before changing `p` to `quarantine` or `reject`. Set `sp` when subdomains need a distinct policy. Ensure the From domain aligns with the SPF MAIL FROM or a passing DKIM `d=` domain.
 
 For hosted domains, inbound port 25 applies the published DMARC policy to unauthenticated mail claiming that domain. Users' authenticated submission and internal mail remain exempt.
+
+### Recommended Cloudflare records for `miautrix.tech`
+
+Cloudflare Email Routing documents `v=spf1 include:_spf.mx.cloudflare.net ~all` for its root-domain SPF, recommends retaining its routing DKIM record, and exposes the Email Routing selector/key in its dashboard. Do not publish a second SPF TXT record at the apex: merge Cloudflare and every actual outbound sender into one record. If the Miautrix server sends directly, a starting template is `v=spf1 include:_spf.mx.cloudflare.net ip4:<miautrix-outbound-ip> ~all`; add `ip6:<miautrix-outbound-ipv6>` only if that address sends mail. Replace these placeholders with the real egress addresses and confirm the current Cloudflare include from its [Postmaster documentation](https://developers.cloudflare.com/email-service/reference/postmaster/).
+
+For DKIM, keep Cloudflare's currently provisioned Email Routing selector record (Cloudflare examples use `cf2024-1._domainkey.miautrix.tech`) and publish the Miautrix sender's own public key at `<miautrix-selector>._domainkey.miautrix.tech` using `v=DKIM1; k=rsa; p=<base64-public-key>`. Never overwrite Cloudflare's selector with the Miautrix key; use the active selector shown by each service.
+
+Publish `_dmarc.miautrix.tech TXT "v=DMARC1; p=none; pct=100; rua=mailto:<monitored-dmarc-report-address>"` to start. After checking aligned SPF/DKIM results and aggregate reports, set `p=quarantine` and later `p=reject` if the domain's legitimate senders consistently authenticate. Cloudflare Email Routing's documentation recommends DMARC and describes its SPF include and routing DKIM behavior: [Email authentication](https://developers.cloudflare.com/email-service/concepts/email-authentication/), [Postmaster](https://developers.cloudflare.com/email-service/reference/postmaster/).
+
+### Owner rollout
+
+1. Set `MIAUTRIX_INBOUND_AUTH_MODE=monitor` (or leave it unset) and deploy the server change; keep the mode in monitor during the initial rollout.
+2. If the Cloudflare Worker sends the authenticated webhook, deploy the updated Worker separately, then configure `MIAUTRIX_INBOUND_TRUSTED_AUTHSERV_IDS=mx.cloudflare.net`. No Worker redeploy is performed as part of this change.
+3. For one week, review the authentication-only logs and stored Authentication-Results headers for SPF/DKIM/DMARC outcomes and confirm normal mail is delivered. Logs exclude message bodies.
+4. Correct SPF, DKIM and DMARC alignment for legitimate senders. Once results look stable, consider `MIAUTRIX_INBOUND_AUTH_MODE=enforce`; keep monitor if you have not finished auditing senders.
 
 ## Troubleshooting draft
 
@@ -54,7 +70,7 @@ For hosted domains, inbound port 25 applies the published DMARC policy to unauth
 
 Unit tests use an in-memory fake DNS resolver; they do not call public DNS. SPF has more than 30 table cases covering all mechanisms, qualifiers, macro forms, include/redirect, limits, duplicate records, timeout, HELO/null reverse path and IPv6. Mechanism examples were adapted from the [IETF SPF test suite](https://github.com/ietf-wg-spfbis/spf-test-suite). DKIM fixtures are signed in-test using MimeKit and generated RSA keys, including tampering, weak/obsolete signatures, expiry, missing key, and multiple signatures. DMARC tests cover strict/relaxed SPF/DKIM alignment, organizational fallback, subdomain policy, percentage sampling, missing and multiple records, and multiple From domains.
 
-Validated during implementation: SPF evaluator tests 39/39; DKIM + DMARC unit tests 16/16, including DNS timeout; full unit suite 181/181; security tests 7/7; full protocol tests 41/41; focused SMTP protocol tests 4/4; targeted integration suite 39/39; inbound webhook and DMARC quarantine tests 3/3; solution build with warnings as errors (zero warnings/errors). Full integration suite: 99/112 passed, 13 failed. These failures are in the existing CLI/storage configuration, EF in-memory UID allocation and Sent-folder fixture groups documented under `ERRORS_AND_ISSUES.md` §13.18; the inbound dispatcher fixtures now seed Inbox and all five dispatcher tests pass. No failure occurred in the inbound authentication tests.
+Validated for this review fix: solution build with warnings as errors (0 warnings/errors); full unit tests 186/186; security tests 7/7; protocol tests 42/42; targeted integration tests 42/42; Worker contract tests 10/10 using Node's test runner. SPF table/evaluator coverage passes (41 cases), including unknown modifier handling and c/r/t macro scope; unit coverage includes trusted authserv validation, raw-header spoofing, webhook SPF absence, and multiple-From behavior. The three-recipient raw-socket test observes one SPF TXT query for the DATA transaction. Full integration tests: 102/115 passed, with 13 failures in the pre-existing CLI/storage configuration, EF in-memory UID allocation, and Sent-folder fixture groups in `ERRORS_AND_ISSUES.md` §13.18; all inbound auth and dispatcher tests pass.
 
 ## Deferred
 
