@@ -27,7 +27,7 @@ namespace Miautrix.Mail.ProtocolTests.Imap;
 [CollectionDefinition("IMAP MailKit listener", DisableParallelization = true)]
 public sealed class ImapMailKitListenerCollection : ICollectionFixture<ImapMailKitListenerFixture>;
 
-public sealed record SeededImapMailbox(string Address, Guid TenantId, Guid MailboxId, Guid InboxId, Guid EmptyFolderId);
+public sealed record SeededImapMailbox(string Address, Guid TenantId, Guid MailboxId, Guid InboxId, Guid EmptyFolderId, string SharedAddress);
 
 public sealed class ImapMailKitListenerFixture : IAsyncLifetime
 {
@@ -70,6 +70,7 @@ public sealed class ImapMailKitListenerFixture : IAsyncLifetime
         services.AddScoped<IMailboxService, MailboxService>();
         services.AddScoped<IMessageService, MessageService>();
         services.AddScoped<Miautrix.Mail.Application.Mail.IMessageUidAllocator, Miautrix.Mail.Application.Mail.MessageUidAllocator>();
+        services.AddSingleton<Miautrix.Mail.Application.Mail.Mime.IMimeMessageParser, MimeKitMimeMessageParser>();
         services.AddSingleton<IMailStorage>(_storage);
         services.AddSingleton<Miautrix.Mail.Application.Mail.Mime.IImapMimeFormatter, MimeKitImapMimeFormatter>();
         _provider = services.BuildServiceProvider();
@@ -89,22 +90,33 @@ public sealed class ImapMailKitListenerFixture : IAsyncLifetime
         var emptyId = Guid.NewGuid();
         var projectsId = Guid.NewGuid();
         var address = $"mailkit_{Guid.NewGuid():N}@test.invalid";
+        var sharedAddress = $"shared_{Guid.NewGuid():N}@test.invalid";
         var userId = Guid.NewGuid();
         var raw = Encoding.UTF8.GetBytes($"From: sender@test.invalid\r\nTo: {address}\r\nSubject: Café\r\nX-Folded: one\r\n two\r\nX-Long: {new string('x', 8192)}\r\nContent-Type: multipart/mixed; boundary=\"mixed\"\r\n\r\n--mixed\r\nContent-Type: multipart/alternative; boundary=\"alternative\"\r\n\r\n--alternative\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nBody π searchable\r\n--alternative\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<b>Body π searchable</b>\r\n--alternative--\r\n--mixed\r\nContent-Type: application/octet-stream; name=\"fixture.txt\"\r\nContent-Disposition: attachment; filename=\"fixture.txt\"\r\nContent-Transfer-Encoding: base64\r\n\r\nAQID\r\n--mixed--\r\n");
         await using var content = new MemoryStream(raw);
         var stored = await _storage!.StoreAsync(content);
         var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(_connectionString).Options;
         await using var db = new AppDbContext(options);
+        var sharedMailboxId = Guid.NewGuid();
         db.Tenants.Add(new Tenant { Id = tenantId, Slug = $"mailkit-{tenantId:N}", CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow });
         db.Domains.Add(new DomainEntity { Id = domainId, TenantId = tenantId, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow });
-        db.Mailboxes.Add(new Mailbox { Id = mailboxId, TenantId = tenantId, DomainId = domainId, Address = address, Name = address, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow });
+        db.Mailboxes.AddRange(
+            new Mailbox { Id = mailboxId, TenantId = tenantId, DomainId = domainId, Address = address, Name = address, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow },
+            new Mailbox { Id = sharedMailboxId, TenantId = tenantId, DomainId = domainId, Address = sharedAddress, Name = sharedAddress, Kind = "shared", CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow });
         db.Folders.AddRange(
             new Folder { Id = inboxId, TenantId = tenantId, MailboxId = mailboxId, Name = "INBOX", Role = "inbox", UidNext = 3, UidValidity = 21, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow },
             new Folder { Id = emptyId, TenantId = tenantId, MailboxId = mailboxId, Name = "Empty", Role = "custom", UidNext = 1, UidValidity = 22, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow },
             new Folder { Id = projectsId, TenantId = tenantId, MailboxId = mailboxId, Name = "Projects", Role = "custom", UidNext = 1, UidValidity = 23, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow },
             new Folder { Id = Guid.NewGuid(), TenantId = tenantId, MailboxId = mailboxId, Name = "2026", ParentId = projectsId, Role = "custom", UidNext = 1, UidValidity = 24, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow },
             new Folder { Id = Guid.NewGuid(), TenantId = tenantId, MailboxId = mailboxId, Name = "Archive", Role = "archive", UidNext = 1, UidValidity = 26, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow },
+            new Folder { Id = Guid.NewGuid(), TenantId = tenantId, MailboxId = mailboxId, Name = "Drafts", Role = "drafts", UidNext = 1, UidValidity = 27, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow },
             new Folder { Id = Guid.NewGuid(), TenantId = tenantId, MailboxId = mailboxId, Name = "Trash", Role = "trash", UidNext = 1, UidValidity = 25, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow });
+        var sharedInboxId = Guid.NewGuid();
+        var sharedArchiveId = Guid.NewGuid();
+        db.Folders.AddRange(
+            new Folder { Id = sharedInboxId, TenantId = tenantId, MailboxId = sharedMailboxId, Name = "INBOX", Role = "inbox", UidNext = 1, UidValidity = 31, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow },
+            new Folder { Id = sharedArchiveId, TenantId = tenantId, MailboxId = sharedMailboxId, Name = "Archive", Role = "archive", UidNext = 1, UidValidity = 32, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow });
+        db.MailboxDelegates.Add(new MailboxDelegate { Id = Guid.NewGuid(), TenantId = tenantId, MailboxId = sharedMailboxId, UserId = userId, AccessLevel = "write", CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow });
         for (uint uid = 1; uid <= 2; uid++)
         {
             var id = Guid.NewGuid();
@@ -118,7 +130,7 @@ public sealed class ImapMailKitListenerFixture : IAsyncLifetime
         await db.SaveChangesAsync();
         _tenantIds.Add(tenantId);
         _accounts[address] = (tenantId, mailboxId, userId);
-        return new SeededImapMailbox(address, tenantId, mailboxId, inboxId, emptyId);
+        return new SeededImapMailbox(address, tenantId, mailboxId, inboxId, emptyId, sharedAddress);
     }
 
     public async Task<ImapClient> ConnectAsync(string address, CancellationToken cancellationToken = default)
@@ -139,6 +151,7 @@ public sealed class ImapMailKitListenerFixture : IAsyncLifetime
             await using var db = new AppDbContext(options);
             db.MessageRecipients.RemoveRange(db.MessageRecipients.Where(r => _tenantIds.Contains(r.TenantId)));
             db.Messages.RemoveRange(db.Messages.Where(m => _tenantIds.Contains(m.TenantId)));
+            db.MailboxDelegates.RemoveRange(db.MailboxDelegates.Where(d => _tenantIds.Contains(d.TenantId)));
             db.Folders.RemoveRange(db.Folders.Where(f => _tenantIds.Contains(f.TenantId)));
             db.Mailboxes.RemoveRange(db.Mailboxes.Where(m => _tenantIds.Contains(m.TenantId)));
             db.Domains.RemoveRange(db.Domains.Where(d => _tenantIds.Contains(d.TenantId)));
@@ -173,6 +186,38 @@ public sealed class ImapMailKitListenerFixture : IAsyncLifetime
 [Trait("RequiresDatabase", "true")]
 public sealed class ImapMailKitProtocolTests(ImapMailKitListenerFixture fixture)
 {
+    [Fact]
+    public async Task MailKit_rev1_without_enable_keeps_shared_move_idle_and_draft_append_working()
+    {
+        var mailbox = await fixture.CreateMailboxAsync();
+        using var client = await fixture.ConnectAsync(mailbox.Address);
+        Assert.True(client.Capabilities.HasFlag(ImapCapabilities.IMAP4rev1));
+        Assert.False(client.Capabilities.HasFlag(ImapCapabilities.IMAP4rev2));
+        Assert.Single(client.SharedNamespaces);
+
+        await client.Inbox.OpenAsync(FolderAccess.ReadWrite);
+        var source = Assert.Single(await client.Inbox.FetchAsync(0, 0,
+            new FetchRequest(MessageSummaryItems.UniqueId | MessageSummaryItems.Envelope)));
+        var sharedArchive = client.GetFolder($"Shared/{mailbox.SharedAddress}/Archive");
+        var movedUid = await client.Inbox.MoveToAsync(source.UniqueId, sharedArchive);
+        Assert.NotNull(movedUid);
+        await sharedArchive.OpenAsync(FolderAccess.ReadWrite);
+        Assert.Single(await sharedArchive.FetchAsync(0, 0, new FetchRequest(MessageSummaryItems.UniqueId)));
+
+        var drafts = client.GetFolder("Drafts");
+        var draft = new MimeKit.MimeMessage();
+        draft.From.Add(MimeKit.MailboxAddress.Parse(mailbox.Address));
+        draft.To.Add(MimeKit.MailboxAddress.Parse(mailbox.Address));
+        draft.Subject = "WEBMAIL-001 MailKit draft";
+        draft.Body = new MimeKit.TextPart("plain") { Text = "Draft body" };
+        await drafts.AppendAsync(new MailKit.AppendRequest(draft, MessageFlags.Draft));
+        await drafts.StatusAsync(StatusItems.Count | StatusItems.Size);
+        Assert.Equal(1, drafts.Count);
+
+        using var idleDone = new CancellationTokenSource(TimeSpan.FromMilliseconds(150));
+        await client.IdleAsync(idleDone.Token, CancellationToken.None);
+    }
+
     [Fact]
     public async Task MailKit_authentication_capability_and_logout_after_auth_failure()
     {

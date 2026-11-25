@@ -479,10 +479,12 @@ public sealed partial class ImapSession
 
     private async Task<ImapCommandResult> CompleteSaslAsync(string tag, string response, CancellationToken ct)
     {
-        if (response.Trim() == "*") return new ImapCommandResult(tag, "NO", "[CANCELLED] AUTHENTICATE cancelled", Array.Empty<string>());
+        if (response.Trim() == "*") return new ImapCommandResult(tag, "BAD", "AUTHENTICATE cancelled", Array.Empty<string>());
         try
         {
-            var fields = Encoding.UTF8.GetString(Convert.FromBase64String(response.Trim())).Split('\0');
+            var initialResponse = response.Trim();
+            var decodedResponse = initialResponse == "=" ? Array.Empty<byte>() : Convert.FromBase64String(initialResponse);
+            var fields = Encoding.UTF8.GetString(decodedResponse).Split('\0');
             if (fields.Length != 3) return new ImapCommandResult(tag, "NO", "[AUTHENTICATIONFAILED] Authentication failed", Array.Empty<string>());
             var auth = await _authenticator.AuthenticateAsync(fields[1], fields[2], ct);
             if (!auth.IsSuccess) return new ImapCommandResult(tag, "NO", "[AUTHENTICATIONFAILED] Authentication failed", Array.Empty<string>());
@@ -491,7 +493,7 @@ public sealed partial class ImapSession
             TenantId = auth.TenantId; MailboxId = auth.MailboxId; _userId = auth.UserId; Username = fields[1]; State = ImapState.Authenticated;
             return new ImapCommandResult(tag, "OK", "AUTHENTICATE completed", Array.Empty<string>());
         }
-        catch (FormatException) { return new ImapCommandResult(tag, "NO", "[AUTHENTICATIONFAILED] Authentication failed", Array.Empty<string>()); }
+        catch (FormatException) { return new ImapCommandResult(tag, "BAD", "Invalid AUTHENTICATE base64 data", Array.Empty<string>()); }
     }
 
     private async Task<ImapCommandResult> HandleStatusAsync(string tag, IReadOnlyList<ImapToken> args, CancellationToken ct)
@@ -1240,6 +1242,14 @@ public sealed partial class ImapSession
             responses.Add($"* {(subscribed ? "LSUB" : "LIST")} ({string.Join(' ', attributes)}) \"/\" \"{escapedName}\"{extendedData}");
             if (statusReturnItems is not null && pair.Folder is not null)
                 responses.Add(await BuildStatusResponseAsync(pair.Folder, pair.Name, statusReturnItems, cancellationToken));
+        }
+        if (_imap4Rev2Enabled && !subscribedSelection && !recursiveMatch && responseRows.Length == 0 &&
+            fullPattern.Length > 0 && !fullPattern.Contains('*') && !fullPattern.Contains('%'))
+        {
+            var attributes = new List<string> { "\\NonExistent", "\\Noselect" };
+            if (returnOptions.Contains("CHILDREN")) attributes.Add("\\HasNoChildren");
+            var escapedName = EncodeMailboxPath(fullPattern).Replace("\\", "\\\\").Replace("\"", "\\\"");
+            responses.Add($"* LIST ({string.Join(' ', attributes)}) \"/\" \"{escapedName}\"");
         }
         return new ImapCommandResult(tag, "OK", $"{(subscribed ? "LSUB" : "LIST")} completed", responses);
     }
