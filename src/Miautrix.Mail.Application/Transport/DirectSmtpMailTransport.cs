@@ -17,6 +17,7 @@ public interface IDnsResolver
     Task<IReadOnlyList<MxHost>> GetMxAsync(string domain, CancellationToken ct = default);
     Task<IReadOnlyList<IPAddress>> GetAddressesAsync(string host, CancellationToken ct = default);
     Task<IReadOnlyList<string>> GetTxtAsync(string name, CancellationToken ct = default);
+    Task<IReadOnlyList<string>> GetPtrAsync(IPAddress address, CancellationToken ct = default);
 }
 
 public sealed class DnsClientResolver : IDnsResolver
@@ -43,6 +44,12 @@ public sealed class DnsClientResolver : IDnsResolver
     {
         var response = await _client.QueryAsync(name, QueryType.TXT, cancellationToken: ct);
         return response.Answers.TxtRecords().Select(record => string.Concat(record.Text)).ToArray();
+    }
+
+    public async Task<IReadOnlyList<string>> GetPtrAsync(IPAddress address, CancellationToken ct = default)
+    {
+        var response = await _client.QueryReverseAsync(address, cancellationToken: ct);
+        return response.Answers.PtrRecords().Select(record => record.PtrDomainName.Value.TrimEnd('.')).ToArray();
     }
 }
 

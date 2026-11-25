@@ -6,9 +6,9 @@ using Miautrix.Mail.Application.Queue;
 using Miautrix.Mail.Application.Transport;
 using Miautrix.Mail.Identity;
 using Miautrix.Mail.Infrastructure.Backup;
-using Miautrix.Mail.Infrastructure.Mail;
 using Miautrix.Mail.Application.Mail.Mime;
 using Miautrix.Mail.Infrastructure.MailboxArchiving;
+using Miautrix.Mail.Infrastructure.Mail;
 using Miautrix.Mail.Infrastructure.Storage;
 using Miautrix.Mail.Persistence;
 using Miautrix.Mail.Protocols.Sieve;
@@ -35,6 +35,8 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
         builder.Host.UseWindowsService();
+
+        var inboundAuthOptions = InboundAuthenticationOptions.FromEnvironment();
 
         var connectionString = Environment.GetEnvironmentVariable("MIAUTRIX_DB_CONNECTION");
         if (string.IsNullOrWhiteSpace(connectionString))
@@ -77,6 +79,9 @@ public class Program
         builder.Services.AddScoped<ISmtpQueueManager, SmtpQueueManager>();
         builder.Services.AddScoped<ISmtpDomainValidator, SmtpDomainValidator>();
         builder.Services.AddScoped<ISmtpInboundHandler, SmtpInboundHandler>();
+        builder.Services.AddSingleton<IDnsResolver, DnsClientResolver>();
+        builder.Services.AddSingleton(inboundAuthOptions);
+        builder.Services.AddScoped<IInboundAuthenticationService, InboundAuthenticationService>();
 
         builder.Services.AddSingleton<IPasswordHasher, Argon2idPasswordHasher>();
         builder.Services.AddSingleton<ITotpService, TotpService>();
