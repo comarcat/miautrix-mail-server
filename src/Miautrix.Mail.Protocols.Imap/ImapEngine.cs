@@ -1241,6 +1241,14 @@ public sealed partial class ImapSession
             if (statusReturnItems is not null && pair.Folder is not null)
                 responses.Add(await BuildStatusResponseAsync(pair.Folder, pair.Name, statusReturnItems, cancellationToken));
         }
+        if (_imap4Rev2Enabled && !subscribedSelection && !recursiveMatch && responseRows.Length == 0 &&
+            fullPattern.Length > 0 && !fullPattern.Contains('*') && !fullPattern.Contains('%'))
+        {
+            var attributes = new List<string> { "\\NonExistent", "\\Noselect" };
+            if (returnOptions.Contains("CHILDREN")) attributes.Add("\\HasNoChildren");
+            var escapedName = EncodeMailboxPath(fullPattern).Replace("\\", "\\\\").Replace("\"", "\\\"");
+            responses.Add($"* LIST ({string.Join(' ', attributes)}) \"/\" \"{escapedName}\"");
+        }
         return new ImapCommandResult(tag, "OK", $"{(subscribed ? "LSUB" : "LIST")} completed", responses);
     }
 
