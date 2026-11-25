@@ -27,6 +27,16 @@ var environment = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
 
 var isDevelopment = environment.Equals("Development", StringComparison.OrdinalIgnoreCase);
 var antiMalwareOptions = AntiMalwareOptions.FromEnvironment(isDevelopment);
+SmtpListenerOptions smtpListenerOptions;
+try
+{
+    smtpListenerOptions = SmtpListenerOptions.FromEnvironment();
+}
+catch (InvalidOperationException ex)
+{
+    Console.Error.WriteLine($"[Worker] FATAL: {ex.Message}");
+    return 1;
+}
 
 // ── Required configuration — crash on missing in production ───────────────────
 
@@ -156,7 +166,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<IPasswordHasher, Argon2idPasswordHasher>();
 
         // Shared options
-        services.AddSingleton(new WorkerHostOptions { Hostname = hostname });
+        services.AddSingleton(new WorkerHostOptions { Hostname = hostname, Smtp = smtpListenerOptions });
         services.AddSingleton(new TlsCertificateProvider(tlsCert));
 
         // Hosted services — SMTP (three listener types)
