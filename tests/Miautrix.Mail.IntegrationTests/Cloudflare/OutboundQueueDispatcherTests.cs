@@ -87,6 +87,45 @@ public sealed class OutboundQueueDispatcherTests
         finally { await CleanupAsync(tenantId); }
     }
 
+    [Theory]
+    [InlineData("vacation", "cloudflare")]
+    [InlineData("reject", "cloudflare")]
+    [InlineData("redirect", "cloudflare")]
+    [InlineData("vacation", "direct")]
+    [InlineData("reject", "direct")]
+    [InlineData("redirect", "direct")]
+    public async Task Sieve_system_mail_uses_mailbox_domain_transport_and_mode_specific_envelope(string kind, string mode)
+    {
+        var tenantId = await SeedTenantAsync();
+        var domain = mode == "direct" ? DirectDomain : CloudflareDomain;
+        var mailboxAddress = $"mailbox@{domain}";
+        try
+        {
+            await SeedDomainAsync(tenantId, domain, mode, mode == "cloudflare" ? "https://worker.example.workers.dev" : null, isPrimary: true);
+            var sender = kind == "redirect" ? "original@remote.test" : string.Empty;
+            var from = kind == "reject" ? $"From: Mail Delivery Subsystem <MAILER-DAEMON@{domain}>\r\n" :
+                kind == "redirect" ? "From: original@remote.test\r\n" : $"From: {mailboxAddress}\r\n";
+            var resent = kind == "redirect" ? $"Resent-From: {mailboxAddress}\r\nResent-To: recipient@remote.test\r\n" : string.Empty;
+            var raw = $"{from}{resent}Subject: system message\r\n\r\nBody\r\n";
+            var queueItemId = await SeedSystemQueueItemAsync(tenantId, "recipient@remote.test", sender, raw, mailboxAddress);
+            var transport = new RecordingTransport(mode == "direct" ? DomainTransportModes.Direct : DomainTransportModes.Cloudflare);
+
+            await RunOnePassAsync(transport);
+
+            var sent = Assert.Single(transport.Sent);
+            Assert.Equal(mode == "cloudflare" ? mailboxAddress : sender, sent.Sender);
+            if (kind == "redirect")
+            {
+                Assert.Contains("From: original@remote.test", sent.RawMessage);
+                Assert.Contains($"Resent-From: {mailboxAddress}", sent.RawMessage);
+                Assert.Contains("Resent-To: recipient@remote.test", sent.RawMessage);
+            }
+            await using var verify = CreateContext();
+            Assert.Equal("Delivered", (await verify.SmtpQueue.SingleAsync(q => q.Id == queueItemId)).Status);
+        }
+        finally { await CleanupAsync(tenantId); }
+    }
+
     [Fact]
     public async Task A_failed_send_is_recorded_so_the_row_retries_instead_of_looping_forever()
     {
@@ -447,6 +486,17 @@ public sealed class OutboundQueueDispatcherTests
         });
         await context.SaveChangesAsync();
 
+        return id;
+    }
+
+    private static async Task<Guid> SeedSystemQueueItemAsync(Guid tenantId, string recipient, string sender, string rawMessage, string mailboxAddress)
+    {
+        var id = await SeedQueueItemAsync(tenantId, recipient, sender);
+        await using var context = CreateContext();
+        var item = await context.SmtpQueue.SingleAsync(q => q.Id == id);
+        item.RawMessage = rawMessage;
+        item.TransportSenderOverride = mailboxAddress;
+        await context.SaveChangesAsync();
         return id;
     }
 

@@ -1412,6 +1412,10 @@ namespace Miautrix.Mail.Persistence.Migrations
                         .HasColumnType("text")
                         .HasColumnName("sender");
 
+                    b.Property<string>("TransportSenderOverride")
+                        .HasColumnType("text")
+                        .HasColumnName("transport_sender_override");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("text")

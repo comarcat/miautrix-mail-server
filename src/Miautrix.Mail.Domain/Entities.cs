@@ -337,6 +337,8 @@ public class SmtpQueueItem : TenantScopedEntityBase
 {
     public QueueDirection Direction { get; set; }
     public string Sender { get; set; } = string.Empty;
+    /// <summary>Verified mailbox address used to choose a transport for system-generated Sieve mail.</summary>
+    public string? TransportSenderOverride { get; set; }
     public string Recipient { get; set; } = string.Empty;
     public string? Subject { get; set; }
     public string RawMessage { get; set; } = string.Empty;

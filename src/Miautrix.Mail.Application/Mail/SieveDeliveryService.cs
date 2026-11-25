@@ -28,11 +28,13 @@ public sealed class SieveDeliveryService : ISieveDeliveryService
     private readonly SieveCompiler _compiler;
     private readonly SieveInterpreter _interpreter;
     private readonly ISmtpQueueManager _queue;
+    private readonly SieveSenderAuthenticationGate _senderAuthentication;
     private readonly ILogger<SieveDeliveryService> _logger;
 
-    public SieveDeliveryService(AppDbContext db, SieveCompiler compiler, SieveInterpreter interpreter, ISmtpQueueManager queue, ILogger<SieveDeliveryService> logger)
+    public SieveDeliveryService(AppDbContext db, SieveCompiler compiler, SieveInterpreter interpreter, ISmtpQueueManager queue,
+        SieveSenderAuthenticationGate senderAuthentication, ILogger<SieveDeliveryService> logger)
     {
-        _db = db; _compiler = compiler; _interpreter = interpreter; _queue = queue; _logger = logger;
+        _db = db; _compiler = compiler; _interpreter = interpreter; _queue = queue; _senderAuthentication = senderAuthentication; _logger = logger;
     }
 
     public async Task<SieveDeliveryDecision> EvaluateAsync(Mailbox mailbox, SmtpQueueItem item, ParsedMailMessage parsed, string defaultFolderRole, CancellationToken cancellationToken = default)
@@ -66,14 +68,25 @@ public sealed class SieveDeliveryService : ISieveDeliveryService
         var effects = execution.Effects;
         if (effects.Any(e => e.Name == "discard")) return new SieveDeliveryDecision(StoreLocally: false, Discard: true);
 
-        foreach (var reject in effects.Where(e => e.Name is "reject" or "ereject"))
-            await QueueRejectAsync(mailbox, item, parsed, reject.Values.FirstOrDefault() ?? "Rejected by mailbox filter", cancellationToken);
+        var hasAutomatedReply = effects.Any(e => e.Name is "reject" or "ereject" or "vacation");
+        var authenticatedSender = hasAutomatedReply && _senderAuthentication.IsAuthenticated(parsed.RawHeaders, item.Sender);
+        if (hasAutomatedReply && !authenticatedSender)
+            _logger.LogInformation("Suppressing Sieve automated response for queue item {QueueItemId}: sender authentication is missing or failed.", item.Id);
+
+        if (authenticatedSender)
+        {
+            foreach (var reject in effects.Where(e => e.Name is "reject" or "ereject"))
+                await QueueRejectAsync(mailbox, item, parsed, reject.Values.FirstOrDefault() ?? "Rejected by mailbox filter", cancellationToken);
+        }
 
         foreach (var redirect in effects.Where(e => e.Name == "redirect"))
             await QueueRedirectsAsync(mailbox, item, parsed, redirect, cancellationToken);
 
-        foreach (var vacation in effects.Where(e => e.Name == "vacation"))
-            await TrySendVacationAsync(mailbox, item, parsed, headers, vacation, cancellationToken);
+        if (authenticatedSender)
+        {
+            foreach (var vacation in effects.Where(e => e.Name == "vacation"))
+                await TrySendVacationAsync(mailbox, item, parsed, headers, vacation, cancellationToken);
+        }
 
         var folderName = defaultFolderRole.Equals("junk", StringComparison.OrdinalIgnoreCase) ? "Junk" : "Inbox";
         Guid? folderId = null;
@@ -124,9 +137,13 @@ public sealed class SieveDeliveryService : ISieveDeliveryService
             if (count >= RedirectLimit) break;
             if (target.Equals(mailbox.Address, StringComparison.OrdinalIgnoreCase) || visited.Contains(target)) continue;
             visited.Add(target);
-            var raw = AddHeader(item.RawMessage, RedirectCountHeader, (count + 1).ToString()) ;
+            var raw = AddHeader(item.RawMessage, RedirectCountHeader, (count + 1).ToString());
             raw = AddHeader(raw, RedirectedToHeader, string.Join(", ", visited));
-            await _queue.EnqueueAsync(item.TenantId, item.Sender, target, raw, QueueDirection.Outbound, item.Subject, ct);
+            raw = AddHeader(raw, "Resent-From", mailbox.Address);
+            raw = AddHeader(raw, "Resent-To", target);
+            var queued = await _queue.EnqueueAsync(item.TenantId, item.Sender, target, raw, QueueDirection.Outbound, item.Subject, ct);
+            queued.TransportSenderOverride = mailbox.Address;
+            await _db.SaveChangesAsync(ct);
             count++;
         }
     }
@@ -138,8 +155,10 @@ public sealed class SieveDeliveryService : ISieveDeliveryService
         var status = "5.7.1";
         var reportingDomain = mailbox.Address[(mailbox.Address.LastIndexOf('@') + 1)..];
         var raw = DeliveryStatusNotificationBuilder.Build(sender, item.Recipient, status, "550", reportingDomain, DateTimeOffset.UtcNow);
-        await _queue.EnqueueAsync(item.TenantId, string.Empty, sender, raw, QueueDirection.Outbound,
+        var queued = await _queue.EnqueueAsync(item.TenantId, string.Empty, sender, raw, QueueDirection.Outbound,
             "Delivery Status Notification (Failure)", ct);
+        queued.TransportSenderOverride = mailbox.Address;
+        await _db.SaveChangesAsync(ct);
         _logger.LogInformation("Sieve rejected inbound queue item {QueueItemId}; reason length={ReasonLength}.", item.Id, reason.Length);
     }
 
@@ -169,7 +188,8 @@ public sealed class SieveDeliveryService : ISieveDeliveryService
             : options with { From = mailbox.Address };
         var reply = BuildVacationReply(mailbox.Address, sender, parsed, headers, replyOptions);
         await using var transaction = await _db.Database.BeginTransactionAsync(ct);
-        await _queue.EnqueueAsync(item.TenantId, string.Empty, sender, reply, QueueDirection.Outbound, options.Subject, ct);
+        var queued = await _queue.EnqueueAsync(item.TenantId, string.Empty, sender, reply, QueueDirection.Outbound, options.Subject, ct);
+        queued.TransportSenderOverride = mailbox.Address;
         if (response is null)
         {
             _db.SieveVacationResponses.Add(new SieveVacationResponse { TenantId = item.TenantId, MailboxId = mailbox.Id, SenderHash = senderHash, Handle = handle, LastSentAt = now, CreatedAt = now, UpdatedAt = now });

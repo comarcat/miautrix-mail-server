@@ -34,6 +34,10 @@ public sealed class SieveMigrationTests
             await using var db = new AppDbContext(options);
             await db.Database.MigrateAsync();
 
+            // Re-run this package migration itself, not just the no-op second call to Migrate.
+            await db.Database.ExecuteSqlRawAsync("DELETE FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '20261125153216_V22_Sieve_Scripts';");
+            await db.Database.MigrateAsync();
+
             var tenant = new Tenant { Slug = "sieve-migration-" + Guid.NewGuid().ToString("N") };
             db.Tenants.Add(tenant);
             await db.SaveChangesAsync();

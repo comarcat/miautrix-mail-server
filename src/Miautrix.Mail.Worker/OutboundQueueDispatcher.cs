@@ -197,14 +197,19 @@ public sealed class OutboundQueueDispatcher : BackgroundService
 
             foreach (var row in rows)
             {
-                var senderDomain = row.Sender.Split('@').Last().TrimEnd('>').ToLowerInvariant();
+                var transportDomainAddress = row.TransportSenderOverride ?? row.Sender;
+                var senderDomain = transportDomainAddress.Trim().Trim('<', '>').Split('@').LastOrDefault()?.ToLowerInvariant() ?? string.Empty;
                 if (domainMap.TryGetValue(senderDomain, out var sendingDomain) &&
                     _transports.TryGetValue(sendingDomain.TransportMode, out var transport))
                 {
                     var key = dkimKeys.FirstOrDefault(k =>
                         string.Equals(k.DomainName, sendingDomain.Name, StringComparison.OrdinalIgnoreCase) &&
                         string.Equals(k.Selector, sendingDomain.DkimSelector, StringComparison.Ordinal));
-                    await DeliverAsync(db, queueManager, transport, row, sendingDomain.CloudflareWorkerUrl, sendingDomain.CloudflareZoneId,
+                    var envelopeSender = string.Equals(transport.Mode, DomainTransportModes.Cloudflare, StringComparison.OrdinalIgnoreCase) &&
+                                         !string.IsNullOrWhiteSpace(row.TransportSenderOverride)
+                        ? row.TransportSenderOverride
+                        : row.Sender;
+                    await DeliverAsync(db, queueManager, transport, row, envelopeSender, sendingDomain.CloudflareWorkerUrl, sendingDomain.CloudflareZoneId,
                         sendingDomain.Name, sendingDomain.DkimSelector, key?.PrivateKeyPem, ct);
                 }
                 else if (primary != null)
@@ -214,7 +219,7 @@ public sealed class OutboundQueueDispatcher : BackgroundService
                         var key = dkimKeys.FirstOrDefault(k =>
                             string.Equals(k.DomainName, primary.Name, StringComparison.OrdinalIgnoreCase) &&
                             string.Equals(k.Selector, primary.DkimSelector, StringComparison.Ordinal));
-                        await DeliverAsync(db, queueManager, primaryTransport, row, primary.CloudflareWorkerUrl, primary.CloudflareZoneId,
+                        await DeliverAsync(db, queueManager, primaryTransport, row, row.Sender, primary.CloudflareWorkerUrl, primary.CloudflareZoneId,
                             primary.Name, primary.DkimSelector, key?.PrivateKeyPem, ct);
                     }
                 }
@@ -230,6 +235,7 @@ public sealed class OutboundQueueDispatcher : BackgroundService
         ISmtpQueueManager queueManager,
         IOutboundMailTransport transport,
         SmtpQueueItem item,
+        string? envelopeSender,
         string? workerUrl,
         string? zoneId,
         string domain,
@@ -247,7 +253,7 @@ public sealed class OutboundQueueDispatcher : BackgroundService
                 ? _dkimService.SignMessage(item.RawMessage, domain, selector, privateKey)
                 : item.RawMessage;
             var message = new OutboundMessage(
-                item.TenantId, item.Sender, item.Recipient, rawMessage, workerUrl, zoneId);
+                item.TenantId, envelopeSender ?? string.Empty, item.Recipient, rawMessage, workerUrl, zoneId);
             var result = await transport.SendAsync(message, ct);
             await using var transaction = !result.IsSuccess && result.IsPermanentFailure
                 ? await db.Database.BeginTransactionAsync(ct)

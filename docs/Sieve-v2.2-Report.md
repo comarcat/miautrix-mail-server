@@ -6,6 +6,10 @@ Scripts are compiled and executed for accepted inbound delivery, per mailbox, be
 
 Delivery supports folder routing (including create), flags, discard, copy, redirects, reject DSNs and vacation replies. Runtime exceptions and execution budgets fall back to implicit keep and log only script identifiers and execution metadata. Vacation dedupe defaults to seven days and clamps to 1–30; null senders, automated/list mail and own addresses are suppressed. Redirects are capped at five, preserve the envelope sender and carry loop markers. This version does not apply SRS; forwarding may fail SPF at the recipient.
 
+For Sieve-generated outbound mail, transport selection uses the redirecting mailbox's domain. Cloudflare mode uses that mailbox address as the transport envelope sender for vacation replies, reject DSNs and redirects; redirects retain the original `From` and add `Resent-From`/`Resent-To`. Direct mode keeps `<>` for vacation replies and reject DSNs, and preserves the original redirect envelope sender without SRS; forwarding can therefore fail SPF at the destination. This is an intentional Cloudflare transport deviation from RFC 5230's null reverse path for vacation replies.
+
+Reject DSNs and vacation replies are generated only when the first `Authentication-Results` field has this server's configured authserv-id (`MIAUTRIX_HOSTNAME`) and reports SPF pass, DMARC pass, or DKIM pass aligned with the envelope domain. Missing, non-first, foreign-authserv, and failing results are treated as unauthenticated; the inbound-auth package can wire its header producer to this small gate.
+
 ## RFC compliance matrix
 
 | RFC | Coverage | Status / limits |
@@ -21,7 +25,7 @@ Delivery supports folder routing (including create), flags, discard, copy, redir
 
 ## Migration and settings
 
-Migration `V22_Sieve_Scripts` creates the vacation dedupe table and active-script partial unique index. It deactivates any pre-existing duplicate active scripts by retaining the latest updated/created record before creating the constraint. No new environment settings were added. Deploy by applying the migration before enabling the Worker and Web changes; no DNS or nginx changes are required.
+Migration `V22_Sieve_Scripts` creates the vacation dedupe table and active-script partial unique index. It deactivates any pre-existing duplicate active scripts by retaining the latest updated/created record before creating the constraint. Table creation and every index use `IF NOT EXISTS`, and the migration test removes its history row and reapplies the migration on a throwaway DB. No new environment settings were added. Deploy by applying the migration before enabling the Worker and Web changes; no DNS or nginx changes are required.
 
 ## Troubleshooting draft
 

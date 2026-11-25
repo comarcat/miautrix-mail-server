@@ -24,48 +24,24 @@ namespace Miautrix.Mail.Persistence.Migrations;
                 FROM ranked
                 WHERE scripts.id = ranked.id AND ranked.active_rank > 1;
                 """);
-
-            migrationBuilder.CreateTable(
-                name: "sieve_vacation_responses",
-                columns: table => new
-                {
-                    id = table.Column<Guid>(type: "uuid", nullable: false),
-                    tenant_id = table.Column<Guid>(type: "uuid", nullable: false),
-                    mailbox_id = table.Column<Guid>(type: "uuid", nullable: false),
-                    sender_hash = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
-                    handle = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
-                    last_sent_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_sieve_vacation_responses", x => x.id);
-                    table.ForeignKey(
-                        name: "FK_sieve_vacation_responses_tenants_tenant_id",
-                        column: x => x.tenant_id,
-                        principalTable: "tenants",
-                        principalColumn: "id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateIndex(
-                name: "uq_sieve_scripts_active_mailbox_id",
-                table: "sieve_scripts",
-                column: "mailbox_id",
-                unique: true,
-                filter: "is_active = TRUE");
-
-            migrationBuilder.CreateIndex(
-                name: "idx_sieve_vacation_responses_tenant_id",
-                table: "sieve_vacation_responses",
-                column: "tenant_id");
-
-            migrationBuilder.CreateIndex(
-                name: "uq_sieve_vacation_responses_mailbox_sender_handle",
-                table: "sieve_vacation_responses",
-                columns: new[] { "mailbox_id", "sender_hash", "handle" },
-                unique: true);
+            migrationBuilder.Sql("ALTER TABLE smtp_queue ADD COLUMN IF NOT EXISTS transport_sender_override text NULL;");
+            migrationBuilder.Sql("""
+                CREATE TABLE IF NOT EXISTS sieve_vacation_responses (
+                    id uuid NOT NULL CONSTRAINT "PK_sieve_vacation_responses" PRIMARY KEY,
+                    tenant_id uuid NOT NULL,
+                    mailbox_id uuid NOT NULL,
+                    sender_hash character varying(64) NOT NULL,
+                    handle character varying(255) NOT NULL,
+                    last_sent_at timestamp with time zone NOT NULL,
+                    created_at timestamp with time zone NOT NULL,
+                    updated_at timestamp with time zone NOT NULL,
+                    CONSTRAINT "FK_sieve_vacation_responses_tenants_tenant_id"
+                        FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE
+                );
+                """);
+            migrationBuilder.Sql("CREATE UNIQUE INDEX IF NOT EXISTS uq_sieve_scripts_active_mailbox_id ON sieve_scripts (mailbox_id) WHERE is_active = TRUE;");
+            migrationBuilder.Sql("CREATE INDEX IF NOT EXISTS idx_sieve_vacation_responses_tenant_id ON sieve_vacation_responses (tenant_id);");
+            migrationBuilder.Sql("CREATE UNIQUE INDEX IF NOT EXISTS uq_sieve_vacation_responses_mailbox_sender_handle ON sieve_vacation_responses (mailbox_id, sender_hash, handle);");
         }
 
         /// <inheritdoc />
@@ -77,5 +53,6 @@ namespace Miautrix.Mail.Persistence.Migrations;
             migrationBuilder.DropIndex(
                 name: "uq_sieve_scripts_active_mailbox_id",
                 table: "sieve_scripts");
+            migrationBuilder.DropColumn(name: "transport_sender_override", table: "smtp_queue");
         }
     }

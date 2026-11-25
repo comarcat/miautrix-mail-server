@@ -47,7 +47,8 @@ public sealed class SieveDeliveryIntegrationTests
                 new Folder { TenantId = tenant.Id, MailboxId = mailbox.Id, Name = "Archive", Role = "custom" });
             await db.SaveChangesAsync();
             var queue = new SmtpQueueManager(db, new ExponentialBackoffWithJitterRetryPolicy());
-            var service = new SieveDeliveryService(db, new SieveCompiler(), new SieveInterpreter(), queue, NullLogger<SieveDeliveryService>.Instance);
+            var service = new SieveDeliveryService(db, new SieveCompiler(), new SieveInterpreter(), queue,
+                new SieveSenderAuthenticationGate("mail.test"), NullLogger<SieveDeliveryService>.Instance);
             var parsed = Parsed("To: filter@example.test\r\nFrom: sender@remote.test\r\nMessage-ID: <original@remote.test>\r\n", "Weekly", "filter@example.test");
 
             async Task<SieveDeliveryDecision> Evaluate(string content, string raw = "From: sender@remote.test\r\n")
@@ -60,7 +61,9 @@ public sealed class SieveDeliveryIntegrationTests
                 }
                 else { script.Content = content; script.UpdatedAt = DateTimeOffset.UtcNow; }
                 await db.SaveChangesAsync();
-                return await service.EvaluateAsync(mailbox, Inbound(tenant.Id, raw), parsed, "inbox");
+                var item = Inbound(tenant.Id, raw);
+                var headers = item.RawMessage.Split(["\r\n\r\n", "\n\n"], StringSplitOptions.None)[0];
+                return await service.EvaluateAsync(mailbox, item, parsed with { RawHeaders = headers }, "inbox");
             }
 
             var fileinto = await Evaluate("require [\"fileinto\"]; fileinto \"Archive\";");
@@ -83,20 +86,28 @@ public sealed class SieveDeliveryIntegrationTests
             Assert.All(await db.SmtpQueue.Where(q => q.Direction == QueueDirection.Outbound).ToListAsync(), q => Assert.Contains("X-Miautrix-Sieve-Redirect-Count: ", q.RawMessage));
 
             await db.SmtpQueue.ExecuteDeleteAsync();
-            var rejectRaw = Inbound(tenant.Id, "From: sender@remote.test\r\n");
+            var rejectRaw = Inbound(tenant.Id, "From: sender@remote.test\r\nAuthentication-Results: mail.test; spf=pass smtp.mailfrom=remote.test\r\n");
+            var rejectParsed = parsed with { RawHeaders = rejectRaw.RawMessage.Split(["\r\n\r\n", "\n\n"], StringSplitOptions.None)[0] };
             await db.SieveScripts.Where(s => s.MailboxId == mailbox.Id).ExecuteUpdateAsync(set => set.SetProperty(s => s.Content, "require [\"reject\"]; reject \"No thanks\";"));
-            await service.EvaluateAsync(mailbox, rejectRaw, parsed, "inbox");
+            await service.EvaluateAsync(mailbox, rejectRaw, rejectParsed, "inbox");
             var rejection = await db.SmtpQueue.SingleAsync();
             Assert.Equal(string.Empty, rejection.Sender);
             Assert.Equal("sender@remote.test", rejection.Recipient);
             Assert.Contains("multipart/report", rejection.RawMessage);
             await db.SmtpQueue.ExecuteDeleteAsync();
-            await service.EvaluateAsync(mailbox, Inbound(tenant.Id, "From: <>\r\n"), parsed, "inbox");
+            var unauthenticatedReject = Inbound(tenant.Id, "From: sender@remote.test\r\n");
+            await service.EvaluateAsync(mailbox, unauthenticatedReject,
+                parsed with { RawHeaders = unauthenticatedReject.RawMessage.Split(["\r\n\r\n", "\n\n"], StringSplitOptions.None)[0] }, "inbox");
+            Assert.Empty(await db.SmtpQueue.ToListAsync());
+            await service.EvaluateAsync(mailbox, Inbound(tenant.Id, "From: <>\r\n"), parsed with { RawHeaders = "From: <>" }, "inbox");
             Assert.Empty(await db.SmtpQueue.ToListAsync());
 
             await db.SieveScripts.Where(s => s.MailboxId == mailbox.Id).ExecuteUpdateAsync(set => set.SetProperty(s => s.Content, "require [\"vacation\"]; vacation :days 7 :subject \"Away\" :handle \"holiday\" \"Out of office\";"));
-            await service.EvaluateAsync(mailbox, rejectRaw, parsed, "inbox");
-            await service.EvaluateAsync(mailbox, rejectRaw, parsed, "inbox");
+            var noAuth = Inbound(tenant.Id, "From: sender@remote.test\r\n");
+            await service.EvaluateAsync(mailbox, noAuth, parsed with { RawHeaders = noAuth.RawMessage.Split(["\r\n\r\n", "\n\n"], StringSplitOptions.None)[0] }, "inbox");
+            Assert.Empty(await db.SmtpQueue.ToListAsync());
+            await service.EvaluateAsync(mailbox, rejectRaw, rejectParsed, "inbox");
+            await service.EvaluateAsync(mailbox, rejectRaw, rejectParsed, "inbox");
             Assert.Single(await db.SmtpQueue.Where(q => q.Direction == QueueDirection.Outbound).ToListAsync());
             var vacation = await db.SmtpQueue.SingleAsync(q => q.Direction == QueueDirection.Outbound);
             Assert.Equal(string.Empty, vacation.Sender);
@@ -104,7 +115,7 @@ public sealed class SieveDeliveryIntegrationTests
             await db.SmtpQueue.ExecuteDeleteAsync();
             await db.SieveScripts.Where(s => s.MailboxId == mailbox.Id).ExecuteUpdateAsync(set => set.SetProperty(s => s.Content,
                 "require [\"vacation\"]; vacation :mime :handle \"mime-test\" text:\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<b>Away</b>\r\n.\r\n;"));
-            await service.EvaluateAsync(mailbox, rejectRaw, parsed, "inbox");
+            await service.EvaluateAsync(mailbox, rejectRaw, rejectParsed, "inbox");
             var mimeVacation = await db.SmtpQueue.SingleAsync(q => q.Direction == QueueDirection.Outbound);
             Assert.Contains("Content-Type: text/html", mimeVacation.RawMessage);
             Assert.Contains("<b>Away</b>", mimeVacation.RawMessage);

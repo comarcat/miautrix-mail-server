@@ -170,6 +170,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddScoped<IMessageUidAllocator, MessageUidAllocator>();
         services.AddScoped<SieveCompiler>();
         services.AddScoped<SieveInterpreter>();
+        services.AddSingleton(new SieveSenderAuthenticationGate(hostname));
         services.AddScoped<ISieveDeliveryService, SieveDeliveryService>();
 
         // Identity

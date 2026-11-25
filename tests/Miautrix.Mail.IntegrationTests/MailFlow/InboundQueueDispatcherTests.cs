@@ -258,6 +258,7 @@ public sealed class InboundQueueDispatcherTests
         services.AddScoped<IRetryPolicy, ExponentialBackoffWithJitterRetryPolicy>();
         services.AddScoped<SieveCompiler>();
         services.AddScoped<SieveInterpreter>();
+        services.AddSingleton(new SieveSenderAuthenticationGate("mail.miautrix.tech"));
         services.AddScoped<ISieveDeliveryService, SieveDeliveryService>();
 
         await using var provider = services.BuildServiceProvider();

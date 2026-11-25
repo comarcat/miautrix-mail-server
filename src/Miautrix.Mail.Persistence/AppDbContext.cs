@@ -470,6 +470,7 @@ public class AppDbContext : DbContext
             entity.HasIndex(e => new { e.TenantId, e.Direction, e.Status, e.NextAttemptAt })
                 .HasDatabaseName("idx_smtp_queue_tenant_id_direction_status_next_attempt_at");
             entity.Property(e => e.Sender).HasColumnName("sender").IsRequired();
+            entity.Property(e => e.TransportSenderOverride).HasColumnName("transport_sender_override");
             entity.Property(e => e.Recipient).HasColumnName("recipient").IsRequired();
             entity.Property(e => e.Subject).HasColumnName("subject");
             entity.Property(e => e.RawMessage).HasColumnName("raw_message").IsRequired();
