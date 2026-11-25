@@ -118,7 +118,7 @@ public sealed class OutboundQueueDispatcherTests
     }
 
     [Fact]
-    public async Task A_configured_sending_domain_is_signed_before_the_cloudflare_transport()
+    public async Task Cloudflare_transport_preserves_raw_message_even_when_a_dkim_key_exists()
     {
         var tenantId = await SeedTenantAsync();
         try
@@ -129,9 +129,34 @@ public sealed class OutboundQueueDispatcherTests
             var key = dkim.GenerateKeyPair();
             await SeedDomainAsync(tenantId, domain, "cloudflare", "https://worker.example.workers.dev", selector);
             await SeedDkimKeyAsync(tenantId, domain, selector, key.PrivateKeyPem, key.PublicKeyPem);
+            var rawMessage = $"From: sender@{domain}\r\nSubject: queued\r\n\r\nBody.";
             await SeedQueueItemAsync(tenantId, $"user@{domain}", $"sender@{domain}");
 
             var transport = new RecordingTransport();
+            await RunOnePassAsync(transport);
+
+            var sent = Assert.Single(transport.Sent);
+            Assert.Equal(rawMessage, sent.RawMessage);
+            Assert.DoesNotContain("DKIM-Signature:", sent.RawMessage, StringComparison.OrdinalIgnoreCase);
+        }
+        finally { await CleanupAsync(tenantId); }
+    }
+
+    [Fact]
+    public async Task Direct_transport_signs_with_the_configured_publicly_verifiable_key()
+    {
+        var tenantId = await SeedTenantAsync();
+        try
+        {
+            const string selector = "outbound-test";
+            var domain = DirectDomain;
+            var dkim = new DkimService();
+            var key = dkim.GenerateKeyPair();
+            await SeedDomainAsync(tenantId, domain, "direct", workerUrl: null, selector: selector);
+            await SeedDkimKeyAsync(tenantId, domain, selector, key.PrivateKeyPem, key.PublicKeyPem);
+            await SeedQueueItemAsync(tenantId, "user@recipient.test", $"sender@{domain}");
+
+            var transport = new RecordingTransport(DomainTransportModes.Direct);
             await RunOnePassAsync(transport);
 
             var sent = Assert.Single(transport.Sent);

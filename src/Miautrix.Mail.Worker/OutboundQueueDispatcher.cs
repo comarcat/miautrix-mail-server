@@ -239,7 +239,11 @@ public sealed class OutboundQueueDispatcher : BackgroundService
     {
         try
         {
-            var rawMessage = !string.IsNullOrWhiteSpace(privateKey) && !string.IsNullOrWhiteSpace(selector)
+            // Cloudflare publishes authentication records for Cloudflare-mode domains and owns
+            // DKIM signing there. Adding a local signature can fail validation when its key is
+            // not published. Direct delivery uses the tenant's configured selector and key.
+            var rawMessage = string.Equals(transport.Mode, DomainTransportModes.Direct, StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(privateKey) && !string.IsNullOrWhiteSpace(selector)
                 ? _dkimService.SignMessage(item.RawMessage, domain, selector, privateKey)
                 : item.RawMessage;
             var message = new OutboundMessage(

@@ -2,7 +2,7 @@
 
 ## Architecture
 
-Outbound queue rows are dispatched according to the **sending domain's** `TransportMode`. `cloudflare` remains the existing default for miautrix.tech and uses the Cloudflare Worker API. `direct` selects the direct SMTP transport; `local` remains unchanged. The dispatcher signs with the sending domain's configured selector and private key before handing the same final message to either transport.
+Outbound queue rows are dispatched according to the **sending domain's** `TransportMode`. `cloudflare` remains the existing default for miautrix.tech and uses the Cloudflare Worker API. `direct` selects the direct SMTP transport; `local` remains unchanged. Direct mode signs with the sending domain's configured selector and private key. Cloudflare mode preserves the message for Cloudflare's own signing, since Cloudflare publishes the authentication records for those domains.
 
 Direct delivery uses the `IDnsResolver` seam for MX, A/AAAA and TXT queries. MX records are tried by ascending preference and each MX name is resolved to addresses through the seam. When no MX exists, the domain's A/AAAA addresses are used. A null MX is treated as a permanent failure. SMTP uses port 25, an EHLO name, command/connect timeouts, dot-stuffed DATA and opportunistic STARTTLS with TLS 1.2 or 1.3. MTA-STS policy is discovered by `_mta-sts.<domain>` TXT, fetched over HTTPS, cached for its `max_age`, and applied to MX matching and TLS requirements in `enforce`; `testing` is logged without enforcement.
 
@@ -33,13 +33,13 @@ MTA-STS is honored when the recipient publishes `_mta-sts.<recipient-domain>` TX
 | Null MX | Permanent failure (556); unit test covers the null-MX branch. |
 | SMTP replies and connection failures | 4xx and network failures retry; 5xx are permanent. Local SMTP socket tests cover failover, recipient 450/550, no STARTTLS, and successful STARTTLS with TLS session EHLO restart. Cloudflare tests cover HTTP 400, 429 and 503 classes. |
 | MTA-STS | Fetcher is injectable; TXT discovery and HTTPS policy fetch are isolated, policy is cached to `max_age`, enforce filters MX and requires valid TLS, testing logs without enforcement. Unit tests cover cache expiry, parser/matching, enforce MX mismatch and testing behavior. |
-| DKIM | Existing `DkimService` signs outgoing data using the sender domain's selector/key before either transport. Existing DKIM headers are preserved so messages are not signed twice. Unit and DB-backed dispatcher tests verify the signature using the corresponding public key. |
+| DKIM | Direct mode signs outgoing data using the sender domain's selector/key; Cloudflare mode leaves bytes unchanged for Cloudflare signing. Existing DKIM headers are preserved so messages are not signed twice. DB-backed dispatcher tests verify the direct signature with its public key and confirm Cloudflare preserves the exact raw message even when a key exists in the database. |
 | Retry lifetime | Exponential backoff with bounded jitter remains in use; lifetime defaults to five days and is configurable. A deterministic `TimeProvider` integration test checks immediate permanent failure and expiry; retry schedule/jitter bounds have unit coverage. |
 | DSN | RFC 3464 multipart report queued through inbound delivery for permanent failure and expiry; null reverse-path, loop avoidance and local mailbox gating are covered in integration tests. |
 
 ## Test evidence
 
-Final validation passed on 2026-11-24: `dotnet build Miautrix.Mail.sln -warnaserror -m:1` (0 warnings, 0 errors); UnitTests 121/121; SecurityTests 7/7; ProtocolTests 28/28; targeted IntegrationTests 29/29 (`Category=Cloudflare|FullyQualifiedName~SenderAuthorizationWiring|FullyQualifiedName~MessageUidAllocator|Category=Smtp`); admin Vitest 18/18. Tests use fake DNS and local in-process SMTP sockets; the database-backed filters use the configured non-production test database. No live external SMTP, public DNS lookup, production database, or deployment was used. No migration was added because retry lifetime uses the existing queue `CreatedAt` timestamp.
+Final validation passed twice after merging the current `release/v2.1`: `dotnet build Miautrix.Mail.sln -warnaserror -m:1` (0 warnings, 0 errors); UnitTests 121/121; SecurityTests 7/7; ProtocolTests 35/35; targeted IntegrationTests 30/30 (`Category=Cloudflare|FullyQualifiedName~SenderAuthorizationWiring|FullyQualifiedName~MessageUidAllocator|Category=Smtp`); admin Vitest 18/18. Tests use fake DNS and local in-process SMTP sockets; the database-backed filters use the configured non-production test database. No live external SMTP, public DNS lookup, production database, or deployment was used. No migration was added because retry lifetime uses the existing queue `CreatedAt` timestamp.
 
 ## Limitations
 
