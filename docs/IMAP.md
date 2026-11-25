@@ -1,6 +1,6 @@
 # IMAP access
 
-The server advertises `IMAP4rev1 AUTH=PLAIN SASL-IR LITERAL+ ENABLE UTF8=ACCEPT UNSELECT UIDPLUS SPECIAL-USE`. IMAP4rev2, NAMESPACE, MOVE and IDLE are not advertised. Use port 993 with implicit TLS and the server hostname covered by its certificate.
+The server advertises `IMAP4rev1 AUTH=PLAIN SASL-IR LITERAL+ ENABLE UTF8=ACCEPT UNSELECT UIDPLUS SPECIAL-USE NAMESPACE MOVE IDLE`. IMAP4rev2 is not advertised. Use port 993 with implicit TLS and the server hostname covered by its certificate.
 
 Mailbox names use RFC 3501 modified UTF-7 until the client sends `ENABLE UTF8=ACCEPT`. After the tagged ENABLE succeeds and `* ENABLED UTF8=ACCEPT` is returned, UTF-8 mailbox names and quoted strings are accepted and returned in UTF-8. Raw non-ASCII mailbox names before ENABLE receive BAD; clients should use modified UTF-7 until that point.
 
@@ -37,7 +37,11 @@ When a message is marked `\\Deleted`, IMAP EXPUNGE permanently removes it from t
 
 EXAMINE opens a folder read-only. STORE and EXPUNGE are rejected, APPEND to that same selected folder returns `NO [READ-ONLY]`, and FETCH BODY[] does not set `\\Seen`. CLOSE silently expunges deleted messages when selected read-write; on a read-only selection it leaves them in place. CHECK is valid only after SELECT or EXAMINE. EXAMINE and read-only NOOP observe pending `\\Recent` messages without consuming them. A read-write SELECT/NOOP claims pending recent UIDs atomically for that session; when the server cannot determine which session was first notified (including concurrent sessions), it conservatively reports the pending messages as recent as RFC 3501 recommends. STATUS reports pending messages without claiming them, so repeated STATUS calls do not change subsequent selection state.
 
-The explicit namespace does not provide RFC 2342 NAMESPACE discovery. Clients should use LIST and select the returned shared paths. Do not configure a shared mailbox address as the login identity to access a delegate mailbox.
+NAMESPACE reports a personal namespace with the empty prefix and `/` delimiter, no Other Users namespace, and the shared namespace prefix `Shared/` with `/` delimiter. Clients can discover these roots and then LIST authorized paths. Do not configure a shared mailbox address as the login identity to access a delegate mailbox.
+
+MOVE and UID MOVE move selected messages atomically to an authorized destination, assigning fresh destination UIDs. A successful command returns COPYUID and reports source EXPUNGE responses in descending sequence order. The destination requires write access; a missing destination returns TRYCREATE, and unauthorized destinations are hidden as nonexistent. Read-only selections cannot move messages.
+
+IDLE sends the continuation `+ idling` and remains active until the client sends `DONE`. The server polls mailbox state every two seconds by default and pushes EXISTS, EXPUNGE and FETCH FLAGS updates from other IMAP sessions and database writers. Authorization is rechecked each poll; revocation ends visibility and clears selection. The server ends an IDLE after 30 minutes. Polling costs one mailbox snapshot query per selected idle session per interval; deployment operators should account for this load when sizing concurrent connections.
 
 ## Validation
 
@@ -57,4 +61,4 @@ For test failures requiring PostgreSQL, follow [Troubleshooting §9 and §14](TR
 
 ## Known limitations
 
-The server does not claim IMAP4rev2 or advertise IDLE/MOVE/ACL/NAMESPACE/STARTTLS; deployment uses implicit TLS. External-client validation still must be run by the owner against the deployed host. See [IMAP Phase 1 report](IMAP-Phase1-Report.md) for the command-by-command audit and evidence status.
+The server does not claim IMAP4rev2 or advertise ACL/STARTTLS; deployment uses implicit TLS. IMAP4rev2 stays unadvertised because mandatory response and command semantics remain incomplete; see [IMAP Phase 2 report](IMAP-Phase2-Report.md) for the gap matrix. External-client validation still must be run by the owner against the deployed host. See [IMAP Phase 1 report](IMAP-Phase1-Report.md) for the rev1 command audit and evidence status.

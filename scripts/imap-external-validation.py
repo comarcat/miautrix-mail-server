@@ -42,6 +42,14 @@ with imaplib.IMAP4_SSL(host, 993, ssl_context=context) as client:
     status, _ = client.login(username, password)
     check("LOGIN", status == "OK")
 
+    status, namespaces = client.namespace()
+    personal, other_users, shared = namespaces if status == "OK" else (None, None, None)
+    decode = lambda value: value.decode(errors="replace") if isinstance(value, bytes) else value
+    personal_ok = bool(personal and any(decode(prefix) == "" and decode(delimiter) == "/" for prefix, delimiter in personal))
+    shared_ok = bool(shared and any(decode(prefix) == "Shared/" and decode(delimiter) == "/" for prefix, delimiter in shared))
+    check("IMAP-010 NAMESPACE personal and shared", status == "OK" and personal_ok and shared_ok,
+          f"personal={personal!r}; shared={shared!r}; other-users={other_users!r}")
+
     status, folders = client.list()
     names = [f.decode(errors="replace") for f in (folders or []) if f]
     has_inbox = any('"INBOX"' in n.upper() or n.upper().endswith(" INBOX") for n in names)
