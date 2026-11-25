@@ -65,6 +65,10 @@ export const DomainsScreen: React.FC<DomainsScreenProps> = ({ client = defaultCl
         transport_mode: formTransportMode,
         cloudflare_zone_id: formTransportMode === 'cloudflare' ? formCloudflareZoneId.trim() || undefined : undefined,
         cloudflare_worker_url: formTransportMode === 'cloudflare' ? formCloudflareWorkerUrl.trim() || undefined : undefined,
+        mta_sts_mode: (document.getElementById('mta-sts-mode') as HTMLSelectElement | null)?.value as UpdateDomainRequest['mta_sts_mode'],
+        mta_sts_max_age: Number((document.getElementById('mta-sts-max-age') as HTMLInputElement | null)?.value || 604800),
+        tls_report_rua: (document.getElementById('tls-report-rua') as HTMLInputElement | null)?.value || '',
+        mta_sts_mx: (document.getElementById('mta-sts-mx') as HTMLTextAreaElement | null)?.value || '',
       };
       await client.createDomain(payload);
       setIsAddOpen(false);
@@ -442,6 +446,21 @@ export const DomainsScreen: React.FC<DomainsScreenProps> = ({ client = defaultCl
             <form onSubmit={handleEditSubmit}>
               <div className="modal-body">
                 <div className="form-group">
+                  <label className="form-label" htmlFor="mta-sts-mode">MTA-STS policy</label>
+                  <select id="mta-sts-mode" className="input-text w-full" defaultValue={editingDomain.mta_sts_mode || 'none'}>
+                    <option value="none">Disabled</option><option value="testing">Testing</option><option value="enforce">Enforce</option>
+                  </select>
+                  <label className="form-label" htmlFor="mta-sts-max-age">Policy max_age (seconds)</label>
+                  <input id="mta-sts-max-age" className="input-text w-full" type="number" min="1" max="31557600" defaultValue={editingDomain.mta_sts_max_age || 604800} />
+                  <label className="form-label" htmlFor="tls-report-rua">TLS-RPT report address</label>
+                  <input id="tls-report-rua" className="input-text w-full" defaultValue={editingDomain.tls_report_rua || `mailto:tls-reports@${editingDomain.name}`} />
+                  <label className="form-label" htmlFor="mta-sts-mx">MTA-STS MX patterns (one per line or comma-separated)</label>
+                  <textarea id="mta-sts-mx" className="input-text w-full" rows={3} defaultValue={editingDomain.mta_sts_mx || ''} placeholder="*.mx.cloudflare.net" />
+                  <p role="alert" className="cell-dim" style={{ color: 'var(--error)', fontSize: '12px' }}>
+                    The mx list must match every MX record of this domain, including Cloudflare Email Routing hosts, or senders enforcing MTA-STS will fail to deliver.
+                  </p>
+                </div>
+                <div className="form-group">
                   <label className="form-label">Domain Name (FQDN)</label>
                   <input
                     type="text"
@@ -600,6 +619,10 @@ export const DomainsScreen: React.FC<DomainsScreenProps> = ({ client = defaultCl
               ) : (
                 <>
                   <div className="detail-row-block">
+                    <div className="detail-label">Client setup DNS suggestions</div>
+                    <pre className="detail-pre" style={{ color: 'var(--text)' }}>{`_imaps._tcp.${inspectingDomain.name}. SRV 0 1 993 <mail-hostname>.\n_submissions._tcp.${inspectingDomain.name}. SRV 0 1 465 <mail-hostname>.\n_submission._tcp.${inspectingDomain.name}. SRV 0 1 587 <mail-hostname>.\nautoconfig.${inspectingDomain.name}. CNAME <mail-hostname>.\nautodiscover.${inspectingDomain.name}. CNAME <mail-hostname>.\n_mta-sts.${inspectingDomain.name}. TXT "v=STSv1; id=${inspectingDomain.mta_sts_id || new Date(inspectingDomain.created_at).getTime()}"\n_smtp._tls.${inspectingDomain.name}. TXT "v=TLSRPTv1; rua=${inspectingDomain.tls_report_rua || `mailto:tls-reports@${inspectingDomain.name}`}"`}</pre>
+                  </div>
+                  <div className="detail-row-block">
                     <div className="detail-label">1. MX Record (Inbound Delivery)</div>
                     <pre className="detail-pre" style={{ color: 'var(--text)' }}>
 {`${inspectingDomain.name}.  300  IN  MX  10  mail.${inspectingDomain.name}.`}
@@ -703,4 +726,3 @@ export const DomainsScreen: React.FC<DomainsScreenProps> = ({ client = defaultCl
     </div>
   );
 };
-

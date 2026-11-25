@@ -108,6 +108,10 @@ public class AppDbContext : DbContext
         {
             entity.Property(e => e.Name).HasColumnName("name").IsRequired();
             entity.Property(e => e.IsVerified).HasColumnName("is_verified");
+            entity.Property(e => e.MtaStsMode).HasColumnName("mta_sts_mode").HasDefaultValue("none").IsRequired();
+            entity.Property(e => e.MtaStsMaxAge).HasColumnName("mta_sts_max_age").HasDefaultValue(604800).IsRequired();
+            entity.Property(e => e.TlsReportRua).HasColumnName("tls_report_rua");
+            entity.Property(e => e.MtaStsMx).HasColumnName("mta_sts_mx");
             entity.Property(e => e.MfaEnforced).HasColumnName("mfa_enforced").HasDefaultValue(false).IsRequired();
             entity.Property(e => e.SessionLifetimeMinutes).HasColumnName("session_lifetime_minutes");
             entity.Property(e => e.LockoutMaxFailedAttempts).HasColumnName("lockout_max_failed_attempts");

@@ -6,6 +6,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Net.Sockets;
@@ -30,6 +31,7 @@ public sealed class AdminService : IAdminService
 {
     private static readonly DateTimeOffset ProcessStartedAt = Process.GetCurrentProcess().StartTime.ToUniversalTime();
     private const string SpamSupectedReleasedTag = "[SPAM Supected-Released]";
+    private static readonly Regex MtaStsMxPattern = new("^(?:\\*\\.)?(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\\.)+[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$", RegexOptions.CultureInvariant);
     private static string DefaultClamAvSocketPath => OperatingSystem.IsWindows() ? "tcp://127.0.0.1:3310" : "/run/clamav/clamd.ctl";
 
     private readonly AppDbContext _db;
@@ -321,6 +323,20 @@ public sealed class AdminService : IAdminService
         if (domain is null) return null;
 
         _auth.AuthorizeAccess(tenantId, userId, domain, "domain.manage");
+
+        if (request.MtaStsMode is not null)
+        {
+            var mode = request.MtaStsMode.Trim().ToLowerInvariant();
+            if (mode is not ("none" or "testing" or "enforce")) throw new ArgumentException("Unknown MTA-STS mode.", nameof(request));
+            domain.MtaStsMode = mode;
+        }
+        if (request.MtaStsMaxAge.HasValue)
+        {
+            if (request.MtaStsMaxAge is < 1 or > 31_557_600) throw new ArgumentOutOfRangeException(nameof(request), "MTA-STS max_age must be between 1 and 31557600 seconds.");
+            domain.MtaStsMaxAge = request.MtaStsMaxAge.Value;
+        }
+        if (request.TlsReportRua is not null) domain.TlsReportRua = string.IsNullOrWhiteSpace(request.TlsReportRua) ? null : request.TlsReportRua.Trim();
+        if (request.MtaStsMx is not null) domain.MtaStsMx = NormalizeMtaStsMx(request.MtaStsMx);
 
         var changedDns = false;
 
@@ -2264,6 +2280,17 @@ public sealed class AdminService : IAdminService
     private static string GenerateDmarcRecord(string domainName) =>
         $"v=DMARC1; p=reject; rua=mailto:dmarc-reports@{domainName}; pct=100";
 
+    private static string? NormalizeMtaStsMx(string value)
+    {
+        var patterns = value.Split([',', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(pattern => pattern.EndsWith('.') ? pattern[..^1] : pattern)
+            .ToArray();
+        if (patterns.Length == 0) return null;
+        if (patterns.Any(pattern => pattern.Length > 253 || !MtaStsMxPattern.IsMatch(pattern)))
+            throw new ArgumentException("MTA-STS MX entries must be DNS hostnames or wildcard DNS suffix patterns.", nameof(value));
+        return string.Join('\n', patterns);
+    }
+
     private static DomainDto ToDomainDto(DomainEntity d) => new(
         d.Id,
         d.Name,
@@ -2277,5 +2304,10 @@ public sealed class AdminService : IAdminService
         d.CreatedAt,
         d.TransportMode,
         d.CloudflareZoneId,
-        d.CloudflareWorkerUrl);
+        d.CloudflareWorkerUrl,
+        d.MtaStsMode,
+        d.MtaStsMaxAge,
+        d.TlsReportRua,
+        d.UpdatedAt.UtcTicks.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        d.MtaStsMx);
 }

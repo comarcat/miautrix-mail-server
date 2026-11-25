@@ -39,8 +39,10 @@ public sealed class SenderAuthorizationTests : IClassFixture<UidPostgresFixture>
     public async Task Sender_permission_migration_is_repeatable_on_dev_database()
     {
         var connection = Environment.GetEnvironmentVariable("MIAUTRIX_DB_CONNECTION") ?? throw new InvalidOperationException("MIAUTRIX_DB_CONNECTION required.");
-        if (!string.Equals(new NpgsqlConnectionStringBuilder(connection).Database, "miautrix-mail-dev", StringComparison.Ordinal))
-            throw new InvalidOperationException("Idempotency check is allowed only against miautrix-mail-dev.");
+        var databaseName = new NpgsqlConnectionStringBuilder(connection).Database ?? string.Empty;
+        if (!string.Equals(databaseName, "miautrix-mail-dev", StringComparison.Ordinal) &&
+            !databaseName.StartsWith("miautrix_test_", StringComparison.Ordinal))
+            throw new InvalidOperationException("Idempotency check is allowed only against miautrix-mail-dev or an isolated miautrix_test_ database.");
         await using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(connection).Options);
         const string repeatable = """
             ALTER TABLE mailbox_delegates ADD COLUMN IF NOT EXISTS can_send_as boolean NOT NULL DEFAULT false;

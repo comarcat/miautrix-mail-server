@@ -561,6 +561,23 @@ namespace Miautrix.Mail.Persistence.Migrations
                         .HasDefaultValue(false)
                         .HasColumnName("mfa_enforced");
 
+                    b.Property<int>("MtaStsMaxAge")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(604800)
+                        .HasColumnName("mta_sts_max_age");
+
+                    b.Property<string>("MtaStsMode")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("none")
+                        .HasColumnName("mta_sts_mode");
+
+                    b.Property<string>("MtaStsMx")
+                        .HasColumnType("text")
+                        .HasColumnName("mta_sts_mx");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text")
@@ -609,6 +626,10 @@ namespace Miautrix.Mail.Persistence.Migrations
                     b.Property<string>("SpfRecord")
                         .HasColumnType("text")
                         .HasColumnName("spf_record");
+
+                    b.Property<string>("TlsReportRua")
+                        .HasColumnType("text")
+                        .HasColumnName("tls_report_rua");
 
                     b.Property<string>("TransportMode")
                         .IsRequired()

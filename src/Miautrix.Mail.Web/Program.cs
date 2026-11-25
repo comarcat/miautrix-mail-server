@@ -21,6 +21,8 @@ using Miautrix.Mail.Web.Infrastructure;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
 
 namespace Miautrix.Mail.Web;
 
@@ -43,6 +45,10 @@ public class Program
         }
 
         builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
+        builder.Services.AddRateLimiter(options => options.AddPolicy("discovery", context =>
+            RateLimitPartition.GetFixedWindowLimiter(DiscoveryClientKey.From(context), _ => new FixedWindowRateLimiterOptions
+            { PermitLimit = 60, Window = TimeSpan.FromMinutes(1), QueueLimit = 0, AutoReplenishment = true })));
+        builder.Services.Configure<Microsoft.AspNetCore.RateLimiting.RateLimiterOptions>(options => options.RejectionStatusCode = StatusCodes.Status429TooManyRequests);
 
         var backupDirectory = Environment.GetEnvironmentVariable("MIAUTRIX_BACKUP_DIR");
         if (string.IsNullOrWhiteSpace(backupDirectory))
@@ -174,13 +180,15 @@ public class Program
             app.UseHsts();
         }
 
-        var adminDirectory = StaticFrontendHosting.ValidateOptionalDirectory("MIAUTRIX_ADMIN_DIR");
-        var webmailDirectory = StaticFrontendHosting.ValidateOptionalDirectory("MIAUTRIX_WEBMAIL_DIR");
+        var adminDirectory = StaticFrontendHosting.ValidateOptionalDirectory("MIAUTRIX_ADMIN_DIR", builder.Configuration["MIAUTRIX_ADMIN_DIR"]);
+        var webmailDirectory = StaticFrontendHosting.ValidateOptionalDirectory("MIAUTRIX_WEBMAIL_DIR", builder.Configuration["MIAUTRIX_WEBMAIL_DIR"]);
         StaticFrontendHosting.Configure(app, adminDirectory, webmailDirectory);
 
+        app.UseRouting();
         app.UseMiddleware<ApiExceptionMiddleware>();
         app.UseMiddleware<RequestIdMiddleware>();
         app.UseMiddleware<IdempotencyMiddleware>();
+        app.UseRateLimiter();
 
         app.MapControllers();
         app.MapGet("/openapi/v1.json", () => Results.Ok(new

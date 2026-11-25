@@ -46,6 +46,11 @@ export interface DomainItem {
   transport_mode: string;
   cloudflare_zone_id?: string | null;
   cloudflare_worker_url?: string | null;
+  mta_sts_mode?: 'none' | 'testing' | 'enforce';
+  mta_sts_max_age?: number;
+  tls_report_rua?: string | null;
+  mta_sts_id?: string;
+  mta_sts_mx?: string | null;
 }
 
 export interface CreateDomainRequest {
@@ -54,6 +59,10 @@ export interface CreateDomainRequest {
   transport_mode?: string;
   cloudflare_zone_id?: string;
   cloudflare_worker_url?: string;
+  mta_sts_mode?: 'none' | 'testing' | 'enforce';
+  mta_sts_max_age?: number;
+  tls_report_rua?: string | null;
+  mta_sts_mx?: string | null;
 }
 
 export interface UpdateDomainRequest {
@@ -65,6 +74,10 @@ export interface UpdateDomainRequest {
   transport_mode?: string;
   cloudflare_zone_id?: string;
   cloudflare_worker_url?: string;
+  mta_sts_mode?: 'none' | 'testing' | 'enforce';
+  mta_sts_max_age?: number;
+  tls_report_rua?: string | null;
+  mta_sts_mx?: string | null;
 }
 
 export interface VerifyDomainResult {

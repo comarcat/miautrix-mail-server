@@ -7,9 +7,9 @@ namespace Miautrix.Mail.Web.Infrastructure;
 /// <summary>Optional equivalent of the nginx /admin and webmail-root static locations.</summary>
 internal static class StaticFrontendHosting
 {
-    public static string? ValidateOptionalDirectory(string variableName)
+    public static string? ValidateOptionalDirectory(string variableName, string? configuredValue = null)
     {
-        var value = Environment.GetEnvironmentVariable(variableName);
+        var value = configuredValue ?? Environment.GetEnvironmentVariable(variableName);
         if (string.IsNullOrWhiteSpace(value)) return null;
         var fullPath = Path.GetFullPath(value);
         if (!Directory.Exists(fullPath))
@@ -45,7 +45,8 @@ internal static class StaticFrontendHosting
             var provider = new PhysicalFileProvider(webmailDirectory);
             app.MapWhen(context => !context.Request.Path.StartsWithSegments("/api") &&
                                    !context.Request.Path.StartsWithSegments("/openapi") &&
-                                   !context.Request.Path.StartsWithSegments("/admin"), branch =>
+                                   !context.Request.Path.StartsWithSegments("/admin") &&
+                                   !DiscoveryRoutes.IsDiscoveryPath(context.Request.Path), branch =>
             {
                 branch.UseDefaultFiles(new DefaultFilesOptions { FileProvider = provider });
                 branch.UseStaticFiles(Options(provider));
