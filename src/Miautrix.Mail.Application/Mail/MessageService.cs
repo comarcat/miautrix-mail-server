@@ -307,6 +307,30 @@ public sealed class MessageService : IMessageService
         return copy.Uid;
     }
 
+    public async Task<uint?> MoveMessageToMailboxAsync(Guid tenantId, Guid userId, Guid sourceMailboxId, Guid messageId, Guid targetMailboxId, Guid targetFolderId, CancellationToken cancellationToken = default)
+    {
+        var sourceMailbox = await _db.Mailboxes.FirstOrDefaultAsync(m => m.TenantId == tenantId && m.Id == sourceMailboxId, cancellationToken);
+        var targetMailbox = await _db.Mailboxes.FirstOrDefaultAsync(m => m.TenantId == tenantId && m.Id == targetMailboxId, cancellationToken);
+        _auth.AssertMailboxAccess(tenantId, userId, sourceMailbox, requireWrite: true);
+        _auth.AssertMailboxAccess(tenantId, userId, targetMailbox, requireWrite: true);
+
+        // The caller owns the transaction. Lock the row so concurrent MOVE commands cannot both
+        // successfully move a message after observing the same source state.
+        if (_db.Database.IsRelational())
+            await _db.Database.SqlQuery<Guid>($"SELECT id AS \"Value\" FROM messages WHERE tenant_id = {tenantId} AND mailbox_id = {sourceMailboxId} AND id = {messageId} FOR UPDATE").ToListAsync(cancellationToken);
+        var source = await _db.Messages.FirstOrDefaultAsync(m => m.TenantId == tenantId && m.MailboxId == sourceMailboxId && m.Id == messageId, cancellationToken);
+        var targetFolder = await _db.Folders.FirstOrDefaultAsync(f => f.TenantId == tenantId && f.MailboxId == targetMailboxId && f.Id == targetFolderId, cancellationToken);
+        if (source is null || targetFolder is null) return null;
+
+        var uid = await _uidAllocator.AllocateAsync(tenantId, targetFolder.Id, cancellationToken: cancellationToken);
+        source.MailboxId = targetMailboxId;
+        source.FolderId = targetFolder.Id;
+        source.Uid = uid;
+        source.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(cancellationToken);
+        return uid;
+    }
+
     public async Task<bool> MoveMessageAsync(
         Guid tenantId,
         Guid userId,

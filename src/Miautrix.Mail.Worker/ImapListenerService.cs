@@ -26,6 +26,8 @@ public sealed class ImapListenerService : BackgroundService
 {
     private const int ImapsPort = 993;
     private readonly int _port;
+    private readonly TimeSpan _idleTimeout;
+    private readonly TimeSpan _idlePollInterval;
 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IMailStorage _storage;
@@ -38,13 +40,18 @@ public sealed class ImapListenerService : BackgroundService
         IMailStorage storage,
         ILogger<ImapListenerService> logger,
         TlsCertificateProvider tlsCertificateProvider,
-        int port = ImapsPort)
+        int port = ImapsPort,
+        TimeSpan? idleTimeout = null,
+        TimeSpan? idlePollInterval = null)
     {
         _scopeFactory = scopeFactory;
         _storage = storage;
         _logger = logger;
         _tlsCert = tlsCertificateProvider.Certificate;
         _port = port;
+        _idleTimeout = idleTimeout is { } configuredTimeout && configuredTimeout > TimeSpan.Zero
+            ? configuredTimeout : TimeSpan.FromMinutes(30);
+        _idlePollInterval = idlePollInterval ?? TimeSpan.FromSeconds(2);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -195,11 +202,59 @@ public sealed class ImapListenerService : BackgroundService
 
             await ImapResponseWriter.WriteAsync(ssl, result, ct);
 
+            if (session.IsIdling && !await RunIdleAsync(session, ssl, connectionReader, ct))
+                break;
+
             if (result.Status == "BYE" || session.State == ImapState.LoggedOut)
             {
                 break;
             }
         }
+    }
+
+    private async Task<bool> RunIdleAsync(ImapSession session, SslStream ssl, ImapConnectionReader reader, CancellationToken ct)
+    {
+        var deadline = DateTimeOffset.UtcNow + _idleTimeout;
+        var input = reader.ReadLineAsync(ct);
+        while (!ct.IsCancellationRequested)
+        {
+            if (input.IsCompleted)
+            {
+                var line = await input;
+                if (line is null) return false;
+                if (Encoding.ASCII.GetString(line).Trim().Equals("DONE", StringComparison.OrdinalIgnoreCase))
+                {
+                    await ImapResponseWriter.WriteAsync(ssl, session.EndIdle(), ct);
+                    return true;
+                }
+                session.AbortIdle();
+                await WriteAsciiAsync(ssl, "* BYE Expected DONE during IDLE\r\n", ct);
+                return false;
+            }
+
+            var remaining = deadline - DateTimeOffset.UtcNow;
+            if (remaining <= TimeSpan.Zero)
+            {
+                session.AbortIdle();
+                await WriteAsciiAsync(ssl, "* BYE IDLE timeout\r\n", ct);
+                return false;
+            }
+            var delay = remaining < _idlePollInterval ? remaining : _idlePollInterval;
+            await Task.WhenAny(input, Task.Delay(delay, ct));
+            if (input.IsCompleted) continue;
+
+            if (DateTimeOffset.UtcNow >= deadline)
+            {
+                session.AbortIdle();
+                await WriteAsciiAsync(ssl, "* BYE IDLE timeout\r\n", ct);
+                return false;
+            }
+            var changes = await session.PollIdleChangesAsync(ct);
+            await ImapResponseWriter.WriteAsync(ssl, changes, ct);
+            if (changes.ResponseSegments.Any(segment => Encoding.ASCII.GetString(segment.Bytes).StartsWith("* BYE", StringComparison.Ordinal)))
+                return false;
+        }
+        return false;
     }
 
     private static Task WriteAsciiAsync(Stream stream, string value, CancellationToken cancellationToken) =>

@@ -145,8 +145,9 @@ public sealed class ImapListenerRawSocketTests
         services.AddSingleton<Miautrix.Mail.Application.Mail.Mime.IImapMimeFormatter, MimeKitImapMimeFormatter>();
         using var provider = services.BuildServiceProvider();
         var service = new ImapListenerService(provider.GetRequiredService<IServiceScopeFactory>(), storage,
-            provider.GetRequiredService<ILogger<ImapListenerService>>(), new TlsCertificateProvider(certificate), port: 0);
-        using var stopping = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+            provider.GetRequiredService<ILogger<ImapListenerService>>(), new TlsCertificateProvider(certificate), port: 0,
+            idleTimeout: TimeSpan.FromSeconds(4), idlePollInterval: TimeSpan.FromMilliseconds(200));
+        using var stopping = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         await service.StartAsync(stopping.Token);
         Assert.True(SpinWait.SpinUntil(() => service.BoundPort != 0, TimeSpan.FromSeconds(5)), "IMAP test listener did not bind.");
 
@@ -160,12 +161,14 @@ public sealed class ImapListenerRawSocketTests
             Assert.Contains("CAPABILITY", Encoding.UTF8.GetString(await reader.ReadLineAsync(stopping.Token) ?? []));
             var capabilities = await SendAndReadAsync(tls, reader, "A0 CAPABILITY", "A0", stopping.Token);
             var capabilityText = Encoding.UTF8.GetString(capabilities);
-            foreach (var capability in new[] { "IMAP4rev1", "AUTH=PLAIN", "SASL-IR", "LITERAL+", "ENABLE", "UTF8=ACCEPT", "UNSELECT", "UIDPLUS", "SPECIAL-USE" })
+            foreach (var capability in new[] { "IMAP4rev1", "AUTH=PLAIN", "SASL-IR", "LITERAL+", "ENABLE", "UTF8=ACCEPT", "UNSELECT", "UIDPLUS", "SPECIAL-USE", "NAMESPACE", "MOVE", "IDLE" })
                 Assert.Contains(capability, capabilityText);
 
             var sasl = Convert.ToBase64String(Encoding.UTF8.GetBytes($"\0{address}\0test-password"));
             var authResult = await SendAndReadAsync(tls, reader, $"A1 AUTHENTICATE PLAIN {sasl}", "A1", stopping.Token);
             Assert.Contains("A1 OK", Encoding.UTF8.GetString(authResult));
+            var namespaceResponse = await SendAndReadAsync(tls, reader, "A1aa NAMESPACE", "A1aa", stopping.Token);
+            Assert.Equal("* NAMESPACE ((\"\" \"/\")) NIL ((\"Shared/\" \"/\"))\r\nA1aa OK NAMESPACE completed\r\n", Encoding.UTF8.GetString(namespaceResponse));
             var utf8BeforeEnable = await SendAndReadAsync(tls, reader, "A1a LIST \"\" \"Café\"", "A1a", stopping.Token);
             Assert.Contains("BAD Invalid mailbox name encoding", Encoding.UTF8.GetString(utf8BeforeEnable));
             var utf7Folders = await SendAndReadAsync(tls, reader, "A1b LIST \"\" \"Caf&AOk-\"", "A1b", stopping.Token);
@@ -548,6 +551,42 @@ public sealed class ImapListenerRawSocketTests
             await using (var verify = new AppDbContext(dbOptions))
                 Assert.False(await verify.Messages.AnyAsync(message => message.TenantId == tenantId && message.MailboxId == sendOnlyMailboxId));
 
+            var moveSource = Encoding.UTF8.GetBytes("From: sender@test.invalid\r\nTo: user@test.invalid\r\nSubject: MOVE source\r\n\r\nmove body");
+            await tls.WriteAsync(Encoding.UTF8.GetBytes($"A7t APPEND INBOX {{{moveSource.Length}+}}\r\n"), stopping.Token);
+            await tls.WriteAsync(moveSource, stopping.Token);
+            await tls.WriteAsync("\r\n"u8.ToArray(), stopping.Token);
+            var appendForMove = Encoding.UTF8.GetString(await ReadResponseAsync(reader, "A7t", stopping.Token));
+            var sourceUid = uint.Parse(System.Text.RegularExpressions.Regex.Match(appendForMove, @"APPENDUID 9 (\d+)").Groups[1].Value);
+            var unauthorizedMoveTarget = Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, $"A7t1 UID MOVE {sourceUid} Shared/{sendOnlyAddress}/INBOX", "A7t1", stopping.Token));
+            Assert.Equal("NO Mailbox does not exist", ResponseTail(unauthorizedMoveTarget));
+            Assert.Contains("NO [TRYCREATE]", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, $"A7t2 UID MOVE {sourceUid} MissingFolder", "A7t2", stopping.Token)));
+            var personalToShared = Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, $"A7u UID MOVE {sourceUid} Shared/{salesAddress}/INBOX", "A7u", stopping.Token));
+            Assert.Contains($"* OK [COPYUID 21 {sourceUid} 2] MOVE completed", personalToShared);
+            Assert.Contains("* 1 EXPUNGE", personalToShared);
+            Assert.EndsWith("A7u OK MOVE completed\r\n", personalToShared);
+            Assert.Contains("MESSAGES 0", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A7v STATUS INBOX (MESSAGES)", "A7v", stopping.Token)));
+            Assert.Contains("MESSAGES 2", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, $"A7w STATUS Shared/{salesAddress}/INBOX (MESSAGES)", "A7w", stopping.Token)));
+
+            await tls.WriteAsync(Encoding.UTF8.GetBytes($"A7x APPEND INBOX {{{moveSource.Length}+}}\r\n"), stopping.Token);
+            await tls.WriteAsync(moveSource, stopping.Token);
+            await tls.WriteAsync("\r\n"u8.ToArray(), stopping.Token);
+            var appendForDeniedMove = Encoding.UTF8.GetString(await ReadResponseAsync(reader, "A7x", stopping.Token));
+            var deniedSourceUid = uint.Parse(System.Text.RegularExpressions.Regex.Match(appendForDeniedMove, @"APPENDUID 9 (\d+)").Groups[1].Value);
+            var readOnlyMoveTarget = Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, $"A7y UID MOVE {deniedSourceUid} Shared/{readAddress}/Trash", "A7y", stopping.Token));
+            Assert.Equal("NO Mailbox does not exist", ResponseTail(readOnlyMoveTarget));
+            await SendAndReadAsync(tls, reader, $"A7z UID STORE {deniedSourceUid} +FLAGS (\\Deleted)", "A7z", stopping.Token);
+            await SendAndReadAsync(tls, reader, "A7z1 EXPUNGE", "A7z1", stopping.Token);
+
+            await SendAndReadAsync(tls, reader, $"A7z2 SELECT Shared/{salesAddress}/INBOX", "A7z2", stopping.Token);
+            var sharedToPersonal = Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A7z3 UID MOVE 2 INBOX", "A7z3", stopping.Token));
+            Assert.Contains("* OK [COPYUID 9 2 6] MOVE completed", sharedToPersonal);
+            Assert.Contains("* 2 EXPUNGE", sharedToPersonal);
+            Assert.EndsWith("A7z3 OK MOVE completed\r\n", sharedToPersonal);
+            Assert.Contains("MESSAGES 1", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, $"A7z4 STATUS Shared/{salesAddress}/INBOX (MESSAGES)", "A7z4", stopping.Token)));
+            await SendAndReadAsync(tls, reader, "A7z5 SELECT INBOX", "A7z5", stopping.Token);
+            await SendAndReadAsync(tls, reader, "A7z6 STORE 1 +FLAGS (\\Deleted)", "A7z6", stopping.Token);
+            await SendAndReadAsync(tls, reader, "A7z7 EXPUNGE", "A7z7", stopping.Token);
+
             var readSelect = Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, $"A8 EXAMINE Shared/{readAddress}/INBOX", "A8", stopping.Token));
             Assert.Contains("[READ-ONLY]", readSelect);
             Assert.Contains("1 EXISTS", readSelect);
@@ -603,16 +642,16 @@ public sealed class ImapListenerRawSocketTests
             await tls.WriteAsync(Encoding.UTF8.GetBytes($"A9g APPEND Shared/{salesAddress}/INBOX {{{salesAppend.Length}+}}\r\n"), stopping.Token);
             await tls.WriteAsync(salesAppend, stopping.Token);
             await tls.WriteAsync("\r\n"u8.ToArray(), stopping.Token);
-            Assert.Contains("[APPENDUID 21 2]", Encoding.UTF8.GetString(await ReadResponseAsync(reader, "A9g", stopping.Token)));
+            Assert.Contains("[APPENDUID 21 3]", Encoding.UTF8.GetString(await ReadResponseAsync(reader, "A9g", stopping.Token)));
             await using (var verify = new AppDbContext(dbOptions))
             {
-                var appendedMessage = await verify.Messages.SingleAsync(message => message.TenantId == tenantId && message.MailboxId == salesMailboxId && message.FolderId == salesInboxId && message.Uid == 2);
+                var appendedMessage = await verify.Messages.SingleAsync(message => message.TenantId == tenantId && message.MailboxId == salesMailboxId && message.FolderId == salesInboxId && message.Uid == 3);
                 Assert.Equal(salesMailboxId, appendedMessage.MailboxId);
             }
             await SendAndReadAsync(tls, reader, "A9h STORE 2 +FLAGS (\\Deleted)", "A9h", stopping.Token);
-            Assert.Contains("* 2 EXPUNGE", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A9i UID EXPUNGE 2", "A9i", stopping.Token)));
+            Assert.Contains("* 2 EXPUNGE", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A9i UID EXPUNGE 3", "A9i", stopping.Token)));
             await using (var verify = new AppDbContext(dbOptions))
-                Assert.False(await verify.Messages.AnyAsync(message => message.TenantId == tenantId && message.MailboxId == salesMailboxId && message.FolderId == salesInboxId && message.Uid == 2));
+                Assert.False(await verify.Messages.AnyAsync(message => message.TenantId == tenantId && message.MailboxId == salesMailboxId && message.FolderId == salesInboxId && message.Uid == 3));
 
             using (var sharedMailKit = new MailKit.Net.Imap.ImapClient { ServerCertificateValidationCallback = (_, _, _, _) => true })
             {
@@ -634,11 +673,40 @@ public sealed class ImapListenerRawSocketTests
             await secondReader.ReadLineAsync(stopping.Token);
             Assert.Contains("OK", Encoding.UTF8.GetString(await SendAndReadAsync(secondTls, secondReader, $"B1 LOGIN {secondAddress} test-password", "B1", stopping.Token)));
             Assert.Contains("OK", Encoding.UTF8.GetString(await SendAndReadAsync(secondTls, secondReader, $"B2 SELECT Shared/{salesAddress}/INBOX", "B2", stopping.Token)));
+            var concurrentMoveSource = Encoding.UTF8.GetBytes($"From: sender@test.invalid\r\nTo: {salesAddress}\r\nSubject: concurrent move\r\n\r\nbody");
+            await tls.WriteAsync(Encoding.UTF8.GetBytes($"A9race APPEND Shared/{salesAddress}/INBOX {{{concurrentMoveSource.Length}+}}\r\n"), stopping.Token);
+            await tls.WriteAsync(concurrentMoveSource, stopping.Token);
+            await tls.WriteAsync("\r\n"u8.ToArray(), stopping.Token);
+            Assert.Contains("[APPENDUID 21 4]", Encoding.UTF8.GetString(await ReadResponseAsync(reader, "A9race", stopping.Token)));
+            await Task.WhenAll(
+                tls.WriteAsync("A9move1 UID MOVE 4 INBOX\r\n"u8.ToArray(), stopping.Token).AsTask(),
+                secondTls.WriteAsync("B6 UID MOVE 4 INBOX\r\n"u8.ToArray(), stopping.Token).AsTask());
+            var concurrentMoveResponses = await Task.WhenAll(
+                ReadResponseAsync(reader, "A9move1", stopping.Token),
+                ReadResponseAsync(secondReader, "B6", stopping.Token));
+            Assert.Single(concurrentMoveResponses, response => Encoding.UTF8.GetString(response).Contains(" OK MOVE completed", StringComparison.Ordinal));
+            Assert.Single(concurrentMoveResponses, response => Encoding.UTF8.GetString(response).Contains(" NO MOVE failed", StringComparison.Ordinal));
             Assert.Contains("UID 1", Encoding.UTF8.GetString(await SendAndReadAsync(secondTls, secondReader, "B3 FETCH 1 (UID FLAGS)", "B3", stopping.Token)));
             Assert.Contains("OK", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A9m STORE 1 +FLAGS (\\Answered)", "A9m", stopping.Token)));
             var visibleFlag = Encoding.UTF8.GetString(await SendAndReadAsync(secondTls, secondReader, "B4 NOOP", "B4", stopping.Token));
             Assert.Contains("B4 OK", visibleFlag);
             Assert.Contains("\\Answered", Encoding.UTF8.GetString(await SendAndReadAsync(secondTls, secondReader, "B5 FETCH 1 (UID FLAGS)", "B5", stopping.Token)));
+            await secondTls.WriteAsync("B7 IDLE\r\n"u8.ToArray(), stopping.Token);
+            Assert.Equal("+ idling", Encoding.ASCII.GetString(await secondReader.ReadLineAsync(stopping.Token) ?? []));
+            var idleAppend = Encoding.UTF8.GetBytes($"From: sender@test.invalid\r\nTo: {salesAddress}\r\nSubject: idle push\r\n\r\nbody");
+            await tls.WriteAsync(Encoding.UTF8.GetBytes($"A9idle APPEND Shared/{salesAddress}/INBOX {{{idleAppend.Length}+}}\r\n"), stopping.Token);
+            await tls.WriteAsync(idleAppend, stopping.Token);
+            await tls.WriteAsync("\r\n"u8.ToArray(), stopping.Token);
+            var idleAppendResult = Encoding.UTF8.GetString(await ReadResponseAsync(reader, "A9idle", stopping.Token));
+            var idleUid = uint.Parse(System.Text.RegularExpressions.Regex.Match(idleAppendResult, @"APPENDUID 21 (\d+)").Groups[1].Value);
+            Assert.Contains("2 EXISTS", await ReadIdleUntilAsync(secondReader, line => line.Contains("2 EXISTS", StringComparison.Ordinal), stopping.Token));
+            await SendAndReadAsync(tls, reader, "A9idle1 STORE 2 +FLAGS (\\Flagged)", "A9idle1", stopping.Token);
+            Assert.Contains($"UID {idleUid}", await ReadIdleUntilAsync(secondReader, line => line.Contains("FETCH", StringComparison.Ordinal), stopping.Token));
+            await SendAndReadAsync(tls, reader, "A9idle2 STORE 2 +FLAGS (\\Deleted)", "A9idle2", stopping.Token);
+            await SendAndReadAsync(tls, reader, "A9idle3 EXPUNGE", "A9idle3", stopping.Token);
+            Assert.Contains("* 2 EXPUNGE", await ReadIdleUntilAsync(secondReader, line => line.Contains("EXPUNGE", StringComparison.Ordinal), stopping.Token));
+            await secondTls.WriteAsync("DONE\r\n"u8.ToArray(), stopping.Token);
+            Assert.Equal("B7 OK IDLE terminated", Encoding.ASCII.GetString(await secondReader.ReadLineAsync(stopping.Token) ?? []));
             await SendAndReadAsync(tls, reader, "A9n STORE 1 +FLAGS (\\Deleted)", "A9n", stopping.Token);
             Assert.Contains("* 1 EXPUNGE", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A9o EXPUNGE", "A9o", stopping.Token)));
             var observedExpunge = Encoding.UTF8.GetString(await SendAndReadAsync(secondTls, secondReader, "B6 NOOP", "B6", stopping.Token));
@@ -669,6 +737,15 @@ public sealed class ImapListenerRawSocketTests
                 Assert.Equal(2, concurrentMessages.Select(message => message.Uid).Distinct().Count());
                 Assert.All(concurrentMessages, message => Assert.Equal(salesMailboxId, message.MailboxId));
             }
+            await secondTls.WriteAsync("B8 IDLE\r\n"u8.ToArray(), stopping.Token);
+            Assert.Equal("+ idling", Encoding.ASCII.GetString(await secondReader.ReadLineAsync(stopping.Token) ?? []));
+            await using (var revokeDelegate = new AppDbContext(dbOptions))
+            {
+                var row = await revokeDelegate.MailboxDelegates.SingleAsync(item => item.TenantId == tenantId && item.UserId == secondUserId && item.MailboxId == salesMailboxId);
+                revokeDelegate.MailboxDelegates.Remove(row);
+                await revokeDelegate.SaveChangesAsync();
+            }
+            Assert.Contains("* BYE Mailbox access revoked", await ReadIdleUntilAsync(secondReader, line => line.StartsWith("* BYE", StringComparison.Ordinal), stopping.Token));
 
             Assert.Contains("OK", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, $"A9j CREATE Shared/{salesAddress}/NewFolder", "A9j", stopping.Token)));
             await using (var verify = new AppDbContext(dbOptions))
@@ -709,6 +786,13 @@ public sealed class ImapListenerRawSocketTests
             await tls.WriteAsync(renameInboxLiteral, stopping.Token);
             await tls.WriteAsync("\r\n"u8.ToArray(), stopping.Token);
             Assert.Contains("A9s1 OK", Encoding.UTF8.GetString(await ReadResponseAsync(reader, "A9s1", stopping.Token)));
+            int inboxBeforeRename;
+            await using (var before = new AppDbContext(dbOptions))
+            {
+                // Earlier steps (e.g. MOVE into INBOX) may leave messages there; RENAME INBOX must move all of them.
+                inboxBeforeRename = await before.Messages.CountAsync(message => message.TenantId == tenantId && message.MailboxId == mailboxId && message.FolderId == folderId);
+            }
+            Assert.True(inboxBeforeRename >= 1);
             var inboxRename = Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A9t RENAME INBOX ImapRenamedInbox", "A9t", stopping.Token));
             Assert.Contains("A9t OK RENAME completed", inboxRename);
             await using (var verify = new AppDbContext(dbOptions))
@@ -717,8 +801,22 @@ public sealed class ImapListenerRawSocketTests
                 var inboxCount = await verify.Messages.CountAsync(message => message.TenantId == tenantId && message.MailboxId == mailboxId && message.FolderId == folderId);
                 var movedCount = await verify.Messages.CountAsync(message => message.TenantId == tenantId && message.MailboxId == mailboxId && message.FolderId == renamedInbox.Id);
                 Assert.Equal(0, inboxCount);
-                Assert.Equal(1, movedCount);
+                Assert.Equal(inboxBeforeRename, movedCount);
                 Assert.NotEqual(9u, renamedInbox.UidValidity);
+            }
+
+            using (var timeoutClient = new TcpClient())
+            {
+                await timeoutClient.ConnectAsync("127.0.0.1", service.BoundPort, stopping.Token);
+                using var timeoutTls = new SslStream(timeoutClient.GetStream(), leaveInnerStreamOpen: false, (_, _, _, _) => true);
+                await timeoutTls.AuthenticateAsClientAsync(new SslClientAuthenticationOptions { TargetHost = "localhost" }, stopping.Token);
+                var timeoutReader = new ImapConnectionReader(timeoutTls);
+                await timeoutReader.ReadLineAsync(stopping.Token);
+                Assert.Contains("OK", Encoding.ASCII.GetString(await SendAndReadAsync(timeoutTls, timeoutReader, $"T1 LOGIN {address} test-password", "T1", stopping.Token)));
+                Assert.Contains("OK", Encoding.ASCII.GetString(await SendAndReadAsync(timeoutTls, timeoutReader, "T2 SELECT ImapRenamedInbox", "T2", stopping.Token)));
+                await timeoutTls.WriteAsync("T3 IDLE\r\n"u8.ToArray(), stopping.Token);
+                Assert.Equal("+ idling", Encoding.ASCII.GetString(await timeoutReader.ReadLineAsync(stopping.Token) ?? []));
+                Assert.Equal("* BYE IDLE timeout", await ReadIdleUntilAsync(timeoutReader, line => line.StartsWith("* BYE IDLE timeout", StringComparison.Ordinal), stopping.Token));
             }
 
             var logout = await SendAndReadAsync(tls, reader, "A6i LOGOUT", "A6i", stopping.Token);
@@ -763,6 +861,17 @@ public sealed class ImapListenerRawSocketTests
             if (text.StartsWith(tag + " ", StringComparison.Ordinal)) break;
         }
         return result.ToArray();
+    }
+
+    private static async Task<string> ReadIdleUntilAsync(ImapConnectionReader reader, Func<string, bool> predicate, CancellationToken ct)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(5));
+        while (true)
+        {
+            var line = Encoding.ASCII.GetString(await reader.ReadLineAsync(timeout.Token) ?? throw new EndOfStreamException());
+            if (predicate(line)) return line;
+        }
     }
 
     private static string ResponseTail(string response)
