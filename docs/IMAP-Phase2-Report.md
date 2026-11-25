@@ -128,6 +128,37 @@ This is the bounded audit completed during this worker dispatch. The full RFC pa
 
 ### Implementation changes and verification
 
-BINARY section parsing now rejects an empty `section-binary` (BODY[] remains the separate complete-message fetch); decoded BINARY partial responses slice at the requested octet offset and report the returned origin. BINARY.SIZE partial syntax is rejected. IMAP4rev2 ENABLE now returns an untagged ENABLED response even when no supported extension was enabled, enables UTF-8 mailbox decoding for the rev2 session, treats CHECK as NOOP, and rejects LSUB. These changes are tested in `ImapListenerRawSocketTests` (`R5a`, `R6a`, `R6b`, `R24a`–`R24c`). `scripts/imap-external-validation.py` now runs a distinct ENABLE IMAP4rev2 validation pass following the legacy rev1 pass.
+BINARY section parsing accepts the grammar's empty `section-binary` (`BINARY[]`); BODY[] remains the separate complete-message fetch. Decoded BINARY partial responses slice at the requested octet offset and report the returned origin; BINARY.SIZE partial syntax is rejected. Raw tests compare BINARY.SIZE with the returned BINARY literal and cover empty sections, partials, past-end offsets, and invalid BINARY.SIZE partial syntax (`R24`–`R24d`, `R24aa`). IMAP4rev2 ENABLE returns ENABLED even when no supported extension was enabled, enables UTF-8 mailbox decoding for the rev2 session, treats CHECK as NOOP, and rejects LSUB. Raw tests cover these in `R5a`, `R6a`, `R6b`, and the mailbox normalization cases `R5c`–`R5e`. `scripts/imap-external-validation.py` runs a distinct ENABLE IMAP4rev2 validation pass following the legacy rev1 pass.
+
+Since this checkpoint, the engine normalizes rev2 mailbox paths to NFC and rejects invalid Net-Unicode scalar values during CREATE. Tests cover a decomposed UTF-8 CREATE followed by selecting its normalized spelling and rejection of a Unicode noncharacter. Exact CAPABILITY stability is tested before authentication, after authentication, and after ENABLE; rev2 is still deliberately absent from CAPABILITY. The protocol suite passed 38/38 after these changes.
+
+### Remaining audit matrix rows before advertisement
+
+The table above is not a complete paragraph-level audit. The specific requirement families still marked Missing or not yet evidenced are:
+
+| RFC paragraph / rule | Level | Status | Code location | Test evidence / missing test |
+|---|---:|---|---|---|
+| §2.2.1 tag reuse accepted | MUST | Missing | `ImapEngine.cs` command dispatch | No focused repeated-tag raw test |
+| §2.2.2 strict syntax rejection | SHOULD | Missing | `ImapCommandTokenizer.cs`, command handlers | Existing malformed-command cases are not a grammar-wide audit |
+| §§2.3.1.1–2 UID and sequence-number invariants across expunge/recreate | MUST | Partial | `ImapEngine.cs`, UID allocator/storage | `ImapUidStabilityTests`; no exhaustive sequence/UID transition matrix |
+| §§2.3.2–2.3.4 flags, internal date, and RFC822.SIZE semantics | SHOULD/MUST | Partial | STORE/APPEND/COPY/MOVE and MIME formatter | Existing keyword and APPEND tests; no full dates/size invariant matrix |
+| §§3–4 state, framing, UTF-8 quoted strings, binary strings and invalid continuations | MUST | Partial | `ImapStateMachine.cs`, listener, tokenizer | Raw state and literal boundaries exist; invalid base64/literal and pipelining matrix is absent |
+| §5.1 Net-Unicode prohibition on invalid mailbox names | MUST | Partial | `ImapEngine.cs: DecodeMailboxPath`, `HandleCreateFolderAsync` | Raw `R5c`–`R5e`; rename, all mailbox-argument commands, and complete Unicode category corpus absent |
+| §5.2 unsolicited size/flag updates | MUST/SHOULD | Partial | `ImapListenerService.cs` IDLE polling | IDLE tests cover observed state changes; command-time unsolicited update requirements not exhaustively tested |
+| §5.5 pipelining and EXPUNGE sequence safety | MUST | Missing | `ImapListenerService.cs`, `ImapEngine.cs` | No pipelining/sequence-number race suite |
+| §§6.1.1–6.2.3 CAPABILITY/authentication corner cases | MUST/conditional | Partial | `ImapEngine.cs`, `ImapListenerService.cs` | Exact CAPABILITY/auth cases exist; AUTH PLAIN cancellation, malformed base64, initial response, TLS upgrade are not fully evidenced; no cleartext STARTTLS listener |
+| §6.3.1 ENABLE additive semantics and valid state | MUST | Partial | `ImapEngine.cs: HandleEnable` | Raw ENABLED/CAPABILITY stability cases; no repeated ENABLE additive test or state matrix |
+| §§6.3.2–6.3.3 SELECT/EXAMINE required responses and read-only codes | MUST | Partial | `ImapEngine.cs: HandleSelectAsync` | Raw SELECT/LIST/CLOSED and no-RECENT cases; EXAMINE and full required-response assertions are absent |
+| §6.3.4 CREATE normalized-name OLDNAME behavior | MUST/SHOULD | Partial | `ImapEngine.cs: HandleCreateFolderAsync` | Normalization round-trip exists; OLDNAME response data is not emitted/tested |
+| §6.3.9 LIST return/selection semantics and attributes | MUST | Partial | `ImapEngine.cs: HandleListAsync` | Current raw `R22` covers SUBSCRIBED/CHILDREN/SPECIAL-USE/STATUS; no complete `\\NonExistent`, `\\HasChildren`, `\\HasNoChildren`, `\\Subscribed`, RETURN/options truth table |
+| §6.3.11 STATUS DELETED/SIZE | MUST | Partial | `ImapEngine.cs: HandleStatusAsync` | Raw `R21` covers zero counts; nonzero DELETED and aggregate SIZE are not asserted |
+| §6.3.12 APPENDUID and §6.4.9 COPYUID/UID EXPUNGE/error codes | MUST | Partial | APPEND/COPY/MOVE/EXPUNGE handlers in `ImapEngine.cs` | Some success/error cases exist; no complete response-code placement and UID EXPUNGE test matrix |
+| §6.4.5 BINARY empty section, leaf eligibility, partial bounds, UNKNOWN-CTE | MUST | Partial | `IImapMimeFormatter`, `MimeKitImapMimeFormatter`, `ImapEngine.cs` | Raw `R24`–`R24d`, `R29`/`R29a`; nested multipart/message/global and textual CRLF normalization conformance remain unverified |
+| §6.4.4 ESEARCH / SEARCHRES SAVE and `$` | MUST | Partial | `ImapEngine.cs: HandleSearchAsync` | Raw `R11`–`R20`; no complete SEARCH key matching/UID result matrix |
+| §6.4.6 STORE/flags, §6.4.8 FETCH and §6.4.9 commands | MUST/SHOULD | Partial | corresponding `ImapEngine.cs` handlers | Basic rev2 raw coverage exists; full command grammar and response semantics absent |
+| §§7.1–7.2 response grammar, codes and capability requirements | MUST/REQUIRED | Partial | `ImapEngine.cs`, `ImapResponseWriter.cs` | Selected exact-code assertions only; response-code placement audit incomplete, so IMAP4rev2 is correctly not advertised |
+| Appendix E rev2 changes | mixed | Partial | command-specific engine and MIME paths | Items E.1–E.21 are summarized by the feature rows above; no complete item-to-test traceability yet |
+
+The requested paragraph-by-paragraph inventory is therefore still incomplete and several MUST/REQUIRED rows remain Missing or Partial. In particular, rev2 is not advertised: protocol tests and a command-feature checklist do not establish full RFC compliance. The remaining table is a truthful gap list, not a completed compliance matrix.
 
 Build: `dotnet build tests/Miautrix.Mail.ProtocolTests/Miautrix.Mail.ProtocolTests.csproj -warnaserror -m:1` succeeded with 0 warnings and 0 errors. Protocol tests: 38/38 passed with the configured non-production test DB. An initial run without passing the test environment into the test process failed because `MIAUTRIX_DB_CONNECTION` was absent; it was rerun correctly. The full solution and all baseline suites were not run in this partial checkpoint.
