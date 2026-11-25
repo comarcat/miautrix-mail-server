@@ -57,7 +57,6 @@ public sealed class AutodiscoveryContractTests : IClassFixture<WebApplicationFac
         var email = $"client@{HostDomain}";
         var xml = $"<Autodiscover><Request><EMailAddress>{email}</EMailAddress></Request></Autodiscover>";
         using var request = new HttpRequestMessage(HttpMethod.Post, "/autodiscover/autodiscover.xml") { Content = new StringContent(xml, Encoding.UTF8, "text/xml") };
-        request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
         using var response = await client.SendAsync(request);
         Assert.True(response.StatusCode == HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
         var doc = XDocument.Parse(await response.Content.ReadAsStringAsync());
@@ -113,5 +112,30 @@ public sealed class AutodiscoveryRateLimitTests : IClassFixture<WebApplicationFa
             if (last.StatusCode == HttpStatusCode.TooManyRequests) break;
         }
         using (last) Assert.Equal(HttpStatusCode.TooManyRequests, last!.StatusCode);
+    }
+
+    [Fact]
+    public async Task Discovery_uses_forwarded_client_ip_only_from_loopback_and_other_routes_are_not_limited()
+    {
+        using var client = _factory.CreateClient();
+        var firstProxyRequest = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        firstProxyRequest.Connection.RemoteIpAddress = IPAddress.Loopback;
+        firstProxyRequest.Request.Headers["X-Forwarded-For"] = "198.51.100.10";
+        var secondProxyRequest = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        secondProxyRequest.Connection.RemoteIpAddress = IPAddress.Loopback;
+        secondProxyRequest.Request.Headers["X-Forwarded-For"] = "198.51.100.11";
+        Assert.NotEqual(
+            Miautrix.Mail.Web.Infrastructure.DiscoveryClientKey.From(firstProxyRequest),
+            Miautrix.Mail.Web.Infrastructure.DiscoveryClientKey.From(secondProxyRequest));
+        var directRequest = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        directRequest.Connection.RemoteIpAddress = IPAddress.Parse("203.0.113.5");
+        directRequest.Request.Headers["X-Forwarded-For"] = "198.51.100.11";
+        Assert.Equal("203.0.113.5", Miautrix.Mail.Web.Infrastructure.DiscoveryClientKey.From(directRequest));
+
+        for (var i = 0; i < 70; i++)
+        {
+            using var response = await client.GetAsync("/openapi/v1.json");
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
     }
 }

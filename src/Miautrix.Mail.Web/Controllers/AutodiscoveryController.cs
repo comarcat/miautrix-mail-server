@@ -10,11 +10,11 @@ using Miautrix.Mail.Web.Infrastructure;
 namespace Miautrix.Mail.Web.Controllers;
 
 [ApiController]
-[EnableRateLimiting("discovery")]
 public sealed class AutodiscoveryController(AppDbContext db, IConfiguration configuration, IRequestContextAccessor context, IHttpContextAccessor httpContextAccessor) : ControllerBase
 {
     [HttpGet("/.well-known/autoconfig/mail/config-v1.1.xml")]
     [HttpGet("/mail/config-v1.1.xml")]
+    [EnableRateLimiting("discovery")]
     public async Task<IActionResult> Autoconfig([FromQuery] string? emailaddress, CancellationToken ct)
     {
         var domainName = EmailDomain(emailaddress);
@@ -32,6 +32,7 @@ public sealed class AutodiscoveryController(AppDbContext db, IConfiguration conf
 
     [HttpGet("/autodiscover/autodiscover.xml")]
     [HttpPost("/autodiscover/autodiscover.xml")]
+    [EnableRateLimiting("discovery")]
     public async Task<IActionResult> Outlook(CancellationToken ct)
     {
         string? email = null;
@@ -60,6 +61,7 @@ public sealed class AutodiscoveryController(AppDbContext db, IConfiguration conf
     }
 
     [HttpGet("/.well-known/mta-sts.txt")]
+    [EnableRateLimiting("discovery")]
     public async Task<IActionResult> MtaSts(CancellationToken ct)
     {
         var host = Request.Host.Host;

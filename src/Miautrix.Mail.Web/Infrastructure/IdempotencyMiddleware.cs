@@ -60,6 +60,13 @@ public sealed class IdempotencyMiddleware
             return;
         }
 
+        // Outlook Autodiscover uses POST for a read-only client configuration lookup.
+        if (path.Equals("/autodiscover/autodiscover.xml", StringComparison.OrdinalIgnoreCase))
+        {
+            await _next(context);
+            return;
+        }
+
         var idempotencyKey = context.Request.Headers["Idempotency-Key"].FirstOrDefault();
         if (string.IsNullOrWhiteSpace(idempotencyKey))
         {
