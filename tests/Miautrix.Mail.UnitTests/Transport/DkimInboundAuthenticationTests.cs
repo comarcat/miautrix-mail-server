@@ -106,6 +106,13 @@ public sealed class DkimInboundAuthenticationTests
         Assert.Equal("fail", untrusted.Dmarc.Result);
         Assert.Equal("none", untrusted.Dmarc.Disposition);
 
+        var rawSpoofed = "Authentication-Results: sender.example; spf=pass smtp.mailfrom=example.test\r\n" +
+            "Authentication-Results: mx.cloudflare.net; spf=pass smtp.mailfrom=example.test\r\n" + raw;
+        var rawUntrusted = await new InboundAuthenticationService(untrustedDns, OptionsWithTrustedAuthservIds())
+            .EvaluateAsync(new(null, null, "sender@remote.test", rawSpoofed, InboundMailPath.CloudflareWebhook));
+        Assert.Equal("none", rawUntrusted.Spf.Result);
+        Assert.Equal("none", rawUntrusted.Dmarc.Disposition);
+
         var dns = new FakeDnsResolver();
         var trusted = await new InboundAuthenticationService(dns, OptionsWithTrustedAuthservIds())
             .EvaluateAsync(new(null, null, "sender@remote.test", raw, InboundMailPath.CloudflareWebhook,
