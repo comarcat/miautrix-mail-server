@@ -37,7 +37,7 @@ The current regression run passed:
 | `dotnet build Miautrix.Mail.sln -warnaserror -m:1` | 0 warnings, 0 errors |
 | UnitTests | 101 |
 | SecurityTests | 7 |
-| ProtocolTests | 30 |
+| ProtocolTests after `release/v2.1` merge (NAMESPACE/MOVE/IDLE and SMTP listener core) | 37 |
 | IntegrationTests sender authorization, UID allocator, and HTTP/IMAP draft round trip | 11 |
 | Webmail Vitest | 17 |
 
@@ -45,4 +45,4 @@ ProtocolTests includes personal/shared APPEND cases with plain, HTML, multipart 
 
 ## Remaining acceptance work
 
-The shared access test runs the real `TenantAuthorizationHelper` against a database-backed mailbox; the integration round trip additionally uses a persisted write delegate and confirms no Send As permission is needed to save. The IMAP session test drives the protocol session command handler rather than opening a TLS socket; listener framing and protocol behavior remain independently covered by ProtocolTests.
+The shared access test runs the real `TenantAuthorizationHelper` against a database-backed mailbox; the integration round trip additionally uses a persisted write delegate and confirms no Send As permission is needed to save. The IMAP session test drives the protocol session command handler rather than opening a TLS socket; listener framing and protocol behavior remain independently covered by ProtocolTests. All requested suites passed twice after merging the latest `release/v2.1` tip, including SMTP listener core and IMAP Phase 2 stage A.
