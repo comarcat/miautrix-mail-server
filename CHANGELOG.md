@@ -2,7 +2,12 @@
 
 All notable changes to this project are documented here.
 
-## [2.2.0] - Unreleased (branch `release/v2.2`)
+## [2.2.1] - 2026-11-25
+
+### Changed
+- Production no longer logs every SQL command at `info`. `Microsoft.EntityFrameworkCore.Database.Command` is now `Warning` in the Web and Worker services; failed commands still log. No migrations and no `.env` changes; deploy without `-RunMigrations`.
+
+## [2.2.0] - 2026-11-25 (deployed)
 
 **Deploy:**
 - three idempotent migrations, so use `-RunMigrations`;

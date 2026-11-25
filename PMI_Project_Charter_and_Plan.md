@@ -98,11 +98,11 @@ Miautrix Mail Server
 | V2.1-WP2 | Outbound: per-domain direct MX, MTA-STS, DKIM (direct only), retry lifetime, RFC 3464 DSN | ✅ Merged (`7689325`, plus the EHLO fallback `20b8969`) |
 | V2.1-WP3 | Inbound SPF/DKIM/DMARC evaluation (RFC 7208/6376/7489) | ⏳ Planned for v2.1 (audit package 5) |
 | V2.1-WP4 | Sieve executed on delivery (RFC 5228 + fileinto, imap4flags, vacation, reject); no ManageSieve | ⏳ Planned for v2.1 (owner decision 2026-11-24) |
-| V2.2-SEC | Web API authenticates every request (server-side sessions); ERRORS §13.19 | ✅ Merged on `release/v2.2` |
-| V2.2-WP3 | Inbound SPF/DKIM/DMARC (monitor default, opt-in enforce) | ✅ Merged on `release/v2.2` |
-| V2.2-WP4 | Sieve on delivery plus webmail Filters / Out of office | ✅ Merged on `release/v2.2` |
-| V2.2-DISC | Autodiscovery, MTA-STS/TLS-RPT hosting | ✅ Merged on `release/v2.2` |
-| V2.2-AUD | Audit triage, MIME hardening, outbound DANE (off by default) | ✅ Merged on `release/v2.2` |
+| V2.2-SEC | Web API authenticates every request (server-side sessions); ERRORS §13.19 | ✅ Deployed 2026-11-25 |
+| V2.2-WP3 | Inbound SPF/DKIM/DMARC (monitor default, opt-in enforce) | ✅ Deployed 2026-11-25 |
+| V2.2-WP4 | Sieve on delivery plus webmail Filters / Out of office | ✅ Deployed 2026-11-25 |
+| V2.2-DISC | Autodiscovery, MTA-STS/TLS-RPT hosting | ✅ Deployed 2026-11-25 |
+| V2.2-AUD | Audit triage, MIME hardening, outbound DANE (off by default) | ✅ Deployed 2026-11-25 |
 | V2.1-WP5 | Remove the JMAP claim (empty project); revisit later | ⏳ Planned for v2.1 (owner decision 2026-11-24) |
 | WEBMAIL-001 | IMAP-appended drafts open empty in webmail | ✅ Merged (`9457ec5`) |
 | V2-10 | Windows server package for real-world testing | 🟡 Built 2026-11-24: `publish/miautrix-mail-win-x64-2.0.0-6086f60.zip` (sha256 ef119ff0…). Windows services, Kestrel HTTPS with the PEM certificate (HTTP on loopback only), registry environment with a restricted ACL, efbundle to the latest schema, secure `users bootstrap-admin`, verify/rollback, `docs/WINDOWS-INSTALL.md` checklist. Pending: the external tester's real-world install and feedback. |

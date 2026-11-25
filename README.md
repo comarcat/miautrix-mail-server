@@ -6,7 +6,7 @@ Self-hosted, multi-tenant mail platform designed as a modular monolith in .NET 1
 
 - **Architecture Diagram:** [`architecture.html`](architecture.html) (interactive diagram with showcase quality profile)
 - **Architecture Blueprint:** [`blueprints/miautrix-mail-server/blueprint.md`](blueprints/miautrix-mail-server/blueprint.md)
-- **Charter & Plan:** [`PMI_Project_Charter_and_Plan.md`](PMI_Project_Charter_and_Plan.md) — Version 1.0 complete (2026-10-03); **Version 2.0.0 released 2026-11-24** (M5 closed); **v2.1 deployed 2026-11-25**; v2.2 on `release/v2.2` (not yet deployed)
+- **Charter & Plan:** [`PMI_Project_Charter_and_Plan.md`](PMI_Project_Charter_and_Plan.md) — Version 1.0 complete (2026-10-03); **Version 2.0.0 released 2026-11-24** (M5 closed); **v2.1 deployed 2026-11-25**; **v2.2 deployed 2026-11-25**
 - **Handoff (v2.2):** [`docs/HANDOFF-v2.2.md`](docs/HANDOFF-v2.2.md) — **start here to catch up**: deploy (with `-RunMigrations`) and test checklist. Previous: [`docs/HANDOFF-v2.1.md`](docs/HANDOFF-v2.1.md), [`docs/HANDOFF-v2.0.0-release.md`](docs/HANDOFF-v2.0.0-release.md). Full history: [`docs/HANDOFF-v2.0.md`](docs/HANDOFF-v2.0.md)
 - **Protocols (v2.1):** compliance audit [`docs/v2.1-Protocol-Compliance-Audit.md`](docs/v2.1-Protocol-Compliance-Audit.md); SMTP [`docs/SMTP-v2.1-Report.md`](docs/SMTP-v2.1-Report.md); outbound/direct MX [`docs/Outbound-v2.1-Report.md`](docs/Outbound-v2.1-Report.md); IMAP phase 2 [`docs/IMAP-Phase2-Report.md`](docs/IMAP-Phase2-Report.md)
 - **IMAP:** [`docs/IMAP.md`](docs/IMAP.md) — capabilities, `Shared/` namespace, client setup; Send As model: [`docs/SMTP-SendAs-Report.md`](docs/SMTP-SendAs-Report.md)
@@ -23,7 +23,7 @@ Self-hosted, multi-tenant mail platform designed as a modular monolith in .NET 1
 
 **Version 2.1 is deployed (2026-11-25)** and in owner validation. It fixes SMTP multi-recipient delivery and unbounded input, adds STARTTLS on port 25 with TLS 1.2+, per-domain direct MX delivery (Cloudflare stays the default), retries with bounces, IMAP NAMESPACE/MOVE/IDLE, and makes drafts saved by IMAP clients editable in webmail. IMAP4rev2 is implemented as a session mode but not yet advertised. 
 
-**Version 2.2** is merged on `release/v2.2` and not yet deployed. It contains:
+**Version 2.2** was deployed on 2026-11-25. It contains:
 - **API session authentication:** a critical fix;
 - **inbound SPF/DKIM/DMARC:** monitor mode by default;
 - **Sieve filters:** with an out-of-office reply;

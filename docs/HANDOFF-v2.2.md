@@ -1,6 +1,6 @@
 # Handoff — Miautrix Mail Server v2.2
 
-**Status:** merged on the local branch `release/v2.2` and not yet deployed. v2.1 is in production.
+**Status:** v2.2.0 deployed to production 2026-11-25 (release `v2.2.0-590feb4`). v2.2.1 (logging noise only) deploys without `-RunMigrations`.
 Previous handoff: `docs/HANDOFF-v2.1.md`.
 
 ## What is in v2.2

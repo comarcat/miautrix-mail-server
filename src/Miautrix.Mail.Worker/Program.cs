@@ -113,6 +113,8 @@ var host = Host.CreateDefaultBuilder(args)
         else
         {
             logging.SetMinimumLevel(LogLevel.Information);
+            // Per-query SQL text is noise in production; EF warnings and errors still log (v2.2.1).
+            logging.AddFilter("Microsoft.EntityFrameworkCore.Database.Command", LogLevel.Warning);
         }
     })
     .ConfigureServices(services =>

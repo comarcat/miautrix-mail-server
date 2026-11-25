@@ -36,6 +36,11 @@ public class Program
     public static void Main(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
+        if (!builder.Environment.IsDevelopment())
+        {
+            // Per-query SQL text is noise in production; EF warnings and errors still log (v2.2.1).
+            builder.Logging.AddFilter("Microsoft.EntityFrameworkCore.Database.Command", LogLevel.Warning);
+        }
         builder.Host.UseWindowsService();
 
         var inboundAuthOptions = InboundAuthenticationOptions.FromEnvironment();
