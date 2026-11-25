@@ -180,6 +180,8 @@ public class Program
 
         app.UseMiddleware<ApiExceptionMiddleware>();
         app.UseMiddleware<RequestIdMiddleware>();
+        // v2.2 API authentication: every /api route requires a persisted bearer session.
+        app.UseMiddleware<SessionAuthenticationMiddleware>();
         app.UseMiddleware<IdempotencyMiddleware>();
 
         app.MapControllers();

@@ -187,7 +187,9 @@ public class AppDbContext : DbContext
             entity.Property(e => e.RoleId).HasColumnName("role_id");
         });
         ConfigureTenantScoped<Session>(modelBuilder, "sessions");
+        modelBuilder.Entity<Session>(e => { e.Property(x => x.UserId).HasColumnName("user_id"); e.Property(x => x.AccessTokenHash).HasColumnName("access_token_hash").IsRequired(); e.Property(x => x.ExpiresAt).HasColumnName("expires_at"); e.Property(x => x.LastSeenAt).HasColumnName("last_seen_at"); e.Property(x => x.RevokedAt).HasColumnName("revoked_at"); e.Property(x => x.ClientHash).HasColumnName("client_hash"); e.HasIndex(x => x.AccessTokenHash).IsUnique(); });
         ConfigureTenantScoped<RefreshToken>(modelBuilder, "refresh_tokens");
+        modelBuilder.Entity<RefreshToken>(e => { e.Property(x => x.SessionId).HasColumnName("session_id"); e.Property(x => x.UserId).HasColumnName("user_id"); e.Property(x => x.TokenHash).HasColumnName("token_hash").IsRequired(); e.Property(x => x.ExpiresAt).HasColumnName("expires_at"); e.Property(x => x.UsedAt).HasColumnName("used_at"); e.Property(x => x.RevokedAt).HasColumnName("revoked_at"); e.HasIndex(x => x.TokenHash).IsUnique(); });
         ConfigureTenantScoped<ApplicationPassword>(modelBuilder, "application_passwords");
         ConfigureTenantScoped<ApiKey>(modelBuilder, "api_keys");
         ConfigureTenantScoped<Invitation>(modelBuilder, "invitations");

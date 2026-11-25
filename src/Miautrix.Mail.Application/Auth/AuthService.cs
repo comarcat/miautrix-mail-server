@@ -100,6 +100,10 @@ public sealed class AuthService : IAuthService
 
         // 6. Issue tokens
         var (sessionToken, refreshToken) = _sessionManager.IssueSessionTokens();
+        var session = new Session { TenantId = user.TenantId, UserId = user.Id, AccessTokenHash = sessionToken.HashedToken, ExpiresAt = sessionToken.ExpiresAt, LastSeenAt = DateTimeOffset.UtcNow, ClientHash = string.IsNullOrWhiteSpace(ipAddress) ? null : _sessionManager.HashToken(ipAddress) };
+        _db.Sessions.Add(session);
+        _db.RefreshTokens.Add(new RefreshToken { TenantId = user.TenantId, UserId = user.Id, SessionId = session.Id, TokenHash = refreshToken.HashedToken, ExpiresAt = refreshToken.ExpiresAt });
+        await _db.SaveChangesAsync(cancellationToken);
         _eventSink.RecordEvent(user.TenantId, user.Id, SecurityEventCodes.AuthLoginSuccess, "User logged in successfully.", ipAddress);
 
         return new AuthResult(
