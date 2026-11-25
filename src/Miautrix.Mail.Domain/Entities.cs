@@ -313,6 +313,14 @@ public class SieveScript : TenantScopedEntityBase
     public bool IsActive { get; set; }
 }
 
+public class SieveVacationResponse : TenantScopedEntityBase
+{
+    public Guid MailboxId { get; set; }
+    public string SenderHash { get; set; } = string.Empty;
+    public string Handle { get; set; } = string.Empty;
+    public DateTimeOffset LastSentAt { get; set; }
+}
+
 // Flow/policy
 public class MailFlowRule : TenantScopedEntityBase
 {
@@ -333,6 +341,8 @@ public class SmtpQueueItem : TenantScopedEntityBase
 {
     public QueueDirection Direction { get; set; }
     public string Sender { get; set; } = string.Empty;
+    /// <summary>Verified mailbox address used to choose a transport for system-generated Sieve mail.</summary>
+    public string? TransportSenderOverride { get; set; }
     public string Recipient { get; set; } = string.Empty;
     public string? Subject { get; set; }
     public string RawMessage { get; set; } = string.Empty;

@@ -1,4 +1,4 @@
-using System.Globalization;
+using Miautrix.Mail.Application.Mail;
 using Miautrix.Mail.Application.Transport;
 using Miautrix.Mail.Domain;
 using Miautrix.Mail.Persistence;
@@ -197,14 +197,19 @@ public sealed class OutboundQueueDispatcher : BackgroundService
 
             foreach (var row in rows)
             {
-                var senderDomain = row.Sender.Split('@').Last().TrimEnd('>').ToLowerInvariant();
+                var transportDomainAddress = row.TransportSenderOverride ?? row.Sender;
+                var senderDomain = transportDomainAddress.Trim().Trim('<', '>').Split('@').LastOrDefault()?.ToLowerInvariant() ?? string.Empty;
                 if (domainMap.TryGetValue(senderDomain, out var sendingDomain) &&
                     _transports.TryGetValue(sendingDomain.TransportMode, out var transport))
                 {
                     var key = dkimKeys.FirstOrDefault(k =>
                         string.Equals(k.DomainName, sendingDomain.Name, StringComparison.OrdinalIgnoreCase) &&
                         string.Equals(k.Selector, sendingDomain.DkimSelector, StringComparison.Ordinal));
-                    await DeliverAsync(db, queueManager, transport, row, sendingDomain.CloudflareWorkerUrl, sendingDomain.CloudflareZoneId,
+                    var envelopeSender = string.Equals(transport.Mode, DomainTransportModes.Cloudflare, StringComparison.OrdinalIgnoreCase) &&
+                                         !string.IsNullOrWhiteSpace(row.TransportSenderOverride)
+                        ? row.TransportSenderOverride
+                        : row.Sender;
+                    await DeliverAsync(db, queueManager, transport, row, envelopeSender, sendingDomain.CloudflareWorkerUrl, sendingDomain.CloudflareZoneId,
                         sendingDomain.Name, sendingDomain.DkimSelector, key?.PrivateKeyPem, ct);
                 }
                 else if (primary != null)
@@ -214,7 +219,7 @@ public sealed class OutboundQueueDispatcher : BackgroundService
                         var key = dkimKeys.FirstOrDefault(k =>
                             string.Equals(k.DomainName, primary.Name, StringComparison.OrdinalIgnoreCase) &&
                             string.Equals(k.Selector, primary.DkimSelector, StringComparison.Ordinal));
-                        await DeliverAsync(db, queueManager, primaryTransport, row, primary.CloudflareWorkerUrl, primary.CloudflareZoneId,
+                        await DeliverAsync(db, queueManager, primaryTransport, row, row.Sender, primary.CloudflareWorkerUrl, primary.CloudflareZoneId,
                             primary.Name, primary.DkimSelector, key?.PrivateKeyPem, ct);
                     }
                 }
@@ -230,6 +235,7 @@ public sealed class OutboundQueueDispatcher : BackgroundService
         ISmtpQueueManager queueManager,
         IOutboundMailTransport transport,
         SmtpQueueItem item,
+        string? envelopeSender,
         string? workerUrl,
         string? zoneId,
         string domain,
@@ -247,7 +253,7 @@ public sealed class OutboundQueueDispatcher : BackgroundService
                 ? _dkimService.SignMessage(item.RawMessage, domain, selector, privateKey)
                 : item.RawMessage;
             var message = new OutboundMessage(
-                item.TenantId, item.Sender, item.Recipient, rawMessage, workerUrl, zoneId);
+                item.TenantId, envelopeSender ?? string.Empty, item.Recipient, rawMessage, workerUrl, zoneId);
             var result = await transport.SendAsync(message, ct);
             await using var transaction = !result.IsSuccess && result.IsPermanentFailure
                 ? await db.Database.BeginTransactionAsync(ct)
@@ -314,23 +320,5 @@ public sealed class OutboundQueueDispatcher : BackgroundService
         string smtpCode,
         string reportingMta,
         DateTimeOffset arrival)
-    {
-        static string Safe(string value) => value.Replace("\r", " ").Replace("\n", " ");
-        var boundary = "=_miautrix_dsn_" + Guid.NewGuid().ToString("N");
-        return $"From: Mail Delivery Subsystem <MAILER-DAEMON@{Safe(reportingMta)}>\r\n" +
-               $"To: {Safe(recipient)}\r\n" +
-               "Subject: Delivery Status Notification (Failure)\r\n" +
-               "MIME-Version: 1.0\r\n" +
-               $"Content-Type: multipart/report; report-type=delivery-status; boundary=\"{boundary}\"\r\n\r\n" +
-               $"--{boundary}\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n" +
-               $"Delivery to {Safe(failedRecipient)} failed. { (status == "4.4.7" ? "The message expired while retrying." : "The recipient server permanently rejected the message.") }\r\n" +
-               $"--{boundary}\r\nContent-Type: message/delivery-status\r\n\r\n" +
-               $"Reporting-MTA: dns; {Safe(reportingMta)}\r\n" +
-               $"Arrival-Date: {arrival.ToUniversalTime().ToString("ddd, dd MMM yyyy HH:mm:ss +0000", CultureInfo.InvariantCulture)}\r\n\r\n" +
-               $"Final-Recipient: rfc822; {Safe(failedRecipient)}\r\n" +
-               "Action: failed\r\n" +
-               $"Status: {status}\r\n" +
-               $"Diagnostic-Code: smtp; {smtpCode} Delivery failed\r\n" +
-               $"--{boundary}--\r\n";
-    }
+        => DeliveryStatusNotificationBuilder.Build(recipient, failedRecipient, status, smtpCode, reportingMta, arrival);
 }

@@ -46,6 +46,18 @@ invalid_token_command :contains ""Subject"" ""Urgent"";";
         Assert.False(result.Success);
         Assert.Equal(3, result.ErrorLine);
         Assert.Contains("invalid_token_command", result.ErrorMessage);
+        Assert.Equal(1, result.ErrorColumn);
+    }
+
+    [Fact]
+    public void Parser_RejectsUnknownRequiredExtensionWithLineAndColumn()
+    {
+        var result = _parser.Validate("require [\"fileinto\", \"unknown_ext\"];");
+
+        Assert.False(result.Success);
+        Assert.Equal(1, result.ErrorLine);
+        Assert.Equal(22, result.ErrorColumn);
+        Assert.Contains("unknown_ext", result.ErrorMessage);
     }
 
     [Fact]

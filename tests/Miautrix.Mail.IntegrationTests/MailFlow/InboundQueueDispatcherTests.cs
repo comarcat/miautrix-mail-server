@@ -7,6 +7,11 @@ using Miautrix.Mail.AntiSpam;
 using Miautrix.Mail.Domain;
 using Miautrix.Mail.Persistence;
 using Miautrix.Mail.Storage;
+using Miautrix.Mail.Application.Mail;
+using Miautrix.Mail.Application.Mail.Mime;
+using Miautrix.Mail.Protocols.Sieve;
+using Miautrix.Mail.Queue;
+using Miautrix.Mail.Infrastructure.Mail;
 using Miautrix.Mail.Worker;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -113,6 +118,53 @@ public sealed class InboundQueueDispatcherTests
     }
 
     [Fact]
+    public async Task Sieve_fileinto_flags_and_discard_are_applied_at_delivery()
+    {
+        var tenantId = await SeedTenantAsync();
+        try
+        {
+            var mailboxId = await SeedDomainAndMailboxAsync(tenantId, $"user@{TestDomain}");
+            await using (var context = CreateContext())
+            {
+                context.SieveScripts.Add(new SieveScript
+                {
+                    TenantId = tenantId,
+                    MailboxId = mailboxId,
+                    Name = "delivery-test",
+                    Content = "require [\"fileinto\", \"imap4flags\", \"mailbox\", \"copy\"];\n" +
+                              "if header :contains \"Subject\" \"Discard\" { discard; } else { fileinto :create :copy :flags [\"\\\\Seen\", \"\\\\Flagged\"] \"SieveArchive\"; }",
+                    IsActive = true
+                });
+                await context.SaveChangesAsync();
+            }
+
+            var storedQueueItem = await SeedQueueItemAsync(tenantId, $"user@{TestDomain}", "From: sender@example.com\r\nSubject: Save this\r\n\r\nStored body");
+            var discardedQueueItem = await SeedQueueItemAsync(tenantId, $"user@{TestDomain}", "From: sender@example.com\r\nSubject: Discard this\r\n\r\nDiscarded body");
+            await RunOnePassAsync();
+
+            await using var verify = CreateContext();
+            var queueStates = await verify.SmtpQueue.AsNoTracking().Where(q => q.Id == storedQueueItem || q.Id == discardedQueueItem).Select(q => new { q.Id, q.Status, q.LastError }).ToListAsync();
+            var storedMessages = await verify.Messages.AsNoTracking().Where(m => m.TenantId == tenantId && m.MailboxId == mailboxId).ToListAsync();
+            Assert.True(storedMessages.Count == 2, $"Expected two messages, got {storedMessages.Count}; queue={string.Join(";", queueStates.Select(q => $"{q.Status}:{q.LastError}"))}");
+            var stored = storedMessages.Single(m => m.FolderId == verify.Folders.Single(f => f.Name == "SieveArchive").Id);
+            var folder = await verify.Folders.AsNoTracking().SingleAsync(f => f.Id == stored.FolderId);
+            Assert.Equal("SieveArchive", folder.Name);
+            Assert.All(storedMessages, message =>
+            {
+                Assert.Contains("\\Seen", message.Flags);
+                Assert.Contains("\\Flagged", message.Flags);
+            });
+            Assert.Equal(4, await verify.MessageFlags.CountAsync(f => f.TenantId == tenantId && storedMessages.Select(m => m.Id).Contains(f.MessageId)));
+            Assert.False(await verify.SmtpQueue.AnyAsync(q => q.Id == discardedQueueItem));
+            Assert.True(await verify.SmtpQueue.AnyAsync(q => q.Id == storedQueueItem && q.Status == "Delivered"));
+        }
+        finally
+        {
+            await CleanupAsync(tenantId);
+        }
+    }
+
+    [Fact]
     public async Task One_bad_row_in_a_batch_does_not_block_or_hide_the_other_rows()
     {
         const string poisonSubjectMarker = "[[POISON-ROW]]";
@@ -184,6 +236,7 @@ public sealed class InboundQueueDispatcherTests
         var services = new ServiceCollection();
 
         services.AddDbContext<AppDbContext>(options => options.UseNpgsql(GetConnectionString()));
+        services.AddLogging();
         services.AddSingleton<IMailStorage>(new FileSystemMailStorage(
             System.IO.Path.Combine(System.IO.Path.GetTempPath(), "miautrix-inbound-dispatch-tests", Guid.NewGuid().ToString("N"))));
         services.AddSingleton<IAntiMalwareScanner, ClamAvScanner>();
@@ -199,6 +252,14 @@ public sealed class InboundQueueDispatcherTests
         }
 
         services.AddScoped<IQuarantineService, QuarantineService>();
+        services.AddScoped<IMessageUidAllocator, MessageUidAllocator>();
+        services.AddSingleton<IMimeMessageParser, MimeKitMimeMessageParser>();
+        services.AddScoped<ISmtpQueueManager, SmtpQueueManager>();
+        services.AddScoped<IRetryPolicy, ExponentialBackoffWithJitterRetryPolicy>();
+        services.AddScoped<SieveCompiler>();
+        services.AddScoped<SieveInterpreter>();
+        services.AddSingleton(new SieveSenderAuthenticationGate("mail.miautrix.tech"));
+        services.AddScoped<ISieveDeliveryService, SieveDeliveryService>();
 
         await using var provider = services.BuildServiceProvider();
 

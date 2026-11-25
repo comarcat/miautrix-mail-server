@@ -89,13 +89,14 @@ public sealed class InboundQueueDispatcher : BackgroundService
             var storage = itemScope.ServiceProvider.GetRequiredService<IMailStorage>();
             var mimeParser = itemScope.ServiceProvider.GetRequiredService<IMimeMessageParser>();
             var uidAllocator = itemScope.ServiceProvider.GetRequiredService<IMessageUidAllocator>();
+            var sieveDeliveryService = itemScope.ServiceProvider.GetRequiredService<ISieveDeliveryService>();
 
             var item = await db.SmtpQueue.FirstOrDefaultAsync(q => q.Id == itemId, ct);
             if (item == null) continue;
 
             try
             {
-                await ProcessItemAsync(db, quarantineService, antiMalwareScanner, storage, mimeParser, uidAllocator, item, ct);
+                await ProcessItemAsync(db, quarantineService, antiMalwareScanner, storage, mimeParser, uidAllocator, sieveDeliveryService, item, ct);
                 await db.SaveChangesAsync(ct);
             }
             catch (Exception ex)
@@ -127,7 +128,7 @@ public sealed class InboundQueueDispatcher : BackgroundService
         }
     }
 
-    private async Task ProcessItemAsync(AppDbContext db, IQuarantineService quarantineService, IAntiMalwareScanner antiMalwareScanner, IMailStorage storage, IMimeMessageParser mimeParser, IMessageUidAllocator uidAllocator, SmtpQueueItem item, CancellationToken ct)
+    private async Task ProcessItemAsync(AppDbContext db, IQuarantineService quarantineService, IAntiMalwareScanner antiMalwareScanner, IMailStorage storage, IMimeMessageParser mimeParser, IMessageUidAllocator uidAllocator, ISieveDeliveryService sieveDeliveryService, SmtpQueueItem item, CancellationToken ct)
     {
         var parsed = mimeParser.Parse(item.RawMessage);
         var subject = item.Subject ?? parsed.Subject ?? "No Subject";
@@ -274,6 +275,15 @@ public sealed class InboundQueueDispatcher : BackgroundService
             return;
         }
 
+        // Sieve executes once per accepted inbound recipient, after parsing and mailbox resolution,
+        // before quota/folder selection; authenticated submissions use the outbound queue path.
+        var sieveDecision = await sieveDeliveryService.EvaluateAsync(mailbox, item, parsed, deliveredRole, ct);
+        if (!sieveDecision.StoreLocally)
+        {
+            db.SmtpQueue.Remove(item);
+            return;
+        }
+
         // Reception issues (like missing mailbox or quota exceeded) must not look like outbound
         // transport failures. DeadLetter is the final state for these inbox problems.
         var rawMessageBytes = Encoding.UTF8.GetBytes(item.RawMessage ?? string.Empty);
@@ -296,17 +306,19 @@ public sealed class InboundQueueDispatcher : BackgroundService
 
         var desiredRole = deliveredRole;
 
-        var folder = await db.Folders
-            .FirstOrDefaultAsync(f => f.TenantId == item.TenantId && f.MailboxId == mailbox.Id && f.Role == desiredRole, ct);
+        var folder = sieveDecision.FolderId is Guid sieveFolderId
+            ? db.Folders.Local.FirstOrDefault(f => f.Id == sieveFolderId)
+                ?? await db.Folders.FirstOrDefaultAsync(f => f.TenantId == item.TenantId && f.MailboxId == mailbox.Id && f.Id == sieveFolderId, ct)
+            : await db.Folders.FirstOrDefaultAsync(f => f.TenantId == item.TenantId && f.MailboxId == mailbox.Id && f.Role == desiredRole, ct);
 
         if (folder == null)
         {
-            var folderName = desiredRole.ToLowerInvariant() switch
+            var folderName = sieveDecision.FolderName ?? (desiredRole.ToLowerInvariant() switch
             {
                 "inbox" => "Inbox",
                 "junk" => "Junk",
                 _ => desiredRole
-            };
+            });
 
             folder = new Folder
             {
@@ -321,53 +333,62 @@ public sealed class InboundQueueDispatcher : BackgroundService
             db.Folders.Add(folder);
         }
 
+        var destinationFolders = new List<Folder> { folder };
+        if (sieveDecision.CopyToDefault)
+        {
+            var defaultFolder = db.Folders.Local.FirstOrDefault(f => f.TenantId == item.TenantId && f.MailboxId == mailbox.Id && f.Role == deliveredRole)
+                ?? await db.Folders.FirstOrDefaultAsync(f => f.TenantId == item.TenantId && f.MailboxId == mailbox.Id && f.Role == deliveredRole, ct);
+            if (defaultFolder is null)
+            {
+                var defaultName = deliveredRole.Equals("junk", StringComparison.OrdinalIgnoreCase) ? "Junk" : "Inbox";
+                defaultFolder = new Folder { Id = Guid.NewGuid(), TenantId = item.TenantId, MailboxId = mailbox.Id, Name = defaultName, Role = deliveredRole, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow };
+                db.Folders.Add(defaultFolder);
+            }
+            if (defaultFolder.Id != folder.Id) destinationFolders.Add(defaultFolder);
+        }
 
-
+        // UID allocation is persisted per folder, so newly-created Sieve destinations must exist
+        // before the allocator is called.
+        if (destinationFolders.Any(destination => db.Entry(destination).State == EntityState.Added))
+        {
+            await db.SaveChangesAsync(ct);
+        }
 
         using var contentStream = new MemoryStream(rawMessageBytes);
         var storageResult = await storage.StoreAsync(contentStream, ct);
-
-        var message = new Message
+        var now = DateTimeOffset.UtcNow;
+        var messages = new List<Message>();
+        foreach (var destination in destinationFolders)
         {
-            Id = Guid.NewGuid(),
-            TenantId = item.TenantId,
-            MailboxId = mailbox.Id,
-            FolderId = folder.Id,
-            Uid = await uidAllocator.AllocateAsync(item.TenantId, folder.Id, cancellationToken: ct),
-            Sender = item.Sender,
-            Recipient = item.Recipient,
-            Subject = subject,
-            Date = parsed.Date ?? DateTimeOffset.UtcNow,
-            ContentHash = storageResult.ContentHash,
-            StoragePath = storageResult.StoragePath,
-            SizeBytes = storageResult.SizeBytes,
-            IsRead = false,
-            RawHeaders = parsed.RawHeaders,
-            BodyText = parsed.BodyText,
-            BodyHtml = parsed.BodyHtml,
-            CreatedAt = DateTimeOffset.UtcNow,
-            UpdatedAt = DateTimeOffset.UtcNow
-        };
-
-        db.Messages.Add(message);
+            var message = new Message
+            {
+                Id = Guid.NewGuid(), TenantId = item.TenantId, MailboxId = mailbox.Id, FolderId = destination.Id,
+                Uid = await uidAllocator.AllocateAsync(item.TenantId, destination.Id, cancellationToken: ct),
+                Sender = item.Sender, Recipient = item.Recipient, Subject = subject, Date = parsed.Date ?? now,
+                ContentHash = storageResult.ContentHash, StoragePath = storageResult.StoragePath, SizeBytes = storageResult.SizeBytes,
+                IsRead = false, RawHeaders = parsed.RawHeaders, Flags = string.Join(' ', sieveDecision.Flags ?? []),
+                BodyText = parsed.BodyText, BodyHtml = parsed.BodyHtml, CreatedAt = now, UpdatedAt = now
+            };
+            messages.Add(message);
+            db.Messages.Add(message);
+            foreach (var flag in sieveDecision.Flags ?? [])
+                db.MessageFlags.Add(new MessageFlag { Id = Guid.NewGuid(), TenantId = item.TenantId, MessageId = message.Id, Flag = flag, CreatedAt = now, UpdatedAt = now });
+        }
 
         foreach (var parsedAttachment in parsed.Attachments)
         {
             await using var attachmentStream = new MemoryStream(parsedAttachment.Content);
             var attachmentStorage = await storage.StoreAsync(attachmentStream, ct);
-            db.Attachments.Add(new Attachment
+            foreach (var message in messages)
             {
-                Id = Guid.NewGuid(),
-                TenantId = item.TenantId,
-                MessageId = message.Id,
-                FileName = parsedAttachment.FileName ?? "attachment",
-                ContentType = parsedAttachment.ContentType,
-                SizeBytes = attachmentStorage.SizeBytes,
-                ContentHash = attachmentStorage.ContentHash,
-                StoragePath = attachmentStorage.StoragePath,
-                CreatedAt = DateTimeOffset.UtcNow,
-                UpdatedAt = DateTimeOffset.UtcNow
-            });
+                db.Attachments.Add(new Attachment
+                {
+                    Id = Guid.NewGuid(), TenantId = item.TenantId, MessageId = message.Id,
+                    FileName = parsedAttachment.FileName ?? "attachment", ContentType = parsedAttachment.ContentType,
+                    SizeBytes = attachmentStorage.SizeBytes, ContentHash = attachmentStorage.ContentHash,
+                    StoragePath = attachmentStorage.StoragePath, CreatedAt = now, UpdatedAt = now
+                });
+            }
         }
 
         mailbox.UsedBytes += storageResult.SizeBytes;

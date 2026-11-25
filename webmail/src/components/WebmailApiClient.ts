@@ -864,6 +864,25 @@ export class WebmailApiClient {
   async deleteSieveRule(mailboxId: string, ruleId: string): Promise<void> {
     await this.request(`/mail/rules/${ruleId}?mailboxId=${encodeURIComponent(mailboxId)}`, { method: 'DELETE' });
   }
+
+  async getSieveScripts(mailboxId: string): Promise<any[]> {
+    const res = await this.request<any>(`/mail/sieve/scripts?mailboxId=${encodeURIComponent(mailboxId)}`);
+    return this.normalizeArray<any>(res).data;
+  }
+
+  async saveSieveScript(mailboxId: string, name: string, content: string, id?: string): Promise<any> {
+    const url = `/mail/sieve/scripts${id ? `/${encodeURIComponent(id)}` : ''}?mailboxId=${encodeURIComponent(mailboxId)}`;
+    const res = await this.request<any>(url, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, content }) });
+    return res?.data ?? res;
+  }
+
+  async setSieveScriptActive(mailboxId: string, id: string, active: boolean): Promise<void> {
+    await this.request(`/mail/sieve/scripts/${encodeURIComponent(id)}/${active ? 'activate' : 'deactivate'}?mailboxId=${encodeURIComponent(mailboxId)}`, { method: 'POST' });
+  }
+
+  async deleteSieveScript(mailboxId: string, id: string): Promise<void> {
+    await this.request(`/mail/sieve/scripts/${encodeURIComponent(id)}?mailboxId=${encodeURIComponent(mailboxId)}`, { method: 'DELETE' });
+  }
 }
 
 export const webmailClient = new WebmailApiClient();

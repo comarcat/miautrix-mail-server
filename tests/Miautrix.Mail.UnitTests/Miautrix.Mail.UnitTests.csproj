@@ -28,6 +28,7 @@
     <ProjectReference Include="..\..\src\Miautrix.Mail.Persistence\Miautrix.Mail.Persistence.csproj" />
     <ProjectReference Include="..\..\src\Miautrix.Mail.AntiSpam\Miautrix.Mail.AntiSpam.csproj" />
     <ProjectReference Include="..\..\src\Miautrix.Mail.Protocols.Imap\Miautrix.Mail.Protocols.Imap.csproj" />
+    <ProjectReference Include="..\..\src\Miautrix.Mail.Protocols.Sieve\Miautrix.Mail.Protocols.Sieve.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1318,7 +1318,43 @@ namespace Miautrix.Mail.Persistence.Migrations
                         .HasColumnType("text")
                         .HasColumnName("name");
 
+                    b.HasIndex("MailboxId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_sieve_scripts_active_mailbox_id")
+                        .HasFilter("is_active = TRUE");
+
                     b.ToTable("sieve_scripts", (string)null);
+                });
+
+            modelBuilder.Entity("Miautrix.Mail.Domain.SieveVacationResponse", b =>
+                {
+                    b.HasBaseType("Miautrix.Mail.Domain.TenantScopedEntityBase");
+
+                    b.Property<string>("Handle")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("handle");
+
+                    b.Property<DateTimeOffset>("LastSentAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_sent_at");
+
+                    b.Property<Guid>("MailboxId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("mailbox_id");
+
+                    b.Property<string>("SenderHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("sender_hash");
+
+                    b.HasIndex("MailboxId", "SenderHash", "Handle")
+                        .IsUnique()
+                        .HasDatabaseName("uq_sieve_vacation_responses_mailbox_sender_handle");
+
+                    b.ToTable("sieve_vacation_responses", (string)null);
                 });
 
             modelBuilder.Entity("Miautrix.Mail.Domain.SmtpDeliveryAttempt", b =>
@@ -1396,6 +1432,10 @@ namespace Miautrix.Mail.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("sender");
+
+                    b.Property<string>("TransportSenderOverride")
+                        .HasColumnType("text")
+                        .HasColumnName("transport_sender_override");
 
                     b.Property<string>("Status")
                         .IsRequired()
