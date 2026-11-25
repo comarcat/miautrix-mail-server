@@ -491,7 +491,7 @@ public sealed partial class ImapSession
             TenantId = auth.TenantId; MailboxId = auth.MailboxId; _userId = auth.UserId; Username = fields[1]; State = ImapState.Authenticated;
             return new ImapCommandResult(tag, "OK", "AUTHENTICATE completed", Array.Empty<string>());
         }
-        catch (FormatException) { return new ImapCommandResult(tag, "NO", "[AUTHENTICATIONFAILED] Authentication failed", Array.Empty<string>()); }
+        catch (FormatException) { return new ImapCommandResult(tag, "BAD", "Invalid AUTHENTICATE base64 data", Array.Empty<string>()); }
     }
 
     private async Task<ImapCommandResult> HandleStatusAsync(string tag, IReadOnlyList<ImapToken> args, CancellationToken ct)

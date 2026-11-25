@@ -173,6 +173,7 @@ public sealed class ImapListenerRawSocketTests
             Assert.Equal("A0c1 NO [AUTHENTICATIONFAILED] Authentication failed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, $"A0c1 AUTHENTICATE PLAIN {badPasswordSasl}", "A0c1", stopping.Token)));
             var mismatchedAuthz = Convert.ToBase64String(Encoding.UTF8.GetBytes($"other@invalid\0{address}\0test-password"));
             Assert.Equal("A0d NO [AUTHORIZATIONFAILED] Cannot act as the requested authorization identity\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, $"A0d AUTHENTICATE PLAIN {mismatchedAuthz}", "A0d", stopping.Token)));
+            Assert.Equal("A0d1 BAD Invalid AUTHENTICATE base64 data\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A0d1 AUTHENTICATE PLAIN !!!", "A0d1", stopping.Token)));
             await tls.WriteAsync("A0e AUTHENTICATE PLAIN\r\n"u8.ToArray(), stopping.Token);
             Assert.Equal("+", Encoding.ASCII.GetString(await reader.ReadLineAsync(stopping.Token) ?? []));
             await tls.WriteAsync("*\r\n"u8.ToArray(), stopping.Token);
