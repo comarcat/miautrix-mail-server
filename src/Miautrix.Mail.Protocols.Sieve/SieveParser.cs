@@ -21,7 +21,7 @@ public sealed class SieveParser
 
     private static readonly HashSet<string> ValidTests = new(StringComparer.OrdinalIgnoreCase)
     {
-        "header", "address", "allof", "anyof", "not", "true", "false", "size", "exists", "envelope"
+        "header", "address", "allof", "anyof", "not", "true", "false", "size", "exists", "envelope", "mailboxexists"
     };
 
     public SieveParseResult Validate(string script)
@@ -34,12 +34,26 @@ public sealed class SieveParser
         var lines = script.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
         int braceDepth = 0;
         bool inBlockComment = false;
+        bool inTextBody = false;
+        bool afterTextTerminator = false;
 
         for (int i = 0; i < lines.Length; i++)
         {
             int lineNum = i + 1;
             var leadingWhitespace = lines[i].Length - lines[i].TrimStart().Length;
             var line = lines[i].Trim();
+
+            if (afterTextTerminator)
+            {
+                afterTextTerminator = false;
+                if (line == ";") continue;
+            }
+
+            if (inTextBody)
+            {
+                if (line == ".") { inTextBody = false; afterTextTerminator = true; }
+                continue;
+            }
 
             if (inBlockComment)
             {
@@ -101,7 +115,10 @@ public sealed class SieveParser
 
                 if (token.Equals("require", StringComparison.OrdinalIgnoreCase))
                 {
-                    var required = Regex.Matches(line, "\"([^\"]+)\"");
+                    var requireStatement = Regex.Match(line, @"^require\b(?<value>.*?);", RegexOptions.IgnoreCase);
+                    var required = requireStatement.Success
+                        ? Regex.Matches(requireStatement.Groups["value"].Value, "\"([^\"]+)\"")
+                        : Regex.Matches(string.Empty, "\"([^\"]+)\"");
                     if (required.Count == 0)
                     {
                         return new SieveParseResult(false, "require must name at least one supported extension", lineNum, leadingWhitespace + tokenMatch.Index + 1);
@@ -111,7 +128,7 @@ public sealed class SieveParser
                     {
                         if (!SupportedExtensions.Contains(extension.Groups[1].Value))
                         {
-                            return new SieveParseResult(false, $"Unknown or unsupported Sieve extension '{extension.Groups[1].Value}'", lineNum, leadingWhitespace + extension.Index + 1);
+                            return new SieveParseResult(false, $"Unknown or unsupported Sieve extension '{extension.Groups[1].Value}'", lineNum, leadingWhitespace + requireStatement.Groups["value"].Index + extension.Index + 1);
                         }
                     }
                 }
@@ -122,6 +139,11 @@ public sealed class SieveParser
             }
 
             // Sieve commands not ending in '{' or part of block header must end in ';'
+            if (line.Contains("text:", StringComparison.OrdinalIgnoreCase))
+            {
+                inTextBody = true;
+                continue;
+            }
             if (!line.EndsWith("{") && !line.EndsWith("}") && !line.EndsWith(";") && !line.StartsWith("if", StringComparison.OrdinalIgnoreCase) && !line.StartsWith("elsif", StringComparison.OrdinalIgnoreCase) && !line.StartsWith("else", StringComparison.OrdinalIgnoreCase))
             {
                 return new SieveParseResult(false, $"Missing terminating semicolon ';' on line {lineNum}", lineNum, leadingWhitespace + line.Length + 1);
