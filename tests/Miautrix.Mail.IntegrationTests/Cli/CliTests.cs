@@ -32,20 +32,40 @@ public sealed class CliTests
 
     private static async Task<int> RunCliWithTestStorageAsync(string[] args)
     {
-        var previousStorageDirectory = Environment.GetEnvironmentVariable("MIAUTRIX_STORAGE_DIR");
         var storageDirectory = Path.Combine(Path.GetTempPath(), $"miautrix-cli-test-{Guid.NewGuid():N}");
 
         try
         {
-            Environment.SetEnvironmentVariable("MIAUTRIX_STORAGE_DIR", storageDirectory);
-            return await Miautrix.Mail.Cli.Program.Main(args);
+            return await Miautrix.Mail.Cli.Program.RunAsync(args, storageDirectory);
         }
         finally
         {
-            Environment.SetEnvironmentVariable("MIAUTRIX_STORAGE_DIR", previousStorageDirectory);
-            if (Directory.Exists(storageDirectory))
+            for (var attempt = 0; attempt < 5; attempt++)
             {
-                Directory.Delete(storageDirectory, recursive: true);
+                try
+                {
+                    if (Directory.Exists(storageDirectory))
+                    {
+                        Directory.Delete(storageDirectory, recursive: true);
+                    }
+                    break;
+                }
+                catch (IOException) when (attempt < 4)
+                {
+                    await Task.Delay(50 * (attempt + 1));
+                }
+                catch (UnauthorizedAccessException) when (attempt < 4)
+                {
+                    await Task.Delay(50 * (attempt + 1));
+                }
+                catch (IOException)
+                {
+                    break;
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    break;
+                }
             }
         }
     }

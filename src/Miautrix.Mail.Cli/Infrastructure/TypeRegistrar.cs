@@ -4,9 +4,10 @@ using System;
 
 namespace Miautrix.Mail.Cli.Infrastructure;
 
-public sealed class TypeRegistrar : ITypeRegistrar
+public sealed class TypeRegistrar : ITypeRegistrar, IDisposable
 {
     private readonly IServiceCollection _builder;
+    private readonly List<TypeResolver> _resolvers = [];
 
     public TypeRegistrar(IServiceCollection builder)
     {
@@ -15,7 +16,9 @@ public sealed class TypeRegistrar : ITypeRegistrar
 
     public ITypeResolver Build()
     {
-        return new TypeResolver(_builder.BuildServiceProvider());
+        var resolver = new TypeResolver(_builder.BuildServiceProvider());
+        _resolvers.Add(resolver);
+        return resolver;
     }
 
     public void Register(Type service, Type implementation)
@@ -32,11 +35,21 @@ public sealed class TypeRegistrar : ITypeRegistrar
     {
         _builder.AddSingleton(service, (provider) => factory());
     }
+
+    public void Dispose()
+    {
+        foreach (var resolver in _resolvers)
+        {
+            resolver.Dispose();
+        }
+        _resolvers.Clear();
+    }
 }
 
 public sealed class TypeResolver : ITypeResolver, IDisposable
 {
     private readonly IServiceProvider _provider;
+    private bool _disposed;
 
     public TypeResolver(IServiceProvider provider)
     {
@@ -55,6 +68,12 @@ public sealed class TypeResolver : ITypeResolver, IDisposable
 
     public void Dispose()
     {
+        if (_disposed)
+        {
+            return;
+        }
+        _disposed = true;
+
         if (_provider is IDisposable disposable)
         {
             disposable.Dispose();

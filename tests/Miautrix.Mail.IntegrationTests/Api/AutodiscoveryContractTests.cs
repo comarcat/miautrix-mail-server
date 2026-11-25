@@ -10,7 +10,6 @@ using Microsoft.EntityFrameworkCore;
 namespace Miautrix.Mail.IntegrationTests.Api;
 
 [Trait("Category", "Autodiscovery")]
-[Collection("AutodiscoveryContract")]
 public sealed class AutodiscoveryContractTests : IClassFixture<WebApplicationFactory<Miautrix.Mail.Web.Program>>
 {
     private readonly WebApplicationFactory<Miautrix.Mail.Web.Program> _factory;
@@ -19,9 +18,7 @@ public sealed class AutodiscoveryContractTests : IClassFixture<WebApplicationFac
 
     public AutodiscoveryContractTests(WebApplicationFactory<Miautrix.Mail.Web.Program> factory)
     {
-        Environment.SetEnvironmentVariable("MIAUTRIX_PUBLIC_IMAP_HOST", "imap.mailhost.test");
-        Environment.SetEnvironmentVariable("MIAUTRIX_PUBLIC_SMTP_HOST", "smtp.mailhost.test");
-        _factory = factory;
+        _factory = factory.WithPublicMailHosts();
     }
 
     [Fact]
@@ -90,9 +87,6 @@ public sealed class AutodiscoveryContractTests : IClassFixture<WebApplicationFac
         await db.SaveChangesAsync();
     }
 }
-
-[CollectionDefinition("AutodiscoveryContract", DisableParallelization = true)]
-public sealed class AutodiscoveryContractCollection;
 
 [Trait("Category", "Autodiscovery")]
 public sealed class AutodiscoveryRateLimitTests : IClassFixture<WebApplicationFactory<Miautrix.Mail.Web.Program>>

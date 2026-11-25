@@ -17,7 +17,9 @@ namespace Miautrix.Mail.Cli;
 
 public class Program
 {
-    public static async Task<int> Main(string[] args)
+    public static Task<int> Main(string[] args) => RunAsync(args, storageDirectoryOverride: null);
+
+    public static async Task<int> RunAsync(string[] args, string? storageDirectoryOverride = null)
     {
         var services = new ServiceCollection();
 
@@ -37,7 +39,7 @@ public class Program
             ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
         var isDevelopment = environment.Equals("Development", StringComparison.OrdinalIgnoreCase);
         var storageDirectory = StorageDirectoryResolver.Resolve(
-            Environment.GetEnvironmentVariable("MIAUTRIX_STORAGE_DIR"), isDevelopment, AppContext.BaseDirectory);
+            storageDirectoryOverride ?? Environment.GetEnvironmentVariable("MIAUTRIX_STORAGE_DIR"), isDevelopment, AppContext.BaseDirectory);
         services.AddSingleton<IMailStorage>(new FileSystemMailStorage(storageDirectory));
 
         services.AddSingleton<ISecurityEventSink, InMemorySecurityEventSink>();
@@ -47,7 +49,7 @@ public class Program
         services.AddScoped<MessageReparseService>();
         services.AddSingleton<IMimeMessageParser, MimeKitMimeMessageParser>();
 
-        var registrar = new TypeRegistrar(services);
+        using var registrar = new TypeRegistrar(services);
         var app = new CommandApp(registrar);
 
         app.Configure(config =>
