@@ -162,6 +162,7 @@ public sealed class ImapListenerRawSocketTests
             var capabilities = await SendAndReadAsync(tls, reader, "A0 CAPABILITY", "A0", stopping.Token);
             var capabilityText = Encoding.UTF8.GetString(capabilities);
             Assert.Equal("* CAPABILITY IMAP4rev1 AUTH=PLAIN SASL-IR LITERAL+ ENABLE UTF8=ACCEPT UNSELECT UIDPLUS SPECIAL-USE NAMESPACE MOVE IDLE\r\nA0 OK CAPABILITY completed\r\n", capabilityText);
+            Assert.Equal(capabilityText, Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A0 CAPABILITY", "A0", stopping.Token)));
             foreach (var capability in new[] { "IMAP4rev1", "AUTH=PLAIN", "SASL-IR", "LITERAL+", "ENABLE", "UTF8=ACCEPT", "UNSELECT", "UIDPLUS", "SPECIAL-USE", "NAMESPACE", "MOVE", "IDLE" })
                 Assert.Contains(capability, capabilityText);
             Assert.DoesNotContain("LOGINDISABLED", capabilityText);
@@ -172,6 +173,13 @@ public sealed class ImapListenerRawSocketTests
             Assert.Equal("A0c1 NO [AUTHENTICATIONFAILED] Authentication failed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, $"A0c1 AUTHENTICATE PLAIN {badPasswordSasl}", "A0c1", stopping.Token)));
             var mismatchedAuthz = Convert.ToBase64String(Encoding.UTF8.GetBytes($"other@invalid\0{address}\0test-password"));
             Assert.Equal("A0d NO [AUTHORIZATIONFAILED] Cannot act as the requested authorization identity\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, $"A0d AUTHENTICATE PLAIN {mismatchedAuthz}", "A0d", stopping.Token)));
+            await tls.WriteAsync("A0e AUTHENTICATE PLAIN\r\n"u8.ToArray(), stopping.Token);
+            Assert.Equal("+", Encoding.ASCII.GetString(await reader.ReadLineAsync(stopping.Token) ?? []));
+            await tls.WriteAsync("*\r\n"u8.ToArray(), stopping.Token);
+            Assert.Equal("A0e BAD AUTHENTICATE cancelled\r\n", Encoding.UTF8.GetString(await ReadResponseAsync(reader, "A0e", stopping.Token)));
+            await tls.WriteAsync("A0f NOOP\r\nA0g NOOP\r\n"u8.ToArray(), stopping.Token);
+            Assert.Equal("A0f OK NOOP completed\r\n", Encoding.UTF8.GetString(await ReadResponseAsync(reader, "A0f", stopping.Token)));
+            Assert.Equal("A0g OK NOOP completed\r\n", Encoding.UTF8.GetString(await ReadResponseAsync(reader, "A0g", stopping.Token)));
 
             var sasl = Convert.ToBase64String(Encoding.UTF8.GetBytes($"\0{address}\0test-password"));
             var authResult = await SendAndReadAsync(tls, reader, $"A1 AUTHENTICATE PLAIN {sasl}", "A1", stopping.Token);
@@ -893,6 +901,14 @@ public sealed class ImapListenerRawSocketTests
                 Assert.Contains("R6a OK NOOP completed", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R6a CHECK", "R6a", stopping.Token)));
                 Assert.Equal("R6b BAD LSUB is not available in IMAP4rev2\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R6b LSUB \"\" \"*\"", "R6b", stopping.Token)));
                 Assert.Contains("* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft \\*)] Permanent flags", rev2Select);
+                var rev2Examine = Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R6e EXAMINE FreshFolder", "R6e", stopping.Token));
+                Assert.Contains("* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)", rev2Examine);
+                Assert.Contains("* 0 EXISTS", rev2Examine);
+                Assert.Contains("* LIST (\\HasNoChildren) \"/\" \"FreshFolder\"", rev2Examine);
+                Assert.Contains("* OK [PERMANENTFLAGS ()]", rev2Examine);
+                Assert.Contains("[UIDNEXT ", rev2Examine);
+                Assert.Contains("[UIDVALIDITY ", rev2Examine);
+                Assert.Contains("R6e OK [READ-ONLY] EXAMINE completed", rev2Examine);
                 Assert.Equal("* ESEARCH (TAG \"R7\")\r\nR7 OK SEARCH completed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R7 SEARCH ALL", "R7", stopping.Token)));
                 Assert.Equal("* ESEARCH (TAG \"R8\") UID\r\nR8 OK SEARCH completed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R8 UID SEARCH ALL", "R8", stopping.Token)));
                 Assert.Contains("BAD RECENT is not available in IMAP4rev2", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R9 STATUS FreshFolder (RECENT)", "R9", stopping.Token)));

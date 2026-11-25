@@ -479,7 +479,7 @@ public sealed partial class ImapSession
 
     private async Task<ImapCommandResult> CompleteSaslAsync(string tag, string response, CancellationToken ct)
     {
-        if (response.Trim() == "*") return new ImapCommandResult(tag, "NO", "[CANCELLED] AUTHENTICATE cancelled", Array.Empty<string>());
+        if (response.Trim() == "*") return new ImapCommandResult(tag, "BAD", "AUTHENTICATE cancelled", Array.Empty<string>());
         try
         {
             var fields = Encoding.UTF8.GetString(Convert.FromBase64String(response.Trim())).Split('\0');
