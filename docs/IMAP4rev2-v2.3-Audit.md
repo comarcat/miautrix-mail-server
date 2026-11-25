@@ -2,7 +2,7 @@
 
 **Scope:** normative paragraphs in RFC 9051 §§2–7. One row represents one paragraph containing server-applicable normative statements. Quote excerpts are limited to 15 words. Paragraph indices are local normative-paragraph ordinals within each section because RFC 9051 does not number prose paragraphs.
 
-**Rows:** 229. **Status:** Implemented 80, Implemented-untested 0, Not applicable 26, Missing 0, Partial 123. **Level:** MUST 121, MUST NOT 36, REQUIRED 7, SHALL 0, SHALL NOT 0, SHOULD 49, SHOULD NOT 14, RECOMMENDED 2.
+**Rows:** 229. **Status:** Implemented 80, Implemented-untested 0, Not applicable 29, Missing 0, Partial 120. **Level:** MUST 121, MUST NOT 36, REQUIRED 7, SHALL 0, SHALL NOT 0, SHOULD 49, SHOULD NOT 14, RECOMMENDED 2.
 
 **Advertisement gate: NOT READY** — applicable Partial MUST-level rows remain, including UID invariants, framing/state, LIST, STATUS, SEARCH, BINARY, and response-code placement.
 
