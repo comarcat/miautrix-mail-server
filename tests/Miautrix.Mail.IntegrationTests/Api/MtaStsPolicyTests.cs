@@ -78,11 +78,11 @@ public sealed class MtaStsPolicyTests : IClassFixture<WebApplicationFactory<Miau
         }
 
         using var client = _factory.CreateClient();
-        async Task<string> UpdatePolicyAsync(string mode)
+        async Task<(string Id, string? Mx)> UpdatePolicyAsync(string mode, string mx)
         {
             using var request = new HttpRequestMessage(HttpMethod.Put, $"/api/v1/domains/{domainId}")
             {
-                Content = new StringContent(JsonSerializer.Serialize(new { mta_sts_mode = mode }), Encoding.UTF8, "application/json")
+                Content = new StringContent(JsonSerializer.Serialize(new { mta_sts_mode = mode, mta_sts_mx = mx }), Encoding.UTF8, "application/json")
             };
             request.Headers.Add("X-Tenant-Id", tenantId.ToString());
             request.Headers.Add("X-User-Id", userId.ToString());
@@ -90,12 +90,32 @@ public sealed class MtaStsPolicyTests : IClassFixture<WebApplicationFactory<Miau
             using var response = await client.SendAsync(request);
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-            return json.RootElement.GetProperty("data").GetProperty("mta_sts_id").GetString()!;
+            var data = json.RootElement.GetProperty("data");
+            return (data.GetProperty("mta_sts_id").GetString()!, data.GetProperty("mta_sts_mx").GetString());
         }
 
-        var testingId = await UpdatePolicyAsync("testing");
-        var enforceId = await UpdatePolicyAsync("enforce");
-        Assert.NotEqual(testingId, enforceId);
+        var configuredMx = "*.mx.cloudflare.net, inbound.example.test";
+        var testing = await UpdatePolicyAsync("testing", configuredMx);
+        var enforcing = await UpdatePolicyAsync("enforce", configuredMx);
+        Assert.NotEqual(testing.Id, enforcing.Id);
+        Assert.Equal("*.mx.cloudflare.net\ninbound.example.test", enforcing.Mx);
+
+        using var policyRequest = new HttpRequestMessage(HttpMethod.Get, "/.well-known/mta-sts.txt");
+        policyRequest.Headers.Host = $"mta-sts.{name}";
+        using var policyResponse = await client.SendAsync(policyRequest);
+        Assert.Equal(HttpStatusCode.OK, policyResponse.StatusCode);
+        var expected = "version: STSv1\nmode: enforce\nmx: *.mx.cloudflare.net\nmx: inbound.example.test\nmax_age: 604800\n";
+        Assert.Equal(Encoding.UTF8.GetBytes(expected), await policyResponse.Content.ReadAsByteArrayAsync());
+
+        using var invalidRequest = new HttpRequestMessage(HttpMethod.Put, $"/api/v1/domains/{domainId}")
+        {
+            Content = new StringContent(JsonSerializer.Serialize(new { mta_sts_mx = "*.mx.cloudflare.net, invalid host" }), Encoding.UTF8, "application/json")
+        };
+        invalidRequest.Headers.Add("X-Tenant-Id", tenantId.ToString());
+        invalidRequest.Headers.Add("X-User-Id", userId.ToString());
+        invalidRequest.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+        using var invalidResponse = await client.SendAsync(invalidRequest);
+        Assert.Equal(HttpStatusCode.BadRequest, invalidResponse.StatusCode);
     }
 
     private static async Task SeedDomainAsync(string name, string mode, int maxAge)

@@ -22,7 +22,8 @@ public sealed record DomainDto(
     string MtaStsMode = "none",
     int MtaStsMaxAge = 604800,
     string? TlsReportRua = null,
-    string MtaStsId = "");
+    string MtaStsId = "",
+    string? MtaStsMx = null);
 
 public sealed record CreateDomainRequest(
     string Name,
@@ -42,7 +43,8 @@ public sealed record UpdateDomainRequest(
     string? CloudflareWorkerUrl = null,
     string? MtaStsMode = null,
     int? MtaStsMaxAge = null,
-    string? TlsReportRua = null);
+    string? TlsReportRua = null,
+    string? MtaStsMx = null);
 
 /// <summary>
 /// The DNS status fields are null when the domain does not use the local transport: a

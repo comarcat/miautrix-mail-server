@@ -68,8 +68,10 @@ public sealed class AutodiscoveryController(AppDbContext db, IConfiguration conf
         var domainName = host[8..].ToLowerInvariant();
         var domain = await db.Domains.AsNoTracking().FirstOrDefaultAsync(d => d.Name.ToLower() == domainName && d.MtaStsMode != "none", ct);
         if (domain is null) return NotFound();
-        var mx = PublicHost("SMTP");
-        var text = $"version: STSv1\nmode: {domain.MtaStsMode}\nmx: {mx}\nmax_age: {domain.MtaStsMaxAge}\n";
+        var mxHosts = string.IsNullOrWhiteSpace(domain.MtaStsMx)
+            ? [PublicHost("SMTP")]
+            : domain.MtaStsMx.Split([',', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var text = $"version: STSv1\nmode: {domain.MtaStsMode}\n{string.Join("\n", mxHosts.Select(mx => $"mx: {mx}"))}\nmax_age: {domain.MtaStsMaxAge}\n";
         return Content(text, "text/plain", Encoding.UTF8);
     }
 

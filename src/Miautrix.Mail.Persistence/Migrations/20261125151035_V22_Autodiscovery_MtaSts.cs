@@ -13,6 +13,7 @@ namespace Miautrix.Mail.Persistence.Migrations;
                 ALTER TABLE domains ADD COLUMN IF NOT EXISTS mta_sts_mode text NOT NULL DEFAULT 'none';
                 ALTER TABLE domains ADD COLUMN IF NOT EXISTS mta_sts_max_age integer NOT NULL DEFAULT 604800;
                 ALTER TABLE domains ADD COLUMN IF NOT EXISTS tls_report_rua text NULL;
+                ALTER TABLE domains ADD COLUMN IF NOT EXISTS mta_sts_mx text NULL;
                 """);
         }
 
@@ -29,6 +30,10 @@ namespace Miautrix.Mail.Persistence.Migrations;
 
             migrationBuilder.DropColumn(
                 name: "tls_report_rua",
+                table: "domains");
+
+            migrationBuilder.DropColumn(
+                name: "mta_sts_mx",
                 table: "domains");
         }
     }

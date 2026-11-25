@@ -23,6 +23,8 @@ describe('DomainsScreen discovery policies', () => {
     expect(screen.getByRole('option', { name: /testing/i })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: /enforce/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/policy max_age/i)).toHaveValue(604800);
+    expect(screen.getByLabelText(/mta-sts mx patterns/i)).toHaveValue('');
+    expect(screen.getByText(/must match every MX record of this domain, including Cloudflare Email Routing hosts/i)).toBeInTheDocument();
   });
 
   it('displays copyable SRV, CNAME, MTA-STS and TLS-RPT suggestions', async () => {

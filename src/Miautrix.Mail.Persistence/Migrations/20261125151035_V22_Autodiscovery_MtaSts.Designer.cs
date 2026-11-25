@@ -576,6 +576,10 @@ namespace Miautrix.Mail.Persistence.Migrations;
                         .HasDefaultValue("none")
                         .HasColumnName("mta_sts_mode");
 
+                    b.Property<string>("MtaStsMx")
+                        .HasColumnType("text")
+                        .HasColumnName("mta_sts_mx");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text")

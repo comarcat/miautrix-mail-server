@@ -53,6 +53,7 @@ public class Domain : TenantScopedEntityBase
     public string MtaStsMode { get; set; } = "none";
     public int MtaStsMaxAge { get; set; } = 604800;
     public string? TlsReportRua { get; set; }
+    public string? MtaStsMx { get; set; }
 
     /// <summary>
     /// How this domain's SMTP traffic is relayed. <c>local</c> means the domain publishes its own
