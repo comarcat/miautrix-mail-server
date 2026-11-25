@@ -63,9 +63,15 @@ public sealed class InboundAuthenticationService(IDnsResolver dns, InboundAuthen
             var tags = header.Value.Split(';').Select(x => x.Trim()).Where(x => x.Contains('=')).Select(x => x.Split('=', 2)).ToDictionary(x => x[0], x => x[1], StringComparer.OrdinalIgnoreCase);
             var domain = tags.GetValueOrDefault("d"); var selector = tags.GetValueOrDefault("s");
             if (tags.GetValueOrDefault("a", "").Equals("rsa-sha1", StringComparison.OrdinalIgnoreCase)) { result.Add(new(domain, selector, "fail", "rsa-sha1 prohibited")); continue; }
-            try { result.Add(new(domain, selector, await verifier.VerifyAsync(message, header, ct) ? "pass" : "fail")); }
+            if (long.TryParse(tags.GetValueOrDefault("x"), out var expires) && expires < DateTimeOffset.UtcNow.ToUnixTimeSeconds())
+            { result.Add(new(domain, selector, "fail", "signature expired (x=)")); continue; }
+            try
+            {
+                var passed = await verifier.VerifyAsync(message, header, ct);
+                result.Add(new(domain, selector, passed ? "pass" : "fail", passed && tags.ContainsKey("l") ? "l= body length limits signed body coverage" : null));
+            }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested) { result.Add(new(domain, selector, "temperror", "DNS lookup timeout")); }
-            catch (Exception ex) { result.Add(new(domain, selector, ex is FormatException ? "permerror" : "fail", ex.GetType().Name)); }
+            catch (Exception ex) { result.Add(new(domain, selector, ex is FormatException ? "permerror" : "fail", ex.GetType().Name + ": " + ex.Message)); }
         }
         return result;
     }
