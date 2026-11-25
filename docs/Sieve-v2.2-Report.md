@@ -40,9 +40,10 @@ Migration `V22_Sieve_Scripts` creates the vacation dedupe table and active-scrip
 - Delivery integration coverage exercises routing, create, discard, flags, redirect guard, reject, vacation dedupe/suppression, runtime fallback and submission bypass.
 - Webmail Vitest: 20 passed; webmail production build passed.
 - Build: `dotnet build Miautrix.Mail.sln -warnaserror -m:1` passed with zero warnings.
-- Unit, Security and Protocol suites: 167, 7 and 39 passed.
-- Focused Sieve delivery integration: 1 passed after adding MIME vacation coverage; dispatcher delivery integration: 1 passed. Migration and API throwaway-database tests passed in earlier runs.
-- Full IntegrationTests run: 100 passed, 14 failed. The repository baseline documents 16 known pre-existing failures; this run stayed within that count.
+- Unit, Security and Protocol suites: 173, 7 and 39 passed.
+- Focused Sieve, Cloudflare-routing and migration integration run: 18 passed, including the twice-applied migration and all three Sieve-generated mail types in both transport modes.
+- Full IntegrationTests run: 105 passed, 15 failed. The repository baseline documents 16 known pre-existing failures; this run stayed within that count.
+- Webmail Vitest: 20 passed; webmail production build passed.
 - Common targeted IntegrationTests filter plus Sieve cases: 37 passed, 1 failed because `Sender_permission_migration_is_repeatable_on_dev_database` explicitly refuses a throwaway database; shared dev DB migration was not run.
 - Webmail Vitest: 20 passed; webmail production build passed.
 
