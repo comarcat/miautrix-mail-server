@@ -20,7 +20,8 @@ public interface ISmtpInboundHandler
         InboundMailPath path = InboundMailPath.Smtp25,
         IPAddress? clientIp = null,
         string? helo = null,
-        string? cloudflareAuthenticationResults = null);
+        string? cloudflareAuthenticationResults = null,
+        InboundAuthenticationResult? precomputedAuthentication = null);
 }
 
 public sealed class SmtpInboundHandler : ISmtpInboundHandler
@@ -66,7 +67,8 @@ public sealed class SmtpInboundHandler : ISmtpInboundHandler
         InboundMailPath path = InboundMailPath.Smtp25,
         IPAddress? clientIp = null,
         string? helo = null,
-        string? cloudflareAuthenticationResults = null)
+        string? cloudflareAuthenticationResults = null,
+        InboundAuthenticationResult? precomputedAuthentication = null)
     {
         if (!_domainValidator.IsDomainLocal(recipient, out var resolvedTenantId) || resolvedTenantId != tenantId)
         {
@@ -76,16 +78,23 @@ public sealed class SmtpInboundHandler : ISmtpInboundHandler
         if (_authentication is not null && _authenticationOptions?.Mode != AuthenticationMode.Off)
         {
             InboundAuthenticationResult auth;
-            try
+            if (precomputedAuthentication is not null)
             {
-                auth = await _authentication.EvaluateAsync(new InboundAuthenticationInput(clientIp, helo, sender, rawMessage, path, cloudflareAuthenticationResults), cancellationToken);
+                auth = precomputedAuthentication;
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
-            catch
+            else
             {
-                var authserv = _authenticationOptions?.AuthservId ?? "unknown";
-                auth = new(new("temperror", null), [new(null, null, "temperror", "verification service error")],
-                    new("temperror", null, null, "none", []), $"{authserv}; spf=temperror; dkim=temperror; dmarc=temperror");
+                try
+                {
+                    auth = await _authentication.EvaluateAsync(new InboundAuthenticationInput(clientIp, helo, sender, rawMessage, path, cloudflareAuthenticationResults), cancellationToken);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+                catch
+                {
+                    var authserv = _authenticationOptions?.AuthservId ?? "unknown";
+                    auth = new(new("temperror", null), [new(null, null, "temperror", "verification service error")],
+                        new("temperror", null, null, "none", []), $"{authserv}; spf=temperror; dkim=temperror; dmarc=temperror");
+                }
             }
 
             _logger?.LogInformation("Inbound authentication path={Path} SPF={SpfResult} SPFDomain={SpfDomain} DKIM={DkimResults} DMARC={DmarcResult} FromDomain={FromDomain}",

@@ -541,6 +541,28 @@ public class SmtpListenerService : BackgroundService
                 if (_mode != SmtpListenerMode.Inbound)
                     rawMessage = SmtpSubmissionHandler.EnsureSubmissionHeaders(rawMessage);
 
+                InboundAuthenticationResult? precomputedAuthentication = null;
+                if (_mode == SmtpListenerMode.Inbound)
+                {
+                    var inboundAuthentication = scope.ServiceProvider.GetService<IInboundAuthenticationService>();
+                    var inboundOptions = scope.ServiceProvider.GetService<InboundAuthenticationOptions>();
+                    if (inboundAuthentication is not null && inboundOptions?.Mode != AuthenticationMode.Off)
+                    {
+                        try
+                        {
+                            precomputedAuthentication = await inboundAuthentication.EvaluateAsync(
+                                new InboundAuthenticationInput(clientIp, heloName, mailFrom, rawMessage, InboundMailPath.Smtp25), ct);
+                        }
+                        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                        catch
+                        {
+                            var authserv = inboundOptions?.AuthservId ?? "unknown";
+                            precomputedAuthentication = new(new("temperror", null), [new(null, null, "temperror", "verification service error")],
+                                new("temperror", null, null, "none", []), $"{authserv}; spf=temperror; dkim=temperror; dmarc=temperror");
+                        }
+                    }
+                }
+
                 SmtpResponse response = SmtpResponse.Queued;
                 foreach (var recipient in recipients)
                 {
@@ -548,7 +570,8 @@ public class SmtpListenerService : BackgroundService
                     {
                         var (resp, _) = await inboundHandler.HandleDataAsync(
                             recipient.TenantId, mailFrom!, recipient.Address, rawMessage, cancellationToken: ct,
-                            path: InboundMailPath.Smtp25, clientIp: clientIp, helo: heloName);
+                            path: InboundMailPath.Smtp25, clientIp: clientIp, helo: heloName,
+                            precomputedAuthentication: precomputedAuthentication);
                         if (!resp.IsSuccess) { response = resp; break; }
                     }
                     else
