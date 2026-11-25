@@ -1,5 +1,12 @@
 namespace Miautrix.Mail.Application.Mail.Mime;
 
+public enum ImapBinarySectionStatus
+{
+    Success,
+    UnknownContentTransferEncoding,
+    NotLeafBodyPart
+}
+
 public interface IImapMimeFormatter
 {
     string BuildEnvelope(byte[] rawMessage);
@@ -10,5 +17,11 @@ public interface IImapMimeFormatter
     {
         bytes = GetBinarySection(rawMessage, section);
         return true;
+    }
+    ImapBinarySectionStatus GetBinarySection(byte[] rawMessage, string section, out byte[] bytes)
+    {
+        return TryGetBinarySection(rawMessage, section, out bytes)
+            ? ImapBinarySectionStatus.Success
+            : ImapBinarySectionStatus.UnknownContentTransferEncoding;
     }
 }

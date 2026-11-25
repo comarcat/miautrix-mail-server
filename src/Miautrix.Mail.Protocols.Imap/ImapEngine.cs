@@ -988,10 +988,20 @@ public sealed partial class ImapSession
         _selectedFlagsSnapshot.Clear();
         foreach (var message in orderedMessages) _selectedFlagsSnapshot[message.Uid] = $"{message.Flags}|{message.IsRead}";
         var firstUnseen = orderedMessages.FindIndex(m => !m.IsRead && !m.Flags.Contains("\\Seen", StringComparison.OrdinalIgnoreCase));
+        var folderPath = await GetFolderPathAsync(folder, cancellationToken);
+        var hasChildren = await _dbContext.Folders.AnyAsync(candidate => candidate.TenantId == TenantId && candidate.ParentId == folder.Id, cancellationToken);
+        var listAttributes = new List<string> { hasChildren ? "\\HasChildren" : "\\HasNoChildren" };
+        var specialUse = folder.Role.ToLowerInvariant() switch
+        {
+            "sent" => "\\Sent", "drafts" => "\\Drafts", "trash" => "\\Trash", "junk" => "\\Junk", "archive" => "\\Archive", _ => null
+        };
+        if (specialUse is not null) listAttributes.Add(specialUse);
+        var escapedFolderPath = EncodeMailboxPath(folderPath).Replace("\\", "\\\\").Replace("\"", "\\\"");
 
         var untagged = new List<string>
         {
             $"* {messageCount} EXISTS",
+            $"* LIST ({string.Join(' ', listAttributes)}) \"/\" \"{escapedFolderPath}\"",
             $"* OK [UIDVALIDITY {folder.UidValidity}] UIDs valid",
             $"* OK [UIDNEXT {folder.UidNext}] Predicted next UID",
             "* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)"
@@ -1003,6 +1013,29 @@ public sealed partial class ImapSession
         untagged.Add(SelectedReadOnly ? "* OK [PERMANENTFLAGS ()] Flags are read-only" : "* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft \\*)] Permanent flags");
 
         return new ImapCommandResult(tag, "OK", SelectedReadOnly ? "[READ-ONLY] " + (readOnly ? "EXAMINE" : "SELECT") + " completed" : "[READ-WRITE] SELECT completed", untagged);
+    }
+
+    private async Task<string> GetFolderPathAsync(Folder folder, CancellationToken cancellationToken)
+    {
+        var names = new Stack<string>();
+        var cursor = folder;
+        var folders = await _dbContext.Folders.AsNoTracking()
+            .Where(candidate => candidate.TenantId == TenantId && candidate.MailboxId == folder.MailboxId)
+            .ToListAsync(cancellationToken);
+        while (true)
+        {
+            names.Push(cursor.Name);
+            if (cursor.ParentId is not Guid parentId) break;
+            var parent = folders.FirstOrDefault(candidate => candidate.Id == parentId);
+            if (parent is null) break;
+            cursor = parent;
+        }
+        var localPath = string.Join('/', names);
+        if (folder.MailboxId == MailboxId) return localPath;
+        var mailboxAddress = await _dbContext.Mailboxes.AsNoTracking()
+            .Where(mailbox => mailbox.TenantId == TenantId && mailbox.Id == folder.MailboxId)
+            .Select(mailbox => mailbox.Address).FirstOrDefaultAsync(cancellationToken);
+        return mailboxAddress is null ? localPath : $"Shared/{mailboxAddress}/{localPath}";
     }
 
     private async Task<ImapCommandResult> HandleListAsync(string tag, IReadOnlyList<ImapToken> arguments, CancellationToken cancellationToken, bool subscribed = false)
@@ -1676,15 +1709,27 @@ public sealed partial class ImapSession
                 else if ((itemName is "BINARY" or "BINARY.PEEK") && item.Section is not null)
                 {
                     var binaryBytes = Array.Empty<byte>();
-                    if (_mimeFormatter is not null && !_mimeFormatter.TryGetBinarySection(messageBytes, item.Section, out binaryBytes))
-                        return new ImapCommandResult(tag, "NO", "[UNKNOWN-CTE] Unknown content transfer encoding", responseSegments);
+                    if (_mimeFormatter is not null)
+                    {
+                        var binaryStatus = _mimeFormatter.GetBinarySection(messageBytes, item.Section, out binaryBytes);
+                        if (binaryStatus == ImapBinarySectionStatus.UnknownContentTransferEncoding)
+                            return new ImapCommandResult(tag, "NO", "[UNKNOWN-CTE] Unknown content transfer encoding", responseSegments);
+                        if (binaryStatus == ImapBinarySectionStatus.NotLeafBodyPart)
+                            return new ImapCommandResult(tag, "NO", "[CANNOT] BINARY section is not a leaf body part", responseSegments);
+                    }
                     AddValue($"BINARY[{item.Section}]", binaryBytes, null, item);
                 }
                 else if (itemName == "BINARY.SIZE" && item.Section is not null)
                 {
                     var binaryBytes = Array.Empty<byte>();
-                    if (_mimeFormatter is not null && !_mimeFormatter.TryGetBinarySection(messageBytes, item.Section, out binaryBytes))
-                        return new ImapCommandResult(tag, "NO", "[UNKNOWN-CTE] Unknown content transfer encoding", responseSegments);
+                    if (_mimeFormatter is not null)
+                    {
+                        var binaryStatus = _mimeFormatter.GetBinarySection(messageBytes, item.Section, out binaryBytes);
+                        if (binaryStatus == ImapBinarySectionStatus.UnknownContentTransferEncoding)
+                            return new ImapCommandResult(tag, "NO", "[UNKNOWN-CTE] Unknown content transfer encoding", responseSegments);
+                        if (binaryStatus == ImapBinarySectionStatus.NotLeafBodyPart)
+                            return new ImapCommandResult(tag, "NO", "[CANNOT] BINARY section is not a leaf body part", responseSegments);
+                    }
                     AddValue($"BINARY.SIZE[{item.Section}]", null, binaryBytes.Length.ToString(), item);
                 }
                 else if (itemName == "RFC822" && item.Section is null) AddValue("RFC822", messageBytes, null, item);

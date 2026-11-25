@@ -883,6 +883,7 @@ public sealed class ImapListenerRawSocketTests
                 }
                 var rev2Select = Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R6 SELECT FreshFolder", "R6", stopping.Token));
                 Assert.DoesNotContain(" RECENT", rev2Select);
+                Assert.Contains("* LIST (\\HasNoChildren)", rev2Select);
                 Assert.Contains("R6a OK NOOP completed", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R6a CHECK", "R6a", stopping.Token)));
                 Assert.Equal("R6b BAD LSUB is not available in IMAP4rev2\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R6b LSUB \"\" \"*\"", "R6b", stopping.Token)));
                 Assert.Contains("* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft \\*)] Permanent flags", rev2Select);
@@ -931,8 +932,12 @@ public sealed class ImapListenerRawSocketTests
                 Assert.Contains("BINARY[1] {", binaryFetch);
                 var binaryPartial = Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R24a FETCH 1 (BINARY[1]<1.2>)", "R24a", stopping.Token));
                 Assert.Contains("BINARY[1]<1> {2}", binaryPartial);
-                Assert.Equal("R24b BAD Invalid FETCH data items\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R24b FETCH 1 (BINARY[])", "R24b", stopping.Token)));
+                var emptyBinary = Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R24b FETCH 1 (BINARY[])", "R24b", stopping.Token));
+                Assert.Contains("BINARY[] {", emptyBinary);
+                Assert.Contains("R24b OK FETCH completed", emptyBinary);
                 Assert.Equal("R24c BAD Invalid FETCH data items\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R24c FETCH 1 (BINARY.SIZE[1]<0.1>)", "R24c", stopping.Token)));
+                var beyondBinary = Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R24d FETCH 1 (BINARY[1]<99.2>)", "R24d", stopping.Token));
+                Assert.Contains("BINARY[1]<99> {0}", beyondBinary);
                 var literalPrefix = Encoding.ASCII.GetBytes($"From: sender@test.invalid\r\nTo: {address}\r\nSubject: rev2 literal minus\r\n\r\n");
                 var literal4096 = literalPrefix.Concat(Encoding.ASCII.GetBytes(new string('x', 4096 - literalPrefix.Length))).ToArray();
                 Assert.Equal(4096, literal4096.Length);
@@ -954,6 +959,7 @@ public sealed class ImapListenerRawSocketTests
                 Assert.StartsWith("R27 OK", Encoding.UTF8.GetString(await ReadResponseAsync(rev2Reader, "R27", stopping.Token)));
                 await SendAndReadAsync(rev2Tls, rev2Reader, "R28 SELECT FreshFolder", "R28", stopping.Token);
                 Assert.Equal("R29 NO [UNKNOWN-CTE] Unknown content transfer encoding\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R29 FETCH 1 (BINARY[1])", "R29", stopping.Token)));
+                Assert.Equal("R29a NO [UNKNOWN-CTE] Unknown content transfer encoding\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R29a FETCH 1 (BINARY.SIZE[1])", "R29a", stopping.Token)));
                 Assert.Equal("R30 NO [LIMIT] Literal too large\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R30 APPEND INBOX {8193}", "R30", stopping.Token)));
             }
 
