@@ -28,7 +28,7 @@ The embedded Public Suffix List is sourced from [publicsuffix.org](https://publi
 - `MIAUTRIX_HOSTNAME`: used as the Authentication-Results authserv-id; when absent, the process machine name is used. Whitespace is rejected.
 - `monitor` records the result, logs only the path and authentication domains/results (never bodies), and never rejects or reroutes.
 - `enforce` rejects only DMARC fail with effective reject policy after `pct`, at the end of SMTP DATA before queueing. DMARC quarantine routes to an existing Junk folder, otherwise Inbox with `\\Flagged`. SPF failure alone never rejects. Authentication temperror never rejects.
-- The Cloudflare webhook accepts an optional `X-Miautrix-Cloudflare-Authentication-Results` result, or a Cloudflare Authentication-Results field in the raw message. SPF is used only when the result identifies Cloudflare; without an IP or such result SPF is none and DMARC can still pass via DKIM.
+- The authenticated Cloudflare webhook accepts an optional `X-Miautrix-Cloudflare-Authentication-Results` result, or a Cloudflare Authentication-Results field in the raw message. The checked-in Worker contract sends the envelope headers and raw MIME; this new header is optional so legacy requests continue to work. SPF is used only when the result identifies Cloudflare; without an IP or such result SPF is none and DMARC can still pass via DKIM. In enforce mode, a DMARC reject is returned as HTTP 403 with `inbound_processing_failed`.
 - Submission and internal delivery are not evaluated.
 
 ## DNS records for hosted domains
