@@ -34,6 +34,8 @@ public interface IMessageService
 
     Task<uint?> CopyMessageAsync(Guid tenantId, Guid userId, Guid mailboxId, Guid messageId, Guid targetFolderId, CancellationToken cancellationToken = default);
 
+    Task<uint?> MoveMessageToMailboxAsync(Guid tenantId, Guid userId, Guid sourceMailboxId, Guid messageId, Guid targetMailboxId, Guid targetFolderId, CancellationToken cancellationToken = default);
+
     Task<bool> MoveMessageAsync(
         Guid tenantId,
         Guid userId,

@@ -6,8 +6,8 @@ public static class ImapStateMachine
     {
         command = command.ToUpperInvariant();
         if (command is "CAPABILITY" or "NOOP" or "LOGOUT") return state != ImapState.LoggedOut;
-        var authenticated = command is "ENABLE" or "LIST" or "LSUB" or "SUBSCRIBE" or "UNSUBSCRIBE" or "STATUS" or "SELECT" or "EXAMINE" or "CREATE" or "DELETE" or "RENAME" or "APPEND";
-        var selected = authenticated || command is "CHECK" or "CLOSE" or "UNSELECT" or "EXPUNGE" or "SEARCH" or "FETCH" or "STORE" or "COPY" or "UID";
+        var authenticated = command is "ENABLE" or "LIST" or "LSUB" or "SUBSCRIBE" or "UNSUBSCRIBE" or "STATUS" or "NAMESPACE" or "SELECT" or "EXAMINE" or "CREATE" or "DELETE" or "RENAME" or "APPEND";
+        var selected = authenticated || command is "CHECK" or "CLOSE" or "UNSELECT" or "EXPUNGE" or "SEARCH" or "FETCH" or "STORE" or "COPY" or "MOVE" or "IDLE" or "UID";
         return state switch
         {
             ImapState.NotAuthenticated => command is "LOGIN" or "AUTHENTICATE",

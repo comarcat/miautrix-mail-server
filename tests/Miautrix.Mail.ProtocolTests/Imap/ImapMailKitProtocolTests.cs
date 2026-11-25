@@ -103,6 +103,7 @@ public sealed class ImapMailKitListenerFixture : IAsyncLifetime
             new Folder { Id = emptyId, TenantId = tenantId, MailboxId = mailboxId, Name = "Empty", Role = "custom", UidNext = 1, UidValidity = 22, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow },
             new Folder { Id = projectsId, TenantId = tenantId, MailboxId = mailboxId, Name = "Projects", Role = "custom", UidNext = 1, UidValidity = 23, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow },
             new Folder { Id = Guid.NewGuid(), TenantId = tenantId, MailboxId = mailboxId, Name = "2026", ParentId = projectsId, Role = "custom", UidNext = 1, UidValidity = 24, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow },
+            new Folder { Id = Guid.NewGuid(), TenantId = tenantId, MailboxId = mailboxId, Name = "Archive", Role = "archive", UidNext = 1, UidValidity = 26, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow },
             new Folder { Id = Guid.NewGuid(), TenantId = tenantId, MailboxId = mailboxId, Name = "Trash", Role = "trash", UidNext = 1, UidValidity = 25, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow });
         for (uint uid = 1; uid <= 2; uid++)
         {
@@ -183,6 +184,41 @@ public sealed class ImapMailKitProtocolTests(ImapMailKitListenerFixture fixture)
         await bad.ConnectAsync("127.0.0.1", fixture.Port, SecureSocketOptions.SslOnConnect);
         await Assert.ThrowsAsync<MailKit.Security.AuthenticationException>(() => bad.AuthenticateAsync(mailbox.Address, "incorrect"));
         await bad.DisconnectAsync(true);
+    }
+
+    [Fact]
+    public async Task MailKit_discovers_personal_shared_and_empty_other_users_namespaces()
+    {
+        var mailbox = await fixture.CreateMailboxAsync();
+        using var client = await fixture.ConnectAsync(mailbox.Address);
+
+        Assert.Single(client.PersonalNamespaces);
+        Assert.Equal(string.Empty, client.PersonalNamespaces[0].Path);
+        Assert.Equal('/', client.PersonalNamespaces[0].DirectorySeparator);
+        Assert.Single(client.SharedNamespaces);
+        // MailKit canonicalizes namespace prefixes by trimming the trailing delimiter.
+        Assert.Equal("Shared", client.SharedNamespaces[0].Path);
+        Assert.Equal('/', client.SharedNamespaces[0].DirectorySeparator);
+        Assert.Empty(client.OtherNamespaces);
+    }
+
+    [Fact]
+    public async Task MailKit_move_to_uses_server_move_and_updates_both_folders()
+    {
+        var mailbox = await fixture.CreateMailboxAsync();
+        using var client = await fixture.ConnectAsync(mailbox.Address);
+        Assert.True(client.Capabilities.HasFlag(ImapCapabilities.Move));
+        await client.Inbox.OpenAsync(FolderAccess.ReadWrite);
+        var summary = Assert.Single(await client.Inbox.FetchAsync(0, 0,
+            new FetchRequest(MessageSummaryItems.UniqueId | MessageSummaryItems.Envelope)));
+        var archive = client.GetFolder("Archive");
+
+        var destinationUid = await client.Inbox.MoveToAsync(summary.UniqueId, archive);
+
+        Assert.NotNull(destinationUid);
+        Assert.Equal(1, client.Inbox.Count);
+        await archive.OpenAsync(FolderAccess.ReadOnly);
+        Assert.Single(await archive.FetchAsync(0, 0, new FetchRequest(MessageSummaryItems.UniqueId | MessageSummaryItems.Envelope)));
     }
 
     [Fact]
