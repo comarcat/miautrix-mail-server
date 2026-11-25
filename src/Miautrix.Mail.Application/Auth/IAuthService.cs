@@ -23,7 +23,8 @@ public interface IAuthService
         Guid userId,
         string currentPassword,
         string newPassword,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        Guid? currentSessionId = null);
 
     Task<AuthResult> RefreshTokenAsync(
         string rawRefreshToken,

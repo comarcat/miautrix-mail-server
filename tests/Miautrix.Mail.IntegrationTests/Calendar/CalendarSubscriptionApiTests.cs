@@ -55,8 +55,7 @@ public sealed class CalendarSubscriptionApiTests : IClassFixture<WebApplicationF
                 Content = new StringContent(JsonSerializer.Serialize(new { user_id = userB }), Encoding.UTF8, "application/json")
             };
             addReq.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
-            addReq.Headers.Add("X-Tenant-Id", tenantId.ToString());
-            addReq.Headers.Add("X-User-Id", userA.ToString());
+            global::Miautrix.Mail.IntegrationTests.TestSessionHelper.Attach(addReq, tenantId, userA);
 
             var addRes = await client.SendAsync(addReq);
             Assert.Equal(HttpStatusCode.NoContent, addRes.StatusCode);
@@ -67,15 +66,13 @@ public sealed class CalendarSubscriptionApiTests : IClassFixture<WebApplicationF
                 Content = new StringContent(JsonSerializer.Serialize(new { user_id = userB }), Encoding.UTF8, "application/json")
             };
             addReq2.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
-            addReq2.Headers.Add("X-Tenant-Id", tenantId.ToString());
-            addReq2.Headers.Add("X-User-Id", userA.ToString());
+            global::Miautrix.Mail.IntegrationTests.TestSessionHelper.Attach(addReq2, tenantId, userA);
             var addRes2 = await client.SendAsync(addReq2);
             Assert.Equal(HttpStatusCode.NoContent, addRes2.StatusCode);
 
             // 2. List subscriptions
             var listReq = new HttpRequestMessage(HttpMethod.Get, "/api/v1/calendar/subscriptions");
-            listReq.Headers.Add("X-Tenant-Id", tenantId.ToString());
-            listReq.Headers.Add("X-User-Id", userA.ToString());
+            global::Miautrix.Mail.IntegrationTests.TestSessionHelper.Attach(listReq, tenantId, userA);
 
             var listRes = await client.SendAsync(listReq);
             Assert.Equal(HttpStatusCode.OK, listRes.StatusCode);
@@ -88,16 +85,14 @@ public sealed class CalendarSubscriptionApiTests : IClassFixture<WebApplicationF
             // 3. Delete subscription
             var delReq = new HttpRequestMessage(HttpMethod.Delete, $"/api/v1/calendar/subscriptions/{userB}");
             delReq.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
-            delReq.Headers.Add("X-Tenant-Id", tenantId.ToString());
-            delReq.Headers.Add("X-User-Id", userA.ToString());
+            global::Miautrix.Mail.IntegrationTests.TestSessionHelper.Attach(delReq, tenantId, userA);
 
             var delRes = await client.SendAsync(delReq);
             Assert.Equal(HttpStatusCode.NoContent, delRes.StatusCode);
 
             // 4. Verify list is now empty
             var listReqAfter = new HttpRequestMessage(HttpMethod.Get, "/api/v1/calendar/subscriptions");
-            listReqAfter.Headers.Add("X-Tenant-Id", tenantId.ToString());
-            listReqAfter.Headers.Add("X-User-Id", userA.ToString());
+            global::Miautrix.Mail.IntegrationTests.TestSessionHelper.Attach(listReqAfter, tenantId, userA);
 
             var listResAfter = await client.SendAsync(listReqAfter);
             var listBodyAfter = await listResAfter.Content.ReadAsStringAsync();
@@ -125,8 +120,7 @@ public sealed class CalendarSubscriptionApiTests : IClassFixture<WebApplicationF
                 Content = new StringContent(JsonSerializer.Serialize(new { user_id = userA }), Encoding.UTF8, "application/json")
             };
             req.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
-            req.Headers.Add("X-Tenant-Id", tenantId.ToString());
-            req.Headers.Add("X-User-Id", userA.ToString());
+            global::Miautrix.Mail.IntegrationTests.TestSessionHelper.Attach(req, tenantId, userA);
 
             var res = await client.SendAsync(req);
             Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
@@ -156,8 +150,7 @@ public sealed class CalendarSubscriptionApiTests : IClassFixture<WebApplicationF
                 Content = new StringContent(JsonSerializer.Serialize(new { user_id = userB }), Encoding.UTF8, "application/json")
             };
             req.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
-            req.Headers.Add("X-Tenant-Id", tenantA.ToString());
-            req.Headers.Add("X-User-Id", userA.ToString());
+            global::Miautrix.Mail.IntegrationTests.TestSessionHelper.Attach(req, tenantA, userA);
 
             var res = await client.SendAsync(req);
             Assert.Equal(HttpStatusCode.NotFound, res.StatusCode);
@@ -274,16 +267,14 @@ public sealed class CalendarSubscriptionApiTests : IClassFixture<WebApplicationF
 
             using var first = new HttpRequestMessage(HttpMethod.Delete, $"/api/v1/calendar/subscriptions/{userB}");
             first.Headers.Add("Idempotency-Key", idempotencyKey);
-            first.Headers.Add("X-Tenant-Id", tenantId.ToString());
-            first.Headers.Add("X-User-Id", userA.ToString());
+            global::Miautrix.Mail.IntegrationTests.TestSessionHelper.Attach(first, tenantId, userA);
             using var firstResponse = await client.SendAsync(first);
             Assert.Equal(HttpStatusCode.NoContent, firstResponse.StatusCode);
 
             // The retry is answered from the captured response, not by re-running the delete.
             using var retry = new HttpRequestMessage(HttpMethod.Delete, $"/api/v1/calendar/subscriptions/{userB}");
             retry.Headers.Add("Idempotency-Key", idempotencyKey);
-            retry.Headers.Add("X-Tenant-Id", tenantId.ToString());
-            retry.Headers.Add("X-User-Id", userA.ToString());
+            global::Miautrix.Mail.IntegrationTests.TestSessionHelper.Attach(retry, tenantId, userA);
             using var retryResponse = await client.SendAsync(retry);
             Assert.Equal(HttpStatusCode.NoContent, retryResponse.StatusCode);
 
@@ -346,8 +337,7 @@ public sealed class CalendarSubscriptionApiTests : IClassFixture<WebApplicationF
             {
                 Content = new StringContent(JsonSerializer.Serialize(new { user_id = userB }), Encoding.UTF8, "application/json")
             };
-            request.Headers.Add("X-Tenant-Id", tenantId.ToString());
-            request.Headers.Add("X-User-Id", userA.ToString());
+            global::Miautrix.Mail.IntegrationTests.TestSessionHelper.Attach(request, tenantId, userA);
 
             using var response = await client.SendAsync(request);
             Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);

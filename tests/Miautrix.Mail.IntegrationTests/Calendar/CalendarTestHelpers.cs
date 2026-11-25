@@ -261,8 +261,7 @@ internal static class CalendarTestHelpers
         object? body = null)
     {
         var request = new HttpRequestMessage(method, url);
-        request.Headers.Add("X-Tenant-Id", tenantId.ToString());
-        request.Headers.Add("X-User-Id", userId.ToString());
+        global::Miautrix.Mail.IntegrationTests.TestSessionHelper.Attach(request, tenantId, userId);
 
         if (method != HttpMethod.Get && method != HttpMethod.Head)
         {

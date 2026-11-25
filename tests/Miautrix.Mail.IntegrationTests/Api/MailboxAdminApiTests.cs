@@ -469,8 +469,7 @@ public sealed class MailboxAdminApiTests : IClassFixture<WebApplicationFactory<M
     private static HttpRequestMessage BuildRequest(TenantScope tenant, HttpMethod method, string path, object? payload = null)
     {
         var request = new HttpRequestMessage(method, path);
-        request.Headers.Add("X-Tenant-Id", tenant.TenantId.ToString());
-        request.Headers.Add("X-User-Id", tenant.AdminUserId.ToString());
+        global::Miautrix.Mail.IntegrationTests.TestSessionHelper.Attach(request, tenant.TenantId, tenant.AdminUserId);
 
         if (payload is not null)
         {

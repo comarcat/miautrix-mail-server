@@ -90,8 +90,7 @@ public sealed class DraftImapHttpRoundTripTests : IClassFixture<WebApplicationFa
 
                 using (var request = new HttpRequestMessage(HttpMethod.Get, $"/api/v1/mailboxes/{mailboxId}/messages/{messageId}"))
                 {
-                    request.Headers.Add("X-Tenant-Id", tenantId.ToString());
-                    request.Headers.Add("X-User-Id", userId.ToString());
+                    global::Miautrix.Mail.IntegrationTests.TestSessionHelper.Attach(request, tenantId, userId);
                     using var response = await http.SendAsync(request);
                     Assert.Equal(HttpStatusCode.OK, response.StatusCode);
                     using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
@@ -114,8 +113,7 @@ public sealed class DraftImapHttpRoundTripTests : IClassFixture<WebApplicationFa
                 }, Json);
                 using (var request = new HttpRequestMessage(HttpMethod.Put, $"/api/v1/mailboxes/{mailboxId}/drafts/{messageId}"))
                 {
-                    request.Headers.Add("X-Tenant-Id", tenantId.ToString());
-                    request.Headers.Add("X-User-Id", userId.ToString());
+                    global::Miautrix.Mail.IntegrationTests.TestSessionHelper.Attach(request, tenantId, userId);
                     request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
                     request.Content = new StringContent(updatePayload, Encoding.UTF8, "application/json");
                     using var response = await http.SendAsync(request);
@@ -147,8 +145,7 @@ public sealed class DraftImapHttpRoundTripTests : IClassFixture<WebApplicationFa
 
                 using (var request = new HttpRequestMessage(HttpMethod.Get, $"/api/v1/mailboxes/{mailboxId}/messages/{messageId}"))
                 {
-                    request.Headers.Add("X-Tenant-Id", tenantId.ToString());
-                    request.Headers.Add("X-User-Id", userId.ToString());
+                    global::Miautrix.Mail.IntegrationTests.TestSessionHelper.Attach(request, tenantId, userId);
                     using var response = await http.SendAsync(request);
                     Assert.Equal(HttpStatusCode.OK, response.StatusCode);
                     using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());

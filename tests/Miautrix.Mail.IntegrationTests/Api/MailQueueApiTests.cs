@@ -50,8 +50,7 @@ public sealed class MailQueueApiTests : IClassFixture<WebApplicationFactory<Miau
             Content = new StringContent("{}", Encoding.UTF8, "application/json"),
         };
         request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
-        request.Headers.Add("X-Tenant-Id", Guid.NewGuid().ToString());
-        request.Headers.Add("X-User-Id", Guid.NewGuid().ToString());
+        global::Miautrix.Mail.IntegrationTests.TestSessionHelper.Attach(request, Guid.NewGuid(), Guid.NewGuid());
 
         // ACT
         using var response = await client.SendAsync(request);
@@ -74,8 +73,7 @@ public sealed class MailQueueApiTests : IClassFixture<WebApplicationFactory<Miau
     {
         using var client = _factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Delete, $"/api/v1/mail/queue/{Guid.NewGuid()}");
-        request.Headers.Add("X-Tenant-Id", Guid.NewGuid().ToString());
-        request.Headers.Add("X-User-Id", Guid.NewGuid().ToString());
+        global::Miautrix.Mail.IntegrationTests.TestSessionHelper.Attach(request, Guid.NewGuid(), Guid.NewGuid());
 
         using var response = await client.SendAsync(request);
         var body = await response.Content.ReadAsStringAsync();
@@ -87,20 +85,21 @@ public sealed class MailQueueApiTests : IClassFixture<WebApplicationFactory<Miau
     }
 
     [Fact]
-    public async Task List_with_malformed_tenant_header_returns_400()
+    public async Task List_with_malformed_tenant_header_returns_404()
     {
         using var client = _factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/mail/queue?status=queued");
+        var tenantId = Guid.NewGuid();
+        TestSessionHelper.Attach(request, tenantId, Guid.NewGuid());
+        request.Headers.Remove("X-Tenant-Id");
         request.Headers.Add("X-Tenant-Id", "all");
-        request.Headers.Add("X-User-Id", Guid.NewGuid().ToString());
 
         using var response = await client.SendAsync(request);
         var body = await response.Content.ReadAsStringAsync();
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         using var json = JsonDocument.Parse(body);
-        Assert.Equal("bad_request", json.RootElement.GetProperty("error").GetProperty("code").GetString());
-        Assert.Contains("X-Tenant-Id", json.RootElement.GetProperty("error").GetProperty("message").GetString());
+        Assert.Equal("not_found", json.RootElement.GetProperty("error").GetProperty("code").GetString());
     }
 
     [Fact]
@@ -145,8 +144,7 @@ public sealed class MailQueueApiTests : IClassFixture<WebApplicationFactory<Miau
 
             using var client = _factory.CreateClient();
             using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/mail/queue?status=queued");
-            request.Headers.Add("X-Tenant-Id", tenantId.ToString());
-            request.Headers.Add("X-User-Id", userId.ToString());
+            global::Miautrix.Mail.IntegrationTests.TestSessionHelper.Attach(request, tenantId, userId);
 
             // ACT
             using var response = await client.SendAsync(request);
@@ -192,8 +190,7 @@ public sealed class MailQueueApiTests : IClassFixture<WebApplicationFactory<Miau
 
             using var client = _factory.CreateClient();
             using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/mail/queue");
-            request.Headers.Add("X-Tenant-Id", tenantId.ToString());
-            request.Headers.Add("X-User-Id", userId.ToString());
+            global::Miautrix.Mail.IntegrationTests.TestSessionHelper.Attach(request, tenantId, userId);
 
             // ACT
             using var response = await client.SendAsync(request);
@@ -247,8 +244,7 @@ public sealed class MailQueueApiTests : IClassFixture<WebApplicationFactory<Miau
                 Content = new StringContent("{\"reason\":\"manual\"}", Encoding.UTF8, "application/json"),
             };
             request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
-            request.Headers.Add("X-Tenant-Id", tenantA.ToString());
-            request.Headers.Add("X-User-Id", userA.ToString());
+            global::Miautrix.Mail.IntegrationTests.TestSessionHelper.Attach(request, tenantA, userA);
 
             // ACT
             using var response = await client.SendAsync(request);

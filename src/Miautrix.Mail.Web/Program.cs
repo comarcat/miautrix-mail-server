@@ -181,20 +181,18 @@ public class Program
         app.UseMiddleware<ApiExceptionMiddleware>();
         app.UseMiddleware<RequestIdMiddleware>();
         // v2.2 API authentication: every /api route requires a persisted bearer session.
+        app.UseRouting();
         app.UseMiddleware<SessionAuthenticationMiddleware>();
         app.UseMiddleware<IdempotencyMiddleware>();
 
         app.MapControllers();
-        app.MapGet("/openapi/v1.json", () => Results.Ok(new
-        {
-            openapi = "3.0.1",
-            info = new
+        if (app.Environment.IsDevelopment())
+            app.MapGet("/openapi/v1.json", () => Results.Ok(new
             {
-                title = "Miautrix Mail API",
-                version = "v1"
-            },
-            paths = new Dictionary<string, object>()
-        }));
+                openapi = "3.0.1",
+                info = new { title = "Miautrix Mail API", version = "v1" },
+                paths = new Dictionary<string, object>()
+            }));
 
         app.Run();
     }

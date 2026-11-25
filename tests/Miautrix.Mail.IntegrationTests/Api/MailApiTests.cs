@@ -59,8 +59,7 @@ public sealed class MailApiTests : IClassFixture<WebApplicationFactory<Miautrix.
         {
             using var client = _factory.CreateClient();
             using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/mailboxes");
-            request.Headers.Add("X-Tenant-Id", tenantId.ToString());
-            request.Headers.Add("X-User-Id", userId.ToString());
+            global::Miautrix.Mail.IntegrationTests.TestSessionHelper.Attach(request, tenantId, userId);
 
             var response = await client.SendAsync(request);
             var body = await response.Content.ReadAsStringAsync();
@@ -92,8 +91,7 @@ public sealed class MailApiTests : IClassFixture<WebApplicationFactory<Miautrix.
         {
             using var client = _factory.CreateClient();
             using var request = new HttpRequestMessage(HttpMethod.Get, $"/api/v1/mailboxes/{mailboxId}/folders");
-            request.Headers.Add("X-Tenant-Id", tenantId.ToString());
-            request.Headers.Add("X-User-Id", userId.ToString());
+            global::Miautrix.Mail.IntegrationTests.TestSessionHelper.Attach(request, tenantId, userId);
 
             var response = await client.SendAsync(request);
             var body = await response.Content.ReadAsStringAsync();
@@ -123,6 +121,12 @@ public sealed class MailApiTests : IClassFixture<WebApplicationFactory<Miautrix.
         try
         {
             using var client = _factory.CreateClient();
+            using (var provisionRequest = new HttpRequestMessage(HttpMethod.Get, $"/api/v1/mailboxes/{mailboxId}/folders"))
+            {
+                global::Miautrix.Mail.IntegrationTests.TestSessionHelper.Attach(provisionRequest, tenantId, userId);
+                using var provisionResponse = await client.SendAsync(provisionRequest);
+                Assert.Equal(HttpStatusCode.OK, provisionResponse.StatusCode);
+            }
             var sendPayload = new
             {
                 from = "sender@testdomain.com",
@@ -136,8 +140,7 @@ public sealed class MailApiTests : IClassFixture<WebApplicationFactory<Miautrix.
                 Content = new StringContent(JsonSerializer.Serialize(sendPayload), Encoding.UTF8, "application/json")
             };
             request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
-            request.Headers.Add("X-Tenant-Id", tenantId.ToString());
-            request.Headers.Add("X-User-Id", userId.ToString());
+            global::Miautrix.Mail.IntegrationTests.TestSessionHelper.Attach(request, tenantId, userId);
 
             var response = await client.SendAsync(request);
             var body = await response.Content.ReadAsStringAsync();
@@ -157,8 +160,7 @@ public sealed class MailApiTests : IClassFixture<WebApplicationFactory<Miautrix.
 
             // Check messages listing
             using var listRequest = new HttpRequestMessage(HttpMethod.Get, $"/api/v1/mailboxes/{mailboxId}/messages?folder_role=sent");
-            listRequest.Headers.Add("X-Tenant-Id", tenantId.ToString());
-            listRequest.Headers.Add("X-User-Id", userId.ToString());
+            global::Miautrix.Mail.IntegrationTests.TestSessionHelper.Attach(listRequest, tenantId, userId);
 
             var listResponse = await client.SendAsync(listRequest);
             var listBody = await listResponse.Content.ReadAsStringAsync();

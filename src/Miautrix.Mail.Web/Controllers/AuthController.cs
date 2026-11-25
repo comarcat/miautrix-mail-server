@@ -7,6 +7,7 @@ using Miautrix.Mail.Web.Contracts;
 using Miautrix.Mail.Web.Infrastructure;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Miautrix.Mail.Web.Controllers;
 
@@ -24,6 +25,7 @@ public sealed class AuthController : ControllerBase
     }
 
     [HttpPost("login")]
+    [AllowAnonymous]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ApiError), StatusCodes.Status403Forbidden)]
@@ -84,6 +86,7 @@ public sealed class AuthController : ControllerBase
     }
 
     [HttpPost("refresh")]
+    [AllowAnonymous]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiError), StatusCodes.Status401Unauthorized)]
     public async Task<IResult> RefreshToken([FromBody] RefreshTokenRequest request, CancellationToken cancellationToken)
@@ -118,6 +121,7 @@ public sealed class AuthController : ControllerBase
         await _authService.LogoutAsync(
             _requestContext.CurrentTenantId,
             _requestContext.CurrentUserId,
+            rawSessionToken: BearerToken(),
             cancellationToken: cancellationToken);
 
         return Results.StatusCode(StatusCodes.Status204NoContent);
@@ -133,7 +137,8 @@ public sealed class AuthController : ControllerBase
             _requestContext.CurrentUserId,
             request.CurrentPassword,
             request.NewPassword,
-            cancellationToken);
+            cancellationToken,
+            HttpContext.Items.TryGetValue("session_id", out var sid) && sid is Guid sessionId ? sessionId : null);
 
         if (result.Success)
         {
@@ -148,6 +153,12 @@ public sealed class AuthController : ControllerBase
             StatusCodes.Status400BadRequest,
             "password_change_failed",
             result.Message);
+    }
+
+    private string? BearerToken()
+    {
+        var value = Request.Headers.Authorization.ToString();
+        return value.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) ? value[7..].Trim() : null;
     }
 }
 

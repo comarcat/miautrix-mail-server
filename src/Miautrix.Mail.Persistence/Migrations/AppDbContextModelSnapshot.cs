@@ -1219,6 +1219,34 @@ namespace Miautrix.Mail.Persistence.Migrations
                 {
                     b.HasBaseType("Miautrix.Mail.Domain.TenantScopedEntityBase");
 
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revoked_at");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("session_id");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("token_hash");
+
+                    b.Property<DateTimeOffset?>("UsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("used_at");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
                     b.ToTable("refresh_tokens", (string)null);
                 });
 
@@ -1264,6 +1292,34 @@ namespace Miautrix.Mail.Persistence.Migrations
             modelBuilder.Entity("Miautrix.Mail.Domain.Session", b =>
                 {
                     b.HasBaseType("Miautrix.Mail.Domain.TenantScopedEntityBase");
+
+                    b.Property<string>("AccessTokenHash")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("access_token_hash");
+
+                    b.Property<string>("ClientHash")
+                        .HasColumnType("text")
+                        .HasColumnName("client_hash");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<DateTimeOffset?>("LastSeenAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_seen_at");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revoked_at");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasIndex("AccessTokenHash")
+                        .IsUnique();
 
                     b.ToTable("sessions", (string)null);
                 });

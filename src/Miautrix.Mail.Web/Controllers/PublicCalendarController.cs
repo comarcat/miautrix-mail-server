@@ -5,6 +5,7 @@ using Miautrix.Mail.Web.Contracts;
 using Miautrix.Mail.Web.Infrastructure;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Miautrix.Mail.Web.Controllers;
 
@@ -20,6 +21,7 @@ public sealed class PublicCalendarController : ControllerBase
     }
 
     [HttpGet("invitations/{token}")]
+    [AllowAnonymous]
     [ProducesResponseType(typeof(string), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiError), StatusCodes.Status404NotFound)]
     public async Task<IResult> ViewInvitation(string token, [FromQuery] string? response, CancellationToken cancellationToken = default)
@@ -35,6 +37,7 @@ public sealed class PublicCalendarController : ControllerBase
     }
 
     [HttpGet("invitations/{token}/proposal")]
+    [AllowAnonymous]
     [ProducesResponseType(typeof(string), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiError), StatusCodes.Status404NotFound)]
     public async Task<IResult> ResolveProposal(string token, [FromQuery] string action, CancellationToken cancellationToken = default)
@@ -51,6 +54,7 @@ public sealed class PublicCalendarController : ControllerBase
     }
 
     [HttpPost("invitations/{token}/respond")]
+    [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponse<CalendarInvitationViewDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiError), StatusCodes.Status404NotFound)]
     public async Task<IResult> Respond(string token, [FromBody] CalendarRsvpRequest request, CancellationToken cancellationToken = default)

@@ -9,6 +9,7 @@ using Miautrix.Mail.Web.Contracts;
 using Miautrix.Mail.Web.Infrastructure;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging;
 
 namespace Miautrix.Mail.Web.Controllers;
@@ -52,6 +53,7 @@ public sealed class InboundController : ControllerBase
     /// <param name="cancellationToken">Request-scoped cancellation token.</param>
     /// <returns>200 when the message is queued, 401 for bad auth, 403 for relay denied.</returns>
     [HttpPost("cloudflare")]
+    [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponse<InboundQueuedResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiError), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiError), StatusCodes.Status401Unauthorized)]
