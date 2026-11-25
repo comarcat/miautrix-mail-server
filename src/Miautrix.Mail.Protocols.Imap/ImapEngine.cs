@@ -346,7 +346,8 @@ public sealed partial class ImapSession
         for (var index = _selectedUidSnapshot.Count - 1; index >= 0; index--)
             if (!currentSet.Contains(_selectedUidSnapshot[index])) responses.Add($"* {index + 1} EXPUNGE");
         recentUids.IntersectWith(currentSet);
-        if (current.Count > _selectedUidSnapshot.Count) responses.Add($"* {current.Count} EXISTS");
+        if (current.Count > _selectedUidSnapshot.Count || current.Any(uid => !_selectedUidSnapshot.Contains(uid)))
+            responses.Add($"* {current.Count} EXISTS");
         if (recentUids.Count != priorRecentCount) responses.Add($"* {recentUids.Count} RECENT");
         _selectedUidSnapshot = current;
         return new ImapCommandResult(tag, "OK", "NOOP completed", responses);
@@ -1138,54 +1139,10 @@ public sealed partial class ImapSession
         // Store payload in MailStorage (content-addressable filesystem deduplication)
         var storageResult = await _storage.StoreAsync(literalPayload, cancellationToken);
 
-        // Read raw headers/subject/sender from storage stream for entity metadata
-        string sender = "unknown@miautrix.local";
-        string recipient = Username ?? "unknown@miautrix.local";
-        string subject = "(No Subject)";
-
-        await using (var readStream = await _storage.OpenReadAsync(storageResult.ContentHash, cancellationToken))
-        {
-            if (readStream != null)
-            {
-                using var reader = new StreamReader(readStream, Encoding.UTF8, leaveOpen: true);
-                string? line;
-                while (!string.IsNullOrWhiteSpace(line = await reader.ReadLineAsync(cancellationToken)))
-                {
-                    if (line.StartsWith("From:", StringComparison.OrdinalIgnoreCase))
-                        sender = line[5..].Trim();
-                    else if (line.StartsWith("To:", StringComparison.OrdinalIgnoreCase))
-                        recipient = line[3..].Trim();
-                    else if (line.StartsWith("Subject:", StringComparison.OrdinalIgnoreCase))
-                        subject = line[8..].Trim();
-                }
-            }
-        }
-
-        if (_uidAllocator is null) return new ImapCommandResult(tag, "NO", "UID allocation unavailable", Array.Empty<string>());
-        uint assignedUid = await _uidAllocator.AllocateAsync(TenantId!.Value, folder.Id, cancellationToken: cancellationToken);
+        if (_messageService is null || _userId is null) return new ImapCommandResult(tag, "NO", "Message service unavailable", Array.Empty<string>());
+        uint assignedUid = await _messageService.AppendStoredMessageAsync(TenantId!.Value, _userId.Value,
+            folder.MailboxId, folder.Id, storageResult, messageDate, flags, cancellationToken);
         folder.UpdatedAt = DateTimeOffset.UtcNow;
-
-        var message = new Message
-        {
-            Id = Guid.NewGuid(),
-            TenantId = TenantId!.Value,
-            MailboxId = folder.MailboxId,
-            FolderId = folder.Id,
-            Sender = sender,
-            Recipient = recipient,
-            Subject = subject,
-            Date = messageDate,
-            ContentHash = storageResult.ContentHash,
-            StoragePath = storageResult.StoragePath,
-            SizeBytes = storageResult.SizeBytes,
-            Flags = flags,
-            Uid = assignedUid,
-            IsRead = flags.Contains("\\Seen", StringComparison.OrdinalIgnoreCase),
-            CreatedAt = DateTimeOffset.UtcNow,
-            UpdatedAt = DateTimeOffset.UtcNow
-        };
-
-        _dbContext.Messages.Add(message);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         return new ImapCommandResult(

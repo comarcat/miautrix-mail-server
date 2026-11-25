@@ -13,7 +13,8 @@ public sealed record MimeMessageRequest(
     IReadOnlyList<MimeAttachment>? Attachments,
     DateTimeOffset Date,
     string? InReplyTo = null,
-    IReadOnlyList<string>? References = null);
+    IReadOnlyList<string>? References = null,
+    bool IncludeBccHeader = false);
 
 public sealed record BuiltMimeMessage(
     string RawMessage,
@@ -55,6 +56,8 @@ public static class MimeMessageBuilder
         {
             headers.Add(MimeEncoders.Header("Cc", MimeEncoders.FormatAddressList(request.Cc)));
         }
+        if (request.IncludeBccHeader && request.Bcc is { Count: > 0 })
+            headers.Add(MimeEncoders.Header("Bcc", MimeEncoders.FormatAddressList(request.Bcc)));
 
         headers.Add(MimeEncoders.Header("Subject", string.IsNullOrWhiteSpace(request.Subject) ? "(No Subject)" : request.Subject));
         headers.Add($"Date: {request.Date:R}");

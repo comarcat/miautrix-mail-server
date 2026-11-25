@@ -80,6 +80,7 @@ export const ComposerView: React.FC<ComposerViewProps> = ({ accounts, defaultAcc
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const editorWrapRef = useRef<HTMLDivElement | null>(null);
   const autosaveRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const dirtyRef = useRef(false);
 
   const selectedImageElRef = useRef<HTMLImageElement | null>(null);
   const [selectedImageBox, setSelectedImageBox] = useState<null | { left: number; top: number; width: number; height: number; img: HTMLImageElement }>(null);
@@ -105,6 +106,7 @@ export const ComposerView: React.FC<ComposerViewProps> = ({ accounts, defaultAcc
 
   useEffect(() => setFromMailboxId(initialState?.mailboxId ?? defaultAccountId), [defaultAccountId, initialState?.mailboxId]);
   useEffect(() => {
+    dirtyRef.current = false;
     setTo(initialState?.to ?? ''); setCc(initialState?.cc ?? ''); setBcc(initialState?.bcc ?? '');
     setShowCc(!!initialState?.cc?.trim()); setShowBcc(!!initialState?.bcc?.trim()); setSubject(initialState?.subject ?? '');
     setEditorHtml(initialState?.bodyHtml ?? textToHtml(initialState?.body ?? ''));
@@ -138,6 +140,7 @@ export const ComposerView: React.FC<ComposerViewProps> = ({ accounts, defaultAcc
     const result = (res as any)?.data ?? res;
     const id = result?.draftId ?? result?.draft_id;
     if (id) setDraftId(id);
+    dirtyRef.current = false;
     setStatus(`Draft saved ${new Date().toLocaleTimeString()}`);
     return (id ?? null) as string | null;
   };
@@ -173,27 +176,32 @@ export const ComposerView: React.FC<ComposerViewProps> = ({ accounts, defaultAcc
     onDiscardClick();
   };
   useEffect(() => {
-    if (autosaveRef.current) clearInterval(autosaveRef.current);
-    autosaveRef.current = setInterval(() => {
-      if (!selectedAccount) return;
-      const hasText = to.trim() || cc.trim() || bcc.trim() || subject.trim() || htmlToText(currentHtml()).trim() || pendingAttachments.length > 0;
-      if (!hasText) return;
-
-      void (async () => {
+    let cancelled = false;
+    if (autosaveRef.current) clearTimeout(autosaveRef.current);
+    const scheduleAutosave = () => {
+      if (cancelled) return;
+      autosaveRef.current = setTimeout(async () => {
         try {
-          const id = await saveDraft();
-          if (id) {
-            const gen = uploadGeneration + 1;
-            setUploadGeneration(gen);
-            await uploadPendingAttachments(id);
+          const hasText = to.trim() || cc.trim() || bcc.trim() || subject.trim() || htmlToText(currentHtml()).trim() || pendingAttachments.length > 0;
+          if (selectedAccount && dirtyRef.current && hasText) {
+            const id = await saveDraft();
+            if (id) {
+              const gen = uploadGeneration + 1;
+              setUploadGeneration(gen);
+              await uploadPendingAttachments(id);
+            }
           }
         } catch (e) {
           setStatus(`Draft save failed: ${e instanceof Error ? e.message : 'Unknown error'}`);
+        } finally {
+          scheduleAutosave();
         }
-      })();
-    }, 30_000);
+      }, 30_000);
+    };
+    scheduleAutosave();
     return () => {
-      if (autosaveRef.current) clearInterval(autosaveRef.current);
+      cancelled = true;
+      if (autosaveRef.current) clearTimeout(autosaveRef.current);
       autosaveRef.current = null;
     };
   }, [selectedAccount?.id, to, cc, bcc, subject, bodyHtml, signatureId, draftId, uploadGeneration]);
@@ -454,11 +462,11 @@ export const ComposerView: React.FC<ComposerViewProps> = ({ accounts, defaultAcc
       <button type="button" className="btn-send-main" onClick={handleSend}>Send</button><button type="button" className="btn btn-secondary" style={{ padding: '8px 14px' }} onClick={handleDiscard}>Discard</button><button type="button" className="btn btn-secondary" style={{ padding: '8px 14px' }} onClick={() => void handleSaveDraftAndClose().catch((e) => setStatus(`Draft save failed: ${e.message}`))}>Save Draft</button>
     </div></div>
     <div style={{ flex: 1, padding: '14px', display: 'flex', justifyContent: 'center', overflowY: 'auto' }}><div className="card" style={{ width: '100%', display: 'flex', flexDirection: 'column', height: '100%', padding: 0, overflow: 'hidden' }}>
-      <div style={{ padding: '14px 18px 0' }}><div className="compose-header"><div className="from-selector"><span style={{ color: 'var(--neutral-body)' }}>From:</span><select className="input-base" value={fromMailboxId} onChange={(e) => setFromMailboxId(e.target.value)}>{accounts.map((a) => <option key={a.id} value={a.id}>{a.name && a.name !== a.address ? `${a.name} <${a.address}>` : a.address}</option>)}</select><span style={{ color: 'var(--neutral-body)' }}>Signature:</span><select className="input-base" value={signatureId} onChange={(e) => setSignatureId(e.target.value)}><option value="">None</option>{signatures.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
-      <div className="compose-row"><div className="pill-label">To</div><input className="compose-input" placeholder="Enter recipients..." value={to} onChange={(e) => setTo(e.target.value)} /><button type="button" className="btn btn-outline" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => setContactPickerTarget('to')}>Contacts</button><button type="button" className="btn btn-ghost" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => setShowCc((v) => !v)}>Cc</button><button type="button" className="btn btn-ghost" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => setShowBcc((v) => !v)}>Bcc</button></div>
-      {showCc && <div className="compose-row"><div className="pill-label">Cc</div><input className="compose-input" placeholder="Cc recipients..." value={cc} onChange={(e) => setCc(e.target.value)} /><button type="button" className="btn btn-outline" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => setContactPickerTarget('cc')}>Contacts</button></div>}
-      {showBcc && <div className="compose-row"><div className="pill-label">Bcc</div><input className="compose-input" placeholder="Bcc recipients..." value={bcc} onChange={(e) => setBcc(e.target.value)} /><button type="button" className="btn btn-outline" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => setContactPickerTarget('bcc')}>Contacts</button></div>}
-      <div className="compose-row" style={{ paddingBottom: 10 }}><input className="subject-input" placeholder="Add a subject" value={subject} onChange={(e) => setSubject(e.target.value)} style={{ fontSize: '1.15rem', padding: '6px 8px' }} /></div></div></div>
+      <div style={{ padding: '14px 18px 0' }}><div className="compose-header"><div className="from-selector"><span style={{ color: 'var(--neutral-body)' }}>From:</span><select className="input-base" value={fromMailboxId} onChange={(e) => { dirtyRef.current = true; setFromMailboxId(e.target.value); }}>{accounts.map((a) => <option key={a.id} value={a.id}>{a.name && a.name !== a.address ? `${a.name} <${a.address}>` : a.address}</option>)}</select><span style={{ color: 'var(--neutral-body)' }}>Signature:</span><select className="input-base" value={signatureId} onChange={(e) => { dirtyRef.current = true; setSignatureId(e.target.value); }}><option value="">None</option>{signatures.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
+      <div className="compose-row"><div className="pill-label">To</div><input className="compose-input" placeholder="Enter recipients..." value={to} onChange={(e) => { dirtyRef.current = true; setTo(e.target.value); }} /><button type="button" className="btn btn-outline" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => setContactPickerTarget('to')}>Contacts</button><button type="button" className="btn btn-ghost" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => setShowCc((v) => !v)}>Cc</button><button type="button" className="btn btn-ghost" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => setShowBcc((v) => !v)}>Bcc</button></div>
+      {showCc && <div className="compose-row"><div className="pill-label">Cc</div><input className="compose-input" placeholder="Cc recipients..." value={cc} onChange={(e) => { dirtyRef.current = true; setCc(e.target.value); }} /><button type="button" className="btn btn-outline" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => setContactPickerTarget('cc')}>Contacts</button></div>}
+      {showBcc && <div className="compose-row"><div className="pill-label">Bcc</div><input className="compose-input" placeholder="Bcc recipients..." value={bcc} onChange={(e) => { dirtyRef.current = true; setBcc(e.target.value); }} /><button type="button" className="btn btn-outline" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => setContactPickerTarget('bcc')}>Contacts</button></div>}
+      <div className="compose-row" style={{ paddingBottom: 10 }}><input className="subject-input" placeholder="Add a subject" value={subject} onChange={(e) => { dirtyRef.current = true; setSubject(e.target.value); }} style={{ fontSize: '1.15rem', padding: '6px 8px' }} /></div></div></div>
 
     {contactPickerTarget && (
       <ContactPickerDialog
@@ -14272,6 +14280,7 @@ export const ComposerView: React.FC<ComposerViewProps> = ({ accounts, defaultAcc
           const files = Array.from(e.target.files ?? []);
           pendingAttachmentsRef.current = files;
           setPendingAttachments(files);
+          dirtyRef.current = true;
           setUploadError(null);
         }}
       />
@@ -14288,7 +14297,7 @@ export const ComposerView: React.FC<ComposerViewProps> = ({ accounts, defaultAcc
           role="textbox"
           aria-multiline="true"
           data-placeholder="Type your message here..."
-          onInput={() => setBodyHtml(currentHtml())}
+          onInput={() => { dirtyRef.current = true; setBodyHtml(currentHtml()); }}
           onMouseUp={() => selectImageFromSelection()}
           onKeyUp={() => selectImageFromSelection()}
           onContextMenu={(e) => {

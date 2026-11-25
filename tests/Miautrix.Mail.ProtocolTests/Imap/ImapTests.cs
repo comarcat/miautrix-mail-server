@@ -108,8 +108,14 @@ public sealed class ImapTests : IDisposable
         });
         await _dbContext.SaveChangesAsync();
 
-        var session = new ImapSession(_dbContext, _storage, new StubImapAuthenticator(tenantId, mailboxId), new AllowTestAuthorization(),
-            uidAllocator: new Miautrix.Mail.Application.Mail.MessageUidAllocator(_dbContext));
+        var authorization = new AllowTestAuthorization();
+        var allocator = new Miautrix.Mail.Application.Mail.MessageUidAllocator(_dbContext);
+        var mailboxes = new Miautrix.Mail.Application.Mail.MailboxService(_dbContext, authorization, new Miautrix.Mail.Persistence.EfPermissionRepository(_dbContext));
+        var messageService = new Miautrix.Mail.Application.Mail.MessageService(_dbContext, authorization, mailboxes, allocator, _storage,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<Miautrix.Mail.Application.Mail.MessageService>.Instance,
+            mimeParser: new Miautrix.Mail.Infrastructure.Mail.MimeKitMimeMessageParser());
+        var session = new ImapSession(_dbContext, _storage, new StubImapAuthenticator(tenantId, mailboxId), authorization,
+            mailboxService: mailboxes, messageService: messageService, uidAllocator: allocator);
 
         // Act 1: Login
         var loginResult = await session.ExecuteCommandAsync($"a001 LOGIN \"{address}\" \"secret\"");
@@ -168,8 +174,12 @@ public sealed class ImapTests : IDisposable
 
         var authz = new RecordingMailboxAuthorization(sharedMailboxId);
         var mailboxes = new Miautrix.Mail.Application.Mail.MailboxService(_dbContext, authz, new EfPermissionRepository(_dbContext));
+        var allocator = new Miautrix.Mail.Application.Mail.MessageUidAllocator(_dbContext);
+        var messageService = new Miautrix.Mail.Application.Mail.MessageService(_dbContext, authz, mailboxes, allocator, _storage,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<Miautrix.Mail.Application.Mail.MessageService>.Instance,
+            mimeParser: new Miautrix.Mail.Infrastructure.Mail.MimeKitMimeMessageParser());
         var session = new ImapSession(_dbContext, _storage, new StubImapAuthenticator(tenantId, ownMailboxId), authz, mailboxes,
-            uidAllocator: new Miautrix.Mail.Application.Mail.MessageUidAllocator(_dbContext));
+            messageService: messageService, uidAllocator: allocator);
         Assert.Equal("OK", (await session.ExecuteCommandAsync($"a001 LOGIN \"{own.Address}\" \"secret\"")).Status);
 
         var list = await session.ExecuteCommandAsync("a001b LIST \"\" \"*\"");
@@ -206,6 +216,146 @@ public sealed class ImapTests : IDisposable
         Assert.Contains("UID 1", fetchHeader);
     }
 
+    [Fact]
+    public async Task Imap_AppendDrafts_PopulatesWebmailDetailForMimeVariantsAndSharedDrafts()
+    {
+        var tenantId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var domainId = Guid.NewGuid();
+        var personalId = Guid.NewGuid();
+        var sharedId = Guid.NewGuid();
+        var address = $"drafts-{Guid.NewGuid():N}@miautrix.local";
+        var sharedAddress = $"shared-{Guid.NewGuid():N}@miautrix.local";
+        var now = DateTimeOffset.UtcNow;
+        _dbContext.AddRange(
+            new Tenant { Id = tenantId, Slug = "append-drafts-" + Guid.NewGuid().ToString("N") },
+            new DomainEntity { Id = domainId, TenantId = tenantId, Name = "miautrix.local" },
+            new Mailbox { Id = personalId, TenantId = tenantId, DomainId = domainId, Address = address, Kind = "user", IsActive = true },
+            new Mailbox { Id = sharedId, TenantId = tenantId, DomainId = domainId, Address = sharedAddress, Kind = "shared", IsActive = true },
+            new Folder { Id = Guid.NewGuid(), TenantId = tenantId, MailboxId = personalId, Name = "Drafts", Role = "drafts", UidNext = 1, UidValidity = 101 },
+            new Folder { Id = Guid.NewGuid(), TenantId = tenantId, MailboxId = sharedId, Name = "Drafts", Role = "drafts", UidNext = 1, UidValidity = 102 },
+            new Folder { Id = Guid.NewGuid(), TenantId = tenantId, MailboxId = personalId, Name = "INBOX", Role = "inbox", UidNext = 1, UidValidity = 103 });
+        await _dbContext.SaveChangesAsync();
+
+        var auth = new AllowTestAuthorization();
+        var allocator = new Miautrix.Mail.Application.Mail.MessageUidAllocator(_dbContext);
+        var mailboxes = new Miautrix.Mail.Application.Mail.MailboxService(_dbContext, auth, new Miautrix.Mail.Persistence.EfPermissionRepository(_dbContext));
+        var service = new Miautrix.Mail.Application.Mail.MessageService(_dbContext, auth, mailboxes, allocator, _storage,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<Miautrix.Mail.Application.Mail.MessageService>.Instance,
+            mimeParser: new Miautrix.Mail.Infrastructure.Mail.MimeKitMimeMessageParser());
+        var session = new ImapSession(_dbContext, _storage, new StubImapAuthenticator(tenantId, personalId, userId), auth,
+            mailboxes, service, uidAllocator: allocator);
+        Assert.Equal("OK", (await session.ExecuteCommandAsync($"d001 LOGIN \"{address}\" secret")).Status);
+
+        var plain = $"From: sender@example.test\r\nTo: {address}\r\nCc: copy@example.test\r\nSubject: Plain draft\r\n\r\nplain body π";
+        var html = $"From: sender@example.test\r\nTo: {address}\r\nSubject: HTML draft\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<b>html body</b>";
+        var attachment = $"From: sender@example.test\r\nTo: {address}\r\nSubject: Multipart\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=part42\r\n\r\n--part42\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nmultipart body\r\n--part42\r\nContent-Type: text/plain; name=note.txt\r\nContent-Disposition: attachment; filename=note.txt\r\nContent-Transfer-Encoding: base64\r\n\r\ndGVzdCBmaWxl\r\n--part42--\r\n";
+        var folded = $"From: sender@example.test\r\nTo: {address},\r\n other@example.test\r\nSubject: Café folded\r\n\r\nfolded body";
+        await AppendToDraftsAsync("Drafts", plain, "\\Draft");
+        await AppendToDraftsAsync("Drafts", html, "\\Draft");
+        await AppendToDraftsAsync("Drafts", attachment, "\\Draft");
+        await AppendToDraftsAsync("Drafts", folded, "\\Draft");
+        await AppendToDraftsAsync($"Shared/{sharedAddress}/Drafts", plain.Replace("Plain draft", "Shared draft", StringComparison.Ordinal), "\\Draft");
+
+        var personalDrafts = await _dbContext.Folders.SingleAsync(f => f.MailboxId == personalId && f.Role == "drafts");
+        var messages = await _dbContext.Messages.Where(m => m.FolderId == personalDrafts.Id).OrderBy(m => m.Uid).ToListAsync();
+        Assert.Equal(new[] { "Plain draft", "HTML draft", "Multipart", "Café folded" }, messages.Select(m => m.Subject));
+        Assert.Equal("plain body π", messages[0].BodyText);
+        Assert.Null(messages[1].BodyText);
+        Assert.Contains("<b>html body</b>", messages[1].BodyHtml ?? string.Empty);
+        Assert.Equal("multipart body", messages[2].BodyText);
+        Assert.Equal("Café folded", messages[3].Subject);
+        Assert.Equal("other@example.test", messages[3].Recipient.Split(',')[1].Trim());
+        await using (var storedMessage = await _storage.OpenReadAsync(messages[2].ContentHash))
+            Assert.Equal(messages[2].SizeBytes, storedMessage!.Length);
+        var detail = await service.GetMessageAsync(tenantId, userId, personalId, messages[2].Id);
+        Assert.NotNull(detail);
+        Assert.Equal("multipart body", detail.BodyText);
+        Assert.Contains("copy@example.test", (await service.GetMessageAsync(tenantId, userId, personalId, messages[0].Id))!.Cc!);
+        Assert.Single(detail.Attachments);
+        Assert.Equal("note.txt", detail.Attachments[0].FileName);
+        var sharedDraft = await _dbContext.Messages.SingleAsync(m => m.MailboxId == sharedId);
+        var sharedDetail = await service.GetMessageAsync(tenantId, userId, sharedId, sharedDraft.Id);
+        Assert.NotNull(sharedDetail);
+        Assert.Equal("Shared draft", sharedDetail.Subject);
+        Assert.Contains(address, sharedDetail.Recipient);
+        Assert.Contains("plain body", sharedDetail.BodyText);
+
+        async Task AppendToDraftsAsync(string folderPath, string raw, string flags)
+        {
+            var bytes = Encoding.UTF8.GetBytes(raw);
+            using var literal = new MemoryStream(bytes);
+            var result = await session.ExecuteCommandAsync($"APP{Guid.NewGuid():N}"[..4] + $" APPEND \"{folderPath}\" ({flags}) {{{bytes.Length}}}", literal);
+            Assert.Equal("OK", result.Status);
+        }
+    }
+
+    [Fact]
+    public async Task MessageReparse_BackfillsLegacyAppendDraftBodyFields()
+    {
+        var tenantId = Guid.NewGuid();
+        var mailboxId = Guid.NewGuid();
+        var domainId = Guid.NewGuid();
+        var folderId = Guid.NewGuid();
+        var messageId = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+        var address = $"reparse-{Guid.NewGuid():N}@miautrix.local";
+        _dbContext.AddRange(
+            new Tenant { Id = tenantId, Slug = "reparse-" + Guid.NewGuid().ToString("N") },
+            new DomainEntity { Id = domainId, TenantId = tenantId, Name = "miautrix.local" },
+            new Mailbox { Id = mailboxId, TenantId = tenantId, DomainId = domainId, Address = address, IsActive = true },
+            new Folder { Id = folderId, TenantId = tenantId, MailboxId = mailboxId, Name = "Drafts", Role = "drafts", UidNext = 2, UidValidity = 201 });
+        await _dbContext.SaveChangesAsync();
+        var raw = Encoding.UTF8.GetBytes($"From: sender@example.test\r\nTo: {address}\r\nSubject: old draft\r\n\r\nbackfilled body");
+        await using var rawStream = new MemoryStream(raw, writable: false);
+        var stored = await _storage.StoreAsync(rawStream);
+        _dbContext.Messages.Add(new Message { Id = messageId, TenantId = tenantId, MailboxId = mailboxId, FolderId = folderId,
+            Sender = "sender@example.test", Recipient = address, Subject = "old draft", Date = now, ContentHash = stored.ContentHash,
+            StoragePath = stored.StoragePath, SizeBytes = stored.SizeBytes, Flags = "\\Draft", Uid = 1,
+            BodyText = null, BodyHtml = null, CreatedAt = now, UpdatedAt = now });
+        await _dbContext.SaveChangesAsync();
+
+        var parser = new Miautrix.Mail.Infrastructure.Mail.MimeKitMimeMessageParser();
+        var reparse = new Miautrix.Mail.Application.Mail.MessageReparseService(_dbContext, _storage, parser, new AllowTestAuthorization());
+        var result = await reparse.ReparseAsync(tenantId, null, null, dryRun: false);
+
+        Assert.Equal(1, result.Updated);
+        var backfilled = await _dbContext.Messages.SingleAsync(m => m.Id == messageId);
+        Assert.Equal("backfilled body", backfilled.BodyText?.TrimEnd());
+    }
+
+    [Fact]
+    public async Task SharedDraftSave_RequiresWriteDelegateButDoesNotRequireSendAs()
+    {
+        var tenantId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var domainId = Guid.NewGuid();
+        var mailboxId = Guid.NewGuid();
+        var folderId = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+        var address = $"shared-drafts-{Guid.NewGuid():N}@miautrix.local";
+        _dbContext.AddRange(new Tenant { Id = tenantId, Slug = "shared-drafts-" + Guid.NewGuid().ToString("N") },
+            new DomainEntity { Id = domainId, TenantId = tenantId, Name = "miautrix.local" },
+            new Mailbox { Id = mailboxId, TenantId = tenantId, DomainId = domainId, Address = address, Kind = "shared", IsActive = true },
+            new Folder { Id = folderId, TenantId = tenantId, MailboxId = mailboxId, Name = "Drafts", Role = "drafts", UidNext = 1, UidValidity = 301 });
+        await _dbContext.SaveChangesAsync();
+        var access = new TestDelegatePermissionRepository("read");
+        var auth = new Miautrix.Mail.Security.TenantAuthorizationHelper(access, new Miautrix.Mail.Identity.InMemorySecurityEventSink());
+        var allocator = new Miautrix.Mail.Application.Mail.MessageUidAllocator(_dbContext);
+        var mailboxes = new Miautrix.Mail.Application.Mail.MailboxService(_dbContext, auth, new Miautrix.Mail.Persistence.EfPermissionRepository(_dbContext));
+        var service = new Miautrix.Mail.Application.Mail.MessageService(_dbContext, auth, mailboxes, allocator, _storage,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<Miautrix.Mail.Application.Mail.MessageService>.Instance,
+            mimeParser: new Miautrix.Mail.Infrastructure.Mail.MimeKitMimeMessageParser());
+        var request = new Miautrix.Mail.Application.Mail.DraftMessageRequest(null, address, Array.Empty<string>(), null, null, "Shared draft", "saved without Send As", null);
+
+        await Assert.ThrowsAsync<Miautrix.Mail.Security.ResourceNotFoundException>(() => service.UpsertDraftAsync(tenantId, userId, mailboxId, request));
+        Assert.Empty(await _dbContext.Messages.Where(m => m.MailboxId == mailboxId).ToListAsync());
+        access.Access = "write";
+        var saved = await service.UpsertDraftAsync(tenantId, userId, mailboxId, request);
+        Assert.True(saved.Success);
+        Assert.Equal(1, await _dbContext.Messages.CountAsync(m => m.MailboxId == mailboxId && m.FolderId == folderId));
+    }
+
     /// <summary>
     /// Stands in for credential verification so the APPEND/FETCH tests stay focused on
     /// protocol behaviour. Credential checks themselves are covered by
@@ -215,16 +365,18 @@ public sealed class ImapTests : IDisposable
     {
         private readonly Guid _tenantId;
         private readonly Guid _mailboxId;
+        private readonly Guid _userId;
 
-        public StubImapAuthenticator(Guid tenantId, Guid mailboxId)
+        public StubImapAuthenticator(Guid tenantId, Guid mailboxId, Guid? userId = null)
         {
             _tenantId = tenantId;
             _mailboxId = mailboxId;
+            _userId = userId ?? Guid.NewGuid();
         }
 
         public Task<ImapAuthenticationResult> AuthenticateAsync(
             string username, string password, CancellationToken cancellationToken = default)
-            => Task.FromResult(new ImapAuthenticationResult(true, _tenantId, _mailboxId, Guid.NewGuid()));
+            => Task.FromResult(new ImapAuthenticationResult(true, _tenantId, _mailboxId, _userId));
     }
 
     private sealed class AllowTestAuthorization : ITenantAuthorizationHelper
@@ -246,5 +398,16 @@ public sealed class ImapTests : IDisposable
             Checks.Add((mailbox.Id, requireWrite));
         }
         public void ValidateOwnerDemotion(Guid tenantId, Guid targetUserId) { }
+    }
+
+    private sealed class TestDelegatePermissionRepository(string? access) : Miautrix.Mail.Security.IPermissionRepository
+    {
+        public string? Access { get; set; } = access;
+        public bool HasPermission(Guid tenantId, Guid userId, string permissionCode) => false;
+        public int GetTenantOwnerCount(Guid tenantId) => 0;
+        public bool IsUserTenantOwner(Guid tenantId, Guid userId) => false;
+        public bool IsMailboxOwner(Guid tenantId, Guid userId, Guid mailboxId) => false;
+        public string? GetMailboxDelegateAccess(Guid tenantId, Guid userId, Guid mailboxId) => Access;
+        public string GetMailboxEffectiveAccess(Guid tenantId, Guid userId, Mailbox mailbox) => Access ?? "none";
     }
 }
