@@ -60,6 +60,8 @@ public sealed class DmarcEvaluationTests
         var dns = new FakeDnsResolver();
         Assert.Equal("none", (await Evaluate(dns, "sender@invalid.test", "From: a@example.test\r\n\r\nbody\r\n")).Dmarc.Result);
         Assert.Equal("fail", (await Evaluate(dns, "sender@invalid.test", "From: a@example.test, b@example.org\r\n\r\nbody\r\n")).Dmarc.Result);
+        dns.Txt["_dmarc." + FromDomain] = ["v=DMARC1; p=none", "v=DMARC1; p=reject"];
+        Assert.Equal("permerror", (await Evaluate(dns, "sender@invalid.test", $"From: a@{FromDomain}\r\n\r\nbody\r\n")).Dmarc.Result);
     }
 
     private static FakeDnsResolver DnsWithDmarc(string record)

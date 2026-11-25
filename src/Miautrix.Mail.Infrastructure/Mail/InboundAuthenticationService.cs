@@ -79,7 +79,8 @@ public sealed class InboundAuthenticationService : IInboundAuthenticationService
         var from = fromDomains[0];
         if (spf.Result == "temperror" || dkim.Any(signature => signature.Result == "temperror"))
             return new("temperror", from, null, "none", []);
-        string? record = await FindDmarcRecord(from, ct);
+        var (record, multipleRecords) = await FindDmarcRecord(from, ct);
+        if (multipleRecords) return new("permerror", from, null, "none", []);
         string? policyDomain = from;
         if (record is null)
         {
@@ -87,7 +88,8 @@ public sealed class InboundAuthenticationService : IInboundAuthenticationService
             if (org is not null && !org.Equals(from, StringComparison.OrdinalIgnoreCase))
             {
                 policyDomain = org;
-                record = await FindDmarcRecord(org, ct);
+                (record, multipleRecords) = await FindDmarcRecord(org, ct);
+                if (multipleRecords) return new("permerror", from, null, "none", []);
             }
         }
         if (record is null) return new("none", from, null, "none", []);
@@ -98,7 +100,10 @@ public sealed class InboundAuthenticationService : IInboundAuthenticationService
             foreach (var item in record.Split(';').Select(x => x.Trim()).Where(x => x.Contains('=')))
             {
                 var pair = item.Split('=', 2);
-                if (!tags.TryAdd(pair[0].Trim(), pair[1].Trim())) return new("permerror", from, null, "none", []);
+                var key = pair[0].Trim();
+                var tagValue = pair[1].Trim();
+                if (key.Equals("p", StringComparison.OrdinalIgnoreCase) || key.Equals("sp", StringComparison.OrdinalIgnoreCase) || key.Equals("adkim", StringComparison.OrdinalIgnoreCase) || key.Equals("aspf", StringComparison.OrdinalIgnoreCase)) tagValue = tagValue.ToLowerInvariant();
+                if (!tags.TryAdd(key, tagValue)) return new("permerror", from, null, "none", []);
             }
             if (!tags.TryGetValue("p", out var policy) || policy is not ("none" or "quarantine" or "reject")) return new("permerror", from, null, "none", []);
             if (tags.GetValueOrDefault("v")?.Equals("DMARC1", StringComparison.OrdinalIgnoreCase) != true) return new("permerror", from, null, "none", []);
@@ -119,11 +124,11 @@ public sealed class InboundAuthenticationService : IInboundAuthenticationService
         return new("fail", from, p, disposition, aligned, spPolicy, pct);
     }
 
-    private async Task<string?> FindDmarcRecord(string domain, CancellationToken ct)
+    private async Task<(string? Record, bool Multiple)> FindDmarcRecord(string domain, CancellationToken ct)
     {
         var txt = await dns.GetTxtAsync("_dmarc." + domain, ct);
         var records = txt.Where(x => x.StartsWith("v=DMARC1", StringComparison.OrdinalIgnoreCase)).ToArray();
-        return records.Length == 1 ? records[0] : null;
+        return (records.Length == 1 ? records[0] : null, records.Length > 1);
     }
 
     private async Task<IReadOnlyList<DkimAuthenticationResult>> EvaluateDkim(string raw, CancellationToken ct)
