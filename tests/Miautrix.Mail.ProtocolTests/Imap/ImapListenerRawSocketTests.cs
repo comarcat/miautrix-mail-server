@@ -146,7 +146,7 @@ public sealed class ImapListenerRawSocketTests
         using var provider = services.BuildServiceProvider();
         var service = new ImapListenerService(provider.GetRequiredService<IServiceScopeFactory>(), storage,
             provider.GetRequiredService<ILogger<ImapListenerService>>(), new TlsCertificateProvider(certificate), port: 0,
-            idleTimeout: TimeSpan.FromSeconds(4), idlePollInterval: TimeSpan.FromMilliseconds(200));
+            idleTimeout: TimeSpan.FromSeconds(4), idlePollInterval: TimeSpan.FromMilliseconds(200), maxLiteralBytes: 8192);
         using var stopping = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         await service.StartAsync(stopping.Token);
         Assert.True(SpinWait.SpinUntil(() => service.BoundPort != 0, TimeSpan.FromSeconds(5)), "IMAP test listener did not bind.");
@@ -166,10 +166,18 @@ public sealed class ImapListenerRawSocketTests
                 Assert.Contains(capability, capabilityText);
             Assert.DoesNotContain("LOGINDISABLED", capabilityText);
             Assert.Equal("A0a BAD STARTTLS is not available on an Implicit TLS port\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A0a STARTTLS", "A0a", stopping.Token)));
+            Assert.Equal("A0b BAD LIST is not valid in the NotAuthenticated state\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A0b LIST \"\" \"*\"", "A0b", stopping.Token)));
+            Assert.Equal("A0c NO [AUTHENTICATIONFAILED] LOGIN failed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, $"A0c LOGIN {address} bad-password", "A0c", stopping.Token)));
+            var badPasswordSasl = Convert.ToBase64String(Encoding.UTF8.GetBytes($"\0{address}\0bad-password"));
+            Assert.Equal("A0c1 NO [AUTHENTICATIONFAILED] Authentication failed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, $"A0c1 AUTHENTICATE PLAIN {badPasswordSasl}", "A0c1", stopping.Token)));
+            var mismatchedAuthz = Convert.ToBase64String(Encoding.UTF8.GetBytes($"other@invalid\0{address}\0test-password"));
+            Assert.Equal("A0d NO [AUTHORIZATIONFAILED] Cannot act as the requested authorization identity\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, $"A0d AUTHENTICATE PLAIN {mismatchedAuthz}", "A0d", stopping.Token)));
 
             var sasl = Convert.ToBase64String(Encoding.UTF8.GetBytes($"\0{address}\0test-password"));
             var authResult = await SendAndReadAsync(tls, reader, $"A1 AUTHENTICATE PLAIN {sasl}", "A1", stopping.Token);
             Assert.Contains("A1 OK", Encoding.UTF8.GetString(authResult));
+            Assert.Equal("A1a0 NO [NONEXISTENT] Mailbox does not exist\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A1a0 DELETE MissingFolder", "A1a0", stopping.Token)));
+            Assert.Equal("A1a1 NO [NONEXISTENT] Mailbox does not exist\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A1a1 RENAME MissingFolder OtherFolder", "A1a1", stopping.Token)));
             var namespaceResponse = await SendAndReadAsync(tls, reader, "A1aa NAMESPACE", "A1aa", stopping.Token);
             Assert.Equal("* NAMESPACE ((\"\" \"/\")) NIL ((\"Shared/\" \"/\"))\r\nA1aa OK NAMESPACE completed\r\n", Encoding.UTF8.GetString(namespaceResponse));
             var utf8BeforeEnable = await SendAndReadAsync(tls, reader, "A1a LIST \"\" \"Café\"", "A1a", stopping.Token);
@@ -223,6 +231,10 @@ public sealed class ImapListenerRawSocketTests
             Assert.Contains("A2f OK SUBSCRIBE completed", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A2f SUBSCRIBE INBOX", "A2f", stopping.Token)));
             Assert.Contains("* LSUB", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A2g LSUB \"\" \"INBOX\"", "A2g", stopping.Token)));
             Assert.Contains("A2h OK CREATE completed", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A2h CREATE FreshFolder", "A2h", stopping.Token)));
+            Assert.Contains("A2h1 OK [READ-WRITE] SELECT completed", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A2h1 SELECT FreshFolder", "A2h1", stopping.Token)));
+            Assert.Equal("A2h2 NO [INUSE] Mailbox is selected\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A2h2 DELETE FreshFolder", "A2h2", stopping.Token)));
+            Assert.Equal("A2h3 NO [INUSE] Mailbox is selected\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A2h3 RENAME FreshFolder OtherFolder", "A2h3", stopping.Token)));
+            Assert.Contains("A2h4 OK UNSELECT completed", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A2h4 UNSELECT", "A2h4", stopping.Token)));
             Assert.Contains("FreshFolder", Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A2i LSUB \"\" \"FreshFolder\"", "A2i", stopping.Token)));
             var duplicateCreate = Encoding.UTF8.GetString(await SendAndReadAsync(tls, reader, "A2i1 CREATE FreshFolder", "A2i1", stopping.Token));
             Assert.Contains("NO [ALREADYEXISTS]", duplicateCreate);
@@ -842,6 +854,16 @@ public sealed class ImapListenerRawSocketTests
                 await rev1Tls.WriteAsync(rev1Literal, stopping.Token);
                 await rev1Tls.WriteAsync("\r\n"u8.ToArray(), stopping.Token);
                 Assert.StartsWith("R3b OK", Encoding.UTF8.GetString(await ReadResponseAsync(rev1Reader, "R3b", stopping.Token)));
+                await SendAndReadAsync(rev1Tls, rev1Reader, "R3c SELECT INBOX", "R3c", stopping.Token);
+                Assert.Equal("* 1 FETCH (FLAGS ($Forwarded $MDNSent $Junk $Phishing \\Recent))\r\nR3d OK STORE completed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev1Tls, rev1Reader, "R3d STORE 1 FLAGS ($Forwarded $MDNSent $Junk $Phishing)", "R3d", stopping.Token)));
+                Assert.Equal("* SEARCH 1\r\nR3e OK SEARCH completed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev1Tls, rev1Reader, "R3e SEARCH KEYWORD $Forwarded", "R3e", stopping.Token)));
+                Assert.Equal("* SEARCH 1\r\nR3f OK SEARCH completed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev1Tls, rev1Reader, "R3f SEARCH KEYWORD $MDNSent", "R3f", stopping.Token)));
+                Assert.Equal("* SEARCH 1\r\nR3g OK SEARCH completed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev1Tls, rev1Reader, "R3g SEARCH KEYWORD $Junk", "R3g", stopping.Token)));
+                Assert.Equal("* SEARCH 1\r\nR3h OK SEARCH completed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev1Tls, rev1Reader, "R3h SEARCH KEYWORD $Phishing", "R3h", stopping.Token)));
+                await SendAndReadAsync(rev1Tls, rev1Reader, "R3i STORE 1 -FLAGS ($Junk)", "R3i", stopping.Token);
+                await SendAndReadAsync(rev1Tls, rev1Reader, "R3j STORE 1 +FLAGS ($NotJunk)", "R3j", stopping.Token);
+                Assert.Equal("* SEARCH 1\r\nR3k OK SEARCH completed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev1Tls, rev1Reader, "R3k SEARCH KEYWORD $NotJunk", "R3k", stopping.Token)));
+                Assert.Equal("R3l NO [TOOBIG] Literal too large\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev1Tls, rev1Reader, "R3l APPEND INBOX {8193}", "R3l", stopping.Token)));
             }
             using (var rev2Client = new TcpClient())
             {
@@ -860,6 +882,7 @@ public sealed class ImapListenerRawSocketTests
                 }
                 var rev2Select = Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R6 SELECT FreshFolder", "R6", stopping.Token));
                 Assert.DoesNotContain(" RECENT", rev2Select);
+                Assert.Contains("* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft \\*)] Permanent flags", rev2Select);
                 Assert.Equal("* ESEARCH (TAG \"R7\")\r\nR7 OK SEARCH completed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R7 SEARCH ALL", "R7", stopping.Token)));
                 Assert.Equal("* ESEARCH (TAG \"R8\") UID\r\nR8 OK SEARCH completed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R8 UID SEARCH ALL", "R8", stopping.Token)));
                 Assert.Contains("BAD RECENT is not available in IMAP4rev2", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R9 STATUS FreshFolder (RECENT)", "R9", stopping.Token)));
@@ -891,15 +914,40 @@ public sealed class ImapListenerRawSocketTests
                 Assert.Equal("* STATUS \"FreshFolder\" (MESSAGES 0 DELETED 0 SIZE 0)\r\nR21 OK STATUS completed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R21 STATUS FreshFolder (MESSAGES SIZE DELETED)", "R21", stopping.Token)));
                 Assert.Equal("* LIST (\\HasNoChildren \\Subscribed) \"/\" \"FreshFolder\"\r\n* STATUS \"FreshFolder\" (MESSAGES 0 SIZE 0)\r\nR22 OK LIST completed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R22 LIST (SUBSCRIBED) \"\" \"FreshFolder\" RETURN (SUBSCRIBED CHILDREN SPECIAL-USE STATUS (MESSAGES SIZE))", "R22", stopping.Token)));
                 await SendAndReadAsync(rev2Tls, rev2Reader, "R23 SELECT ImapRenamedInbox", "R23", stopping.Token);
+                Assert.Equal("* 1 FETCH (FLAGS ($Forwarded $MDNSent $Junk $Phishing))\r\nR23a OK STORE completed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R23a STORE 1 FLAGS ($Forwarded $MDNSent $Junk $Phishing)", "R23a", stopping.Token)));
+                Assert.Equal("* ESEARCH (TAG \"R23b\") ALL 1\r\nR23b OK SEARCH completed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R23b SEARCH RETURN (ALL) KEYWORD $Forwarded", "R23b", stopping.Token)));
+                Assert.Equal("* ESEARCH (TAG \"R23c\") ALL 1\r\nR23c OK SEARCH completed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R23c SEARCH RETURN (ALL) KEYWORD $MDNSent", "R23c", stopping.Token)));
+                Assert.Equal("* ESEARCH (TAG \"R23d\") ALL 1\r\nR23d OK SEARCH completed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R23d SEARCH RETURN (ALL) KEYWORD $Junk", "R23d", stopping.Token)));
+                Assert.Equal("* ESEARCH (TAG \"R23e\") ALL 1\r\nR23e OK SEARCH completed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R23e SEARCH RETURN (ALL) KEYWORD $Phishing", "R23e", stopping.Token)));
+                await SendAndReadAsync(rev2Tls, rev2Reader, "R23f STORE 1 -FLAGS ($Junk)", "R23f", stopping.Token);
+                await SendAndReadAsync(rev2Tls, rev2Reader, "R23g STORE 1 +FLAGS ($NotJunk)", "R23g", stopping.Token);
+                Assert.Equal("* ESEARCH (TAG \"R23h\") ALL 1\r\nR23h OK SEARCH completed\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R23h SEARCH RETURN (ALL) KEYWORD $NotJunk", "R23h", stopping.Token)));
                 var binaryFetch = Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R24 FETCH 1 (BINARY[1] BINARY.SIZE[1] BINARY.PEEK[1])", "R24", stopping.Token));
                 Assert.Contains("BINARY[1] {", binaryFetch);
                 Assert.Contains("BINARY.SIZE[1] ", binaryFetch);
                 Assert.Contains("BINARY[1] {", binaryFetch);
-                var rev2Literal = Encoding.UTF8.GetBytes($"From: sender@test.invalid\r\nTo: {address}\r\nSubject: rev2 literal minus\r\n\r\nbody");
-                await rev2Tls.WriteAsync(Encoding.ASCII.GetBytes($"R25 APPEND INBOX {{{rev2Literal.Length}}}\r\n"), stopping.Token);
-                await rev2Tls.WriteAsync(rev2Literal, stopping.Token);
+                var literalPrefix = Encoding.ASCII.GetBytes($"From: sender@test.invalid\r\nTo: {address}\r\nSubject: rev2 literal minus\r\n\r\n");
+                var literal4096 = literalPrefix.Concat(Encoding.ASCII.GetBytes(new string('x', 4096 - literalPrefix.Length))).ToArray();
+                Assert.Equal(4096, literal4096.Length);
+                await rev2Tls.WriteAsync(Encoding.ASCII.GetBytes($"R25 APPEND ImapRenamedInbox {{{literal4096.Length}}}\r\n"), stopping.Token);
+                await rev2Tls.WriteAsync(literal4096, stopping.Token);
                 await rev2Tls.WriteAsync("\r\n"u8.ToArray(), stopping.Token);
                 Assert.StartsWith("R25 OK", Encoding.UTF8.GetString(await ReadResponseAsync(rev2Reader, "R25", stopping.Token)));
+                var literal4097 = literalPrefix.Concat(Encoding.ASCII.GetBytes(new string('y', 4097 - literalPrefix.Length))).ToArray();
+                Assert.Equal(4097, literal4097.Length);
+                await rev2Tls.WriteAsync(Encoding.ASCII.GetBytes($"R26 APPEND ImapRenamedInbox {{{literal4097.Length}}}\r\n"), stopping.Token);
+                Assert.Equal("+ Ready for literal data", Encoding.ASCII.GetString(await rev2Reader.ReadLineAsync(stopping.Token) ?? []));
+                await rev2Tls.WriteAsync(literal4097, stopping.Token);
+                await rev2Tls.WriteAsync("\r\n"u8.ToArray(), stopping.Token);
+                Assert.StartsWith("R26 OK", Encoding.UTF8.GetString(await ReadResponseAsync(rev2Reader, "R26", stopping.Token)));
+                var unknownCte = Encoding.ASCII.GetBytes($"From: sender@test.invalid\r\nTo: {address}\r\nSubject: unknown CTE\r\nContent-Type: text/plain\r\nContent-Transfer-Encoding: x-unknown\r\n\r\nencoded-body");
+                await rev2Tls.WriteAsync(Encoding.ASCII.GetBytes($"R27 APPEND FreshFolder {{{unknownCte.Length}+}}\r\n"), stopping.Token);
+                await rev2Tls.WriteAsync(unknownCte, stopping.Token);
+                await rev2Tls.WriteAsync("\r\n"u8.ToArray(), stopping.Token);
+                Assert.StartsWith("R27 OK", Encoding.UTF8.GetString(await ReadResponseAsync(rev2Reader, "R27", stopping.Token)));
+                await SendAndReadAsync(rev2Tls, rev2Reader, "R28 SELECT FreshFolder", "R28", stopping.Token);
+                Assert.Equal("R29 NO [UNKNOWN-CTE] Unknown content transfer encoding\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R29 FETCH 1 (BINARY[1])", "R29", stopping.Token)));
+                Assert.Equal("R30 NO [LIMIT] Literal too large\r\n", Encoding.UTF8.GetString(await SendAndReadAsync(rev2Tls, rev2Reader, "R30 APPEND INBOX {8193}", "R30", stopping.Token)));
             }
 
             var logout = await SendAndReadAsync(tls, reader, "A6i LOGOUT", "A6i", stopping.Token);

@@ -49,7 +49,7 @@ Rollback: `scripts/deploy-release.ps1 -Rollback` (no schema change, so it is a p
 
 ## Verification on `release/v2.1`
 
-Build 0 warnings/0 errors; unit 125, security 7, protocol 38, integration 34 (Cloudflare, SMTP, sender authorization, UID allocator, drafts), admin 18, webmail 17. Run twice.
+Build 0 warnings/0 errors; unit 125, security 7, protocol 38, integration 34 (Cloudflare, SMTP, sender authorization, UID allocator, drafts), admin 18, webmail 17. Run twice. The full integration suite is 94/110; the same 16 fixture failures exist on v2.0.0 (ERRORS §13.18).
 
 ## Next
 

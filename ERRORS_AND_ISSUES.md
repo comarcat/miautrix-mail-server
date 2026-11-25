@@ -1014,3 +1014,13 @@ The root `deploy.ps1` previously included a hardcoded production database passwo
 - **A test with a fixed expectation:** the RENAME INBOX test assumed exactly one INBOX message after the new MOVE steps; it now counts first.
 - **Lost manual section:** TROUBLESHOOTING §15 (Send As), written for v2.0.0, had been placed below the appendix marker, so the bundle generator removed it. It is restored above the marker, together with the new §16–§18.
 
+
+### 13.18 Known, pre-existing: 16 integration tests fail on the shared dev test environment (2026-11-24, Low — test debt)
+
+- **Scope:** the same 16 tests fail on v2.0.0 (`76c8e7c`, 84/100 pass) and on `release/v2.1` (94/110 pass). v2.1 introduces no new integration failures; its 10 new integration tests pass.
+- **Causes (fixtures, not product code):**
+  - `CliTests` (3): the test process lacks `MIAUTRIX_STORAGE_DIR`.
+  - `LicensingQuotaTests`, `BackupRestoreTests`: they run on the EF in-memory provider, and `MessageUidAllocator` needs PostgreSQL. This also breaks the "never mock the database" rule.
+  - `InboundQueueDispatcherTests` (3): the test service provider doesn't register `IMimeMessageParser`.
+  - `MailApiTests` send and the 7 `Calendar*` tests: the send path returns `404 Folder was not found` because the test tenants have no Sent folder.
+- **Next:** move these fixtures to the PostgreSQL test database and seed system folders. This is a v2.1 follow-up and doesn't block the deploy.

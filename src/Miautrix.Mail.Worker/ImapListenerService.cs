@@ -26,6 +26,7 @@ public sealed class ImapListenerService : BackgroundService
 {
     private const int ImapsPort = 993;
     private readonly int _port;
+    private readonly int? _maxLiteralBytesOverride;
     private readonly TimeSpan _idleTimeout;
     private readonly TimeSpan _idlePollInterval;
 
@@ -42,13 +43,15 @@ public sealed class ImapListenerService : BackgroundService
         TlsCertificateProvider tlsCertificateProvider,
         int port = ImapsPort,
         TimeSpan? idleTimeout = null,
-        TimeSpan? idlePollInterval = null)
+        TimeSpan? idlePollInterval = null,
+        int? maxLiteralBytes = null)
     {
         _scopeFactory = scopeFactory;
         _storage = storage;
         _logger = logger;
         _tlsCert = tlsCertificateProvider.Certificate;
         _port = port;
+        _maxLiteralBytesOverride = maxLiteralBytes is > 0 ? Math.Clamp(maxLiteralBytes.Value, 1024, 50 * 1024 * 1024) : null;
         _idleTimeout = idleTimeout is { } configuredTimeout && configuredTimeout > TimeSpan.Zero
             ? configuredTimeout : TimeSpan.FromMinutes(30);
         _idlePollInterval = idlePollInterval ?? TimeSpan.FromSeconds(2);
@@ -156,7 +159,7 @@ public sealed class ImapListenerService : BackgroundService
 
         var session = new ImapSession(db, _storage, authenticator, authorization, mailboxService, messageService, mimeFormatter, uidAllocator);
 
-        var maxLiteral = int.TryParse(Environment.GetEnvironmentVariable("MIAUTRIX_IMAP_MAX_LITERAL_BYTES"), out var configured) ? Math.Clamp(configured, 1024, 50 * 1024 * 1024) : 50 * 1024 * 1024;
+        var maxLiteral = _maxLiteralBytesOverride ?? (int.TryParse(Environment.GetEnvironmentVariable("MIAUTRIX_IMAP_MAX_LITERAL_BYTES"), out var configured) ? Math.Clamp(configured, 1024, 50 * 1024 * 1024) : 50 * 1024 * 1024);
         var connectionReader = new ImapConnectionReader(ssl, maxLineBytes: 64 * 1024, maxLiteralBytes: maxLiteral);
         while (!ct.IsCancellationRequested)
         {
@@ -187,7 +190,8 @@ public sealed class ImapListenerService : BackgroundService
                     await WriteAsciiAsync(ssl, "* BYE Literal too large\r\n", ct);
                     return;
                 }
-                await WriteAsciiAsync(ssl, $"{ex.Tag} NO [TOOBIG] Literal too large\r\n", ct);
+                var sizeCode = session.IsImap4Rev2Enabled ? "LIMIT" : "TOOBIG";
+                await WriteAsciiAsync(ssl, $"{ex.Tag} NO [{sizeCode}] Literal too large\r\n", ct);
                 continue;
             }
             catch (Exception ex)

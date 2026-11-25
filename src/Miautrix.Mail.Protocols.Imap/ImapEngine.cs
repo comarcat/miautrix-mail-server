@@ -479,13 +479,15 @@ public sealed partial class ImapSession
         try
         {
             var fields = Encoding.UTF8.GetString(Convert.FromBase64String(response.Trim())).Split('\0');
-            if (fields.Length != 3) return new ImapCommandResult(tag, "NO", "AUTHENTICATE failed", Array.Empty<string>());
+            if (fields.Length != 3) return new ImapCommandResult(tag, "NO", "[AUTHENTICATIONFAILED] Authentication failed", Array.Empty<string>());
             var auth = await _authenticator.AuthenticateAsync(fields[1], fields[2], ct);
-            if (!auth.IsSuccess) return new ImapCommandResult(tag, "NO", "AUTHENTICATE failed", Array.Empty<string>());
+            if (!auth.IsSuccess) return new ImapCommandResult(tag, "NO", "[AUTHENTICATIONFAILED] Authentication failed", Array.Empty<string>());
+            if (fields[0].Length > 0 && !fields[0].Equals(fields[1], StringComparison.OrdinalIgnoreCase))
+                return new ImapCommandResult(tag, "NO", "[AUTHORIZATIONFAILED] Cannot act as the requested authorization identity", Array.Empty<string>());
             TenantId = auth.TenantId; MailboxId = auth.MailboxId; _userId = auth.UserId; Username = fields[1]; State = ImapState.Authenticated;
             return new ImapCommandResult(tag, "OK", "AUTHENTICATE completed", Array.Empty<string>());
         }
-        catch (FormatException) { return new ImapCommandResult(tag, "NO", "AUTHENTICATE failed", Array.Empty<string>()); }
+        catch (FormatException) { return new ImapCommandResult(tag, "NO", "[AUTHENTICATIONFAILED] Authentication failed", Array.Empty<string>()); }
     }
 
     private async Task<ImapCommandResult> HandleStatusAsync(string tag, IReadOnlyList<ImapToken> args, CancellationToken ct)
@@ -792,8 +794,13 @@ public sealed partial class ImapSession
         var name = args.LastOrDefault(t => t.Kind is ImapTokenKind.Atom or ImapTokenKind.QuotedString)?.Text;
         if (name is null || TenantId is null || MailboxId is null || _userId is null || _mailboxService is null) return new ImapCommandResult(tag, "NO", "DELETE unavailable", Array.Empty<string>());
         var folder = await FindFolderByPathAsync(name, ct);
-        if (folder is null) return new ImapCommandResult(tag, "NO", "Mailbox does not exist", Array.Empty<string>());
+        if (folder is null)
+        {
+            var canSeeNamespace = await CanAccessMailboxNamespaceAsync(name, write: true, ct);
+            return new ImapCommandResult(tag, "NO", canSeeNamespace ? "[NONEXISTENT] Mailbox does not exist" : "Mailbox does not exist", Array.Empty<string>());
+        }
         if (!await AuthorizeMailboxAsync(folder.MailboxId, write: true, ct)) return new ImapCommandResult(tag, "NO", "Mailbox does not exist", Array.Empty<string>());
+        if (SelectedFolder?.Id == folder.Id) return new ImapCommandResult(tag, "NO", "[INUSE] Mailbox is selected", Array.Empty<string>());
         if (await _dbContext.Folders.AnyAsync(child => child.TenantId == TenantId && child.MailboxId == folder.MailboxId && child.ParentId == folder.Id, ct))
             return new ImapCommandResult(tag, "NO", "Mailbox has inferior hierarchical names", Array.Empty<string>());
         var deleted = await _mailboxService.DeleteFolderAsync(TenantId.Value, _userId.Value, folder.MailboxId, folder.Id, ct);
@@ -805,8 +812,13 @@ public sealed partial class ImapSession
         var names = args.Where(t => t.Kind is ImapTokenKind.Atom or ImapTokenKind.QuotedString).ToArray();
         if (names.Length < 2 || TenantId is null || MailboxId is null || _userId is null || _mailboxService is null || _messageService is null) return new ImapCommandResult(tag, "BAD", "RENAME requires source and destination", Array.Empty<string>());
         var folder = await FindFolderByPathAsync(names[0].Text, ct);
-        if (folder is null) return new ImapCommandResult(tag, "NO", "Mailbox does not exist", Array.Empty<string>());
+        if (folder is null)
+        {
+            var canSeeNamespace = await CanAccessMailboxNamespaceAsync(names[0].Text, write: true, ct);
+            return new ImapCommandResult(tag, "NO", canSeeNamespace ? "[NONEXISTENT] Mailbox does not exist" : "Mailbox does not exist", Array.Empty<string>());
+        }
         if (!await AuthorizeMailboxAsync(folder.MailboxId, write: true, ct)) return new ImapCommandResult(tag, "NO", "Mailbox does not exist", Array.Empty<string>());
+        if (SelectedFolder?.Id == folder.Id) return new ImapCommandResult(tag, "NO", "[INUSE] Mailbox is selected", Array.Empty<string>());
         try
         {
             var destinationPath = DecodeMailboxPath(names[1].Text);
@@ -898,7 +910,7 @@ public sealed partial class ImapSession
         var auth = await _authenticator.AuthenticateAsync(user, password, cancellationToken);
         if (!auth.IsSuccess)
         {
-            return new ImapCommandResult(tag, "NO", "LOGIN failed: invalid credentials", Array.Empty<string>());
+            return new ImapCommandResult(tag, "NO", "[AUTHENTICATIONFAILED] LOGIN failed", Array.Empty<string>());
         }
 
         TenantId = auth.TenantId;
@@ -1315,7 +1327,7 @@ public sealed partial class ImapSession
         }
         else if (_imap4Rev2Enabled)
             returnOptions.Add("ALL");
-        if (!_imap4Rev2Enabled && arguments.Any(argument => argument.Text.Contains('$')))
+        if (!_imap4Rev2Enabled && arguments.Any(argument => argument.Text == "$"))
             return new ImapCommandResult(tag, "BAD", "SEARCHRES requires IMAP4rev2", Array.Empty<string>());
         ImapSearchQuery query;
         try { query = ImapSearchParser.Parse(criteria); }
