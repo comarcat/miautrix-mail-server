@@ -217,6 +217,9 @@ public sealed partial class ImapSession
             case "NAMESPACE":
                 return HandleNamespace(tag);
 
+            case "ID":
+                return HandleId(tag, args);
+
             case "CHECK":
                 if (_imap4Rev2Enabled) return await HandleNoopAsync(tag, cancellationToken);
                 return State == ImapState.Selected
@@ -346,6 +349,27 @@ public sealed partial class ImapSession
             .Where(name => _enabledExtensions.Contains(name)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         var enabled = new[] { $"* ENABLED{(enabledNow.Length == 0 ? string.Empty : " " + string.Join(' ', enabledNow))}" };
         return new ImapCommandResult(tag, "OK", "ENABLE completed", enabled);
+    }
+
+    private static ImapCommandResult HandleId(string tag, IReadOnlyList<ImapToken> args)
+    {
+        // RFC 2971 permits NIL or a parenthesized sequence of string/nstring pairs.
+        // The server does not retain client identification data, but always answers ID with ID NIL.
+        if (args.Count == 1 && args[0].Kind == ImapTokenKind.Atom && args[0].Text.Equals("NIL", StringComparison.OrdinalIgnoreCase))
+            return new ImapCommandResult(tag, "OK", "ID completed", new[] { "* ID NIL" });
+
+        if (args.Count < 2 || args[0].Kind != ImapTokenKind.LeftParenthesis || args[^1].Kind != ImapTokenKind.RightParenthesis)
+            return new ImapCommandResult(tag, "BAD", "Invalid ID arguments", Array.Empty<string>());
+
+        var pairs = args.Skip(1).Take(args.Count - 2).ToArray();
+        if (pairs.Length % 2 != 0 || pairs.Where((_, index) => index % 2 == 0)
+                .Any(token => token.Kind is not (ImapTokenKind.Atom or ImapTokenKind.QuotedString)) ||
+            pairs.Where((_, index) => index % 2 == 1)
+                .Any(token => token.Kind is not (ImapTokenKind.Atom or ImapTokenKind.QuotedString) ||
+                              token.Kind == ImapTokenKind.Atom && !token.Text.Equals("NIL", StringComparison.OrdinalIgnoreCase)))
+            return new ImapCommandResult(tag, "BAD", "Invalid ID arguments", Array.Empty<string>());
+
+        return new ImapCommandResult(tag, "OK", "ID completed", new[] { "* ID NIL" });
     }
 
     private static ImapCommandResult HandleNamespace(string tag)
@@ -763,7 +787,9 @@ public sealed partial class ImapSession
         if (name is null || TenantId is null || MailboxId is null || _userId is null || _mailboxService is null) return new ImapCommandResult(tag, "NO", "CREATE unavailable", Array.Empty<string>());
         if (_imap4Rev2Enabled && !IsValidNetUnicode(name))
             return new ImapCommandResult(tag, "NO", "Invalid Net-Unicode mailbox name", Array.Empty<string>());
+        var requestedName = name;
         name = DecodeMailboxPath(name);
+        var normalizedName = name;
         Guid? namespaceMailboxId = null;
         string[] segments;
         if (name.StartsWith("Shared/", StringComparison.OrdinalIgnoreCase))
@@ -792,7 +818,16 @@ public sealed partial class ImapSession
         if (segments.Length > 1 && parent is null) return new ImapCommandResult(tag, "NO", "[TRYCREATE] Parent folder does not exist", Array.Empty<string>());
         var createMailboxId = parent?.MailboxId ?? namespaceMailboxId ?? ActiveMailboxId;
         if (createMailboxId is null || !await AuthorizeMailboxAsync(createMailboxId.Value, write: true, ct)) return new ImapCommandResult(tag, "NO", "Mailbox does not exist", Array.Empty<string>());
-        try { await _mailboxService.CreateFolderAsync(TenantId.Value, _userId.Value, createMailboxId.Value, new CreateFolderRequest(segments[^1], parent?.Id), ct); return new ImapCommandResult(tag, "OK", "CREATE completed", Array.Empty<string>()); }
+        try
+        {
+            await _mailboxService.CreateFolderAsync(TenantId.Value, _userId.Value, createMailboxId.Value, new CreateFolderRequest(segments[^1], parent?.Id), ct);
+            if (!string.Equals(requestedName, normalizedName, StringComparison.Ordinal))
+            {
+                static string QuoteMailbox(string value) => "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+                return new ImapCommandResult(tag, "OK", $"[OLDNAME {QuoteMailbox(EncodeMailboxPath(requestedName))} {QuoteMailbox(EncodeMailboxPath(normalizedName))}] CREATE completed", Array.Empty<string>());
+            }
+            return new ImapCommandResult(tag, "OK", "CREATE completed", Array.Empty<string>());
+        }
         catch (InvalidOperationException ex) when (ex.Message.Contains("already exists", StringComparison.OrdinalIgnoreCase)) { return new ImapCommandResult(tag, "NO", "[ALREADYEXISTS] Folder collision", Array.Empty<string>()); }
         catch (Exception ex) when (ex is ArgumentException or ResourceNotFoundException or InvalidOperationException) { return new ImapCommandResult(tag, "NO", "CREATE failed", Array.Empty<string>()); }
     }
