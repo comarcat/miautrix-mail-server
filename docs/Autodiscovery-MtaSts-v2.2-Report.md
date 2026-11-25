@@ -53,14 +53,17 @@
 
 ## Test evidence
 
-- `dotnet build Miautrix.Mail.sln -warnaserror -m:1`: passed, zero warnings (before the latest endpoint/test additions; rerun in final suite).
-- Autodiscovery integration contracts: 4 passed, including XML structures and ports, POX address echo, unknown domain, local-part independence, and rate limiting.
+- `dotnet build Miautrix.Mail.sln -warnaserror -m:1`: passed, zero warnings.
+- UnitTests: 125 passed; SecurityTests: 7 passed; ProtocolTests: 38 passed.
+- Targeted IntegrationTests: 46 passed, including the existing required subsets plus all package contracts.
+- Autodiscovery integration contracts: 4 passed, including XML structure, settings/ports, POX address echo, unknown domain, local-part independence, and rate limiting.
 - MTA-STS integration contracts: 4 passed, including exact response bytes for testing/enforce, Host routing, none/unknown 404, and policy-ID rotation on policy update.
 - Mobileconfig integration contracts: 3 passed, including missing identity, no password/current address, and cross-tenant rejection.
 - Migration integration contract: 1 passed; migration reapplication is a no-op and new domains retain `none` / `604800`.
 - Throwaway PostgreSQL database `miautrix_test_autodisc_mig_c5098` was migrated from the immediately preceding migration. A pre-existing domain row received `none` / `604800`; applying the latest migration a second time left one migration-history entry and succeeded.
-- Admin Domains tests: 2 passed for mode selection/max-age and DNS suggestions. Webmail `App.test.tsx`: 9 passed, including the iPhone/Mac setup link. Full admin suite: 20 passed.
-- Remaining final verification is the full common .NET suites and webmail suite after all commits.
+- Admin suite: 20 passed, including mode selection/max-age and DNS suggestions; admin production build passed.
+- Webmail suite: 17 passed, including the iPhone/Mac setup link.
+- Full IntegrationTests: 106 passed and 16 failed out of 122. This matches the repository's documented 16 pre-existing failures (baseline was 94/110); no additional failures were observed.
 
 ## Deferred and limitations
 
