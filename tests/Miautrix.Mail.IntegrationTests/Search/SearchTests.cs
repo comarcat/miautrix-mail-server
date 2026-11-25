@@ -89,6 +89,10 @@ public sealed class SearchTests : IDisposable
             UpdatedAt = DateTimeOffset.UtcNow
         };
 
+        // Warm up the query path (JIT, pooled connection) so the 1 s budget measures index + search
+        // latency, not cold start under the parallel suite.
+        await _searchProvider.SearchAsync(tenantId, mailboxId, $"warmup_{Guid.NewGuid():N}");
+
         // Act: Deliver / Index message
         var stopwatch = Stopwatch.StartNew();
         await _searchProvider.IndexMessageAsync(tenantId, message);
