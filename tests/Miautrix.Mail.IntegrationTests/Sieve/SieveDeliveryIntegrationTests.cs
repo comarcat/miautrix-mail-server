@@ -83,7 +83,12 @@ public sealed class SieveDeliveryIntegrationTests
             var redirect = await Evaluate("require [\"copy\"]; redirect [\"filter@example.test\", \"one@remote.test\", \"two@remote.test\", \"three@remote.test\", \"four@remote.test\", \"five@remote.test\", \"six@remote.test\"];");
             Assert.False(redirect.StoreLocally);
             Assert.Equal(5, await db.SmtpQueue.CountAsync(q => q.Direction == QueueDirection.Outbound));
-            Assert.All(await db.SmtpQueue.Where(q => q.Direction == QueueDirection.Outbound).ToListAsync(), q => Assert.Contains("X-Miautrix-Sieve-Redirect-Count: ", q.RawMessage));
+            Assert.All(await db.SmtpQueue.Where(q => q.Direction == QueueDirection.Outbound).ToListAsync(), q =>
+            {
+                Assert.Equal(mailbox.Address, q.TransportSenderOverride);
+                Assert.Contains("X-Miautrix-Sieve-Redirect-Count: ", q.RawMessage);
+                Assert.Contains($"Resent-From: {mailbox.Address}", q.RawMessage);
+            });
 
             await db.SmtpQueue.ExecuteDeleteAsync();
             var rejectRaw = Inbound(tenant.Id, "From: sender@remote.test\r\nAuthentication-Results: mail.test; spf=pass smtp.mailfrom=remote.test\r\n");
@@ -92,6 +97,7 @@ public sealed class SieveDeliveryIntegrationTests
             await service.EvaluateAsync(mailbox, rejectRaw, rejectParsed, "inbox");
             var rejection = await db.SmtpQueue.SingleAsync();
             Assert.Equal(string.Empty, rejection.Sender);
+            Assert.Equal(mailbox.Address, rejection.TransportSenderOverride);
             Assert.Equal("sender@remote.test", rejection.Recipient);
             Assert.Contains("multipart/report", rejection.RawMessage);
             await db.SmtpQueue.ExecuteDeleteAsync();
@@ -111,6 +117,7 @@ public sealed class SieveDeliveryIntegrationTests
             Assert.Single(await db.SmtpQueue.Where(q => q.Direction == QueueDirection.Outbound).ToListAsync());
             var vacation = await db.SmtpQueue.SingleAsync(q => q.Direction == QueueDirection.Outbound);
             Assert.Equal(string.Empty, vacation.Sender);
+            Assert.Equal(mailbox.Address, vacation.TransportSenderOverride);
             Assert.Contains("Auto-Submitted: auto-replied", vacation.RawMessage);
             await db.SmtpQueue.ExecuteDeleteAsync();
             await db.SieveScripts.Where(s => s.MailboxId == mailbox.Id).ExecuteUpdateAsync(set => set.SetProperty(s => s.Content,
