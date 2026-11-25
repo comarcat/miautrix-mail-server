@@ -21,6 +21,8 @@ using Miautrix.Mail.Web.Infrastructure;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
 
 namespace Miautrix.Mail.Web;
 
@@ -43,6 +45,9 @@ public class Program
         }
 
         builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
+        builder.Services.AddRateLimiter(options => options.AddPolicy("discovery", context =>
+            RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
+            { PermitLimit = 60, Window = TimeSpan.FromMinutes(1), QueueLimit = 0, AutoReplenishment = true })));
 
         var backupDirectory = Environment.GetEnvironmentVariable("MIAUTRIX_BACKUP_DIR");
         if (string.IsNullOrWhiteSpace(backupDirectory))
@@ -166,6 +171,7 @@ public class Program
         builder.Services.AddEndpointsApiExplorer();
 
         var app = builder.Build();
+        app.UseRateLimiter();
 
         // Windows packages expose the application directly over HTTPS. Keep HSTS scoped to
         // Windows so the existing Linux nginx deployment retains its current header policy.

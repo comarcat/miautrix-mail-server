@@ -768,6 +768,7 @@ export const App: React.FC = () => {
           />
         )}
         {activeTab === 'rules' && (
+          <div style={{ padding: '12px 20px' }}><a href="/api/v1/webmail/mobileconfig">Set up on iPhone/Mac</a></div>
           <SieveRulesView initialRules={rules} mailboxId={selectedMailboxAccount} onRulesChanged={(nextRules) => setRules(nextRules)} />
         )}
       </div>

@@ -18,7 +18,11 @@ public sealed record DomainDto(
     DateTimeOffset CreatedAt,
     string TransportMode,
     string? CloudflareZoneId,
-    string? CloudflareWorkerUrl);
+    string? CloudflareWorkerUrl,
+    string MtaStsMode = "none",
+    int MtaStsMaxAge = 604800,
+    string? TlsReportRua = null,
+    string MtaStsId = "");
 
 public sealed record CreateDomainRequest(
     string Name,
@@ -35,7 +39,10 @@ public sealed record UpdateDomainRequest(
     string? DmarcRecord = null,
     string? TransportMode = null,
     string? CloudflareZoneId = null,
-    string? CloudflareWorkerUrl = null);
+    string? CloudflareWorkerUrl = null,
+    string? MtaStsMode = null,
+    int? MtaStsMaxAge = null,
+    string? TlsReportRua = null);
 
 /// <summary>
 /// The DNS status fields are null when the domain does not use the local transport: a

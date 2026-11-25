@@ -322,6 +322,19 @@ public sealed class AdminService : IAdminService
 
         _auth.AuthorizeAccess(tenantId, userId, domain, "domain.manage");
 
+        if (request.MtaStsMode is not null)
+        {
+            var mode = request.MtaStsMode.Trim().ToLowerInvariant();
+            if (mode is not ("none" or "testing" or "enforce")) throw new ArgumentException("Unknown MTA-STS mode.", nameof(request));
+            domain.MtaStsMode = mode;
+        }
+        if (request.MtaStsMaxAge.HasValue)
+        {
+            if (request.MtaStsMaxAge is < 1 or > 31_557_600) throw new ArgumentOutOfRangeException(nameof(request), "MTA-STS max_age must be between 1 and 31557600 seconds.");
+            domain.MtaStsMaxAge = request.MtaStsMaxAge.Value;
+        }
+        if (request.TlsReportRua is not null) domain.TlsReportRua = string.IsNullOrWhiteSpace(request.TlsReportRua) ? null : request.TlsReportRua.Trim();
+
         var changedDns = false;
 
         if (!string.IsNullOrWhiteSpace(request.Name))
@@ -2277,5 +2290,9 @@ public sealed class AdminService : IAdminService
         d.CreatedAt,
         d.TransportMode,
         d.CloudflareZoneId,
-        d.CloudflareWorkerUrl);
+        d.CloudflareWorkerUrl,
+        d.MtaStsMode,
+        d.MtaStsMaxAge,
+        d.TlsReportRua,
+        d.UpdatedAt.ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture));
 }
