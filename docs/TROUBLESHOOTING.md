@@ -1,4 +1,4 @@
-# Troubleshooting — Miautrix Mail Server v2.1
+# Troubleshooting — Miautrix Mail Server v2.2
 
 This manual is for the owner-operator running PowerShell on Windows and administering the Debian LXC app server as root over SSH. The app server runs self-contained .NET; PostgreSQL 18.6 is on a separate server. Replace placeholders such as `<tenant-guid>` and `<db-name>` before use; never paste secrets into a command.
 
@@ -107,7 +107,7 @@ ls -lh /opt/miautrix-mail/backups
 ```bash
 systemctl status miautrix-mail miautrix-mail-worker --no-pager
 ss -ltnp | grep -E ':(25|465|587|993)\b'
-curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:5000/api/v1/system/info
+curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:5000/api/v1/system/info   # since v2.2: 401 = healthy (a session is required); 5xx/000 = down
 find -L /opt/miautrix-mail/app/ -maxdepth 1 -name '*.runtimeconfig.json' -type f -print
 printf 'a1 CAPABILITY\r\na2 LOGOUT\r\n' | timeout 5 openssl s_client -quiet -connect 127.0.0.1:993 -servername localhost
 ```
@@ -335,7 +335,7 @@ systemctl --no-pager --full status miautrix-mail miautrix-mail-worker nginx | se
 printf '%s\n' '== listeners =='
 ss -ltnp | grep -E ':(25|465|587|993)\b' || true
 printf '%s\n' '== local Kestrel status =='
-curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:5000/api/v1/system/info || true
+curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:5000/api/v1/system/info || true   # 401 is healthy since v2.2
 printf '%s\n' '== recent logs =='
 journalctl -u miautrix-mail -u miautrix-mail-worker -u nginx -n 80 --no-pager
 printf '%s\n' '== release IDs =='
@@ -526,6 +526,126 @@ Reparse never changes the stored bytes or UIDs.
 **Verify.** Open the draft in webmail and check its subject, recipients and body. Edit it and save. In the IMAP client, refresh: the draft shows the edit, and there is only one copy.
 
 **Rollback/escalate.** If a draft still opens empty after reparse, escalate with its folder and UID (not its content).
+
+## 19. Web/API login and sessions (v2.2)
+
+**Symptom.** After the v2.2 deploy, every user is sent back to the login page once; later, an API call returns `401 unauthorized`; or webmail shows "not found" for data that exists.
+
+**Diagnose.**
+- **The one-time logout is expected.** Since v2.2 every controller endpoint needs a server-side session (`sessions` table, tokens stored hashed). Browser tokens issued before v2.2 were never stored, so they are invalid.
+- **`401`** means the token is missing, expired, revoked (by logout, a password change, or refresh-token reuse), or idle for more than 30 days.
+- **`404` with a valid token** means the client sent an `X-Tenant-Id`/`X-User-Id` header that doesn't match the session. This is audited:
+
+```sql
+SELECT created_at, actor_id, target_type FROM audit_logs
+WHERE action = 'authorization.failed' ORDER BY created_at DESC LIMIT 20;
+```
+
+Only these endpoints are anonymous:
+- login and refresh;
+- the Cloudflare inbound webhook (it has its own token);
+- calendar invitation links (token in the URL);
+- the discovery URLs in §21.
+
+A reflection test enforces this list.
+
+**Fix.**
+- Log in again. If it loops, clear the site data in the browser and confirm the clock on the server is correct.
+- Never add a header-based bypass.
+
+**Verify.** On the server: `curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:5000/api/v1/auth/me` returns `401`. Logging in through webmail works.
+
+**Rollback/escalate.** A code rollback to v2.1 re-opens the authentication hole (ERRORS §13.19). Use it only for an outage, and redeploy v2.2 as soon as possible.
+
+## 20. Inbound SPF / DKIM / DMARC results (v2.2)
+
+**Symptom.** You want to know whether an incoming message was authenticated, a message landed in Junk, or a sender reports a `550 5.7.1 Message rejected by DMARC policy`.
+
+**Diagnose.**
+- Every inbound message has one header we add: `Authentication-Results: <mail-hostname>; spf=… dkim=… dmarc=… policy.dmarc=…`.
+- Any copy of that header with our hostname that arrives from outside is removed.
+- The mode is `MIAUTRIX_INBOUND_AUTH_MODE`:
+  - `monitor` (the default) only adds the header;
+  - `enforce` rejects DMARC `p=reject` failures with `550 5.7.1` on port 25 and files `p=quarantine` failures in Junk (or in INBOX flagged, if there is no Junk folder);
+  - `off` disables the checks.
+- `temperror` (DNS trouble) never rejects.
+- **Mail received through the Cloudflare webhook** (miautrix.tech) has no client IP. SPF is `none` and DMARC is never enforced there, unless the updated Email Worker forwards Cloudflare's results and their authserv-id is listed in `MIAUTRIX_INBOUND_TRUSTED_AUTHSERV_IDS`.
+- The Worker logs one line per message with the domains and results (no bodies): `journalctl -u miautrix-mail-worker | grep 'Inbound authentication'`.
+
+**Fix.**
+- Stay in `monitor` for at least a week and review the headers.
+- If legitimate mail would fail, the sender's SPF/DKIM/DMARC needs fixing. Don't switch to `enforce` to work around it.
+- Publish a DMARC record for our own domains (InboundAuth report).
+
+**Verify.** Send a message from Gmail and check the header. With `enforce` on a test domain, a message forged from `p=reject` must get `550 5.7.1`.
+
+**Rollback/escalate.** Set `MIAUTRIX_INBOUND_AUTH_MODE=monitor` (or `off`) and restart the Worker. Report the header line to escalate, never the message body.
+
+## 21. Client autodiscovery and MTA-STS (v2.2)
+
+**Symptom.** Thunderbird or Outlook can't find settings automatically; the iPhone profile won't download; or a sender reports MTA-STS failures.
+
+**Diagnose.** These are the public URLs, routed by Host:
+- `GET /.well-known/autoconfig/mail/config-v1.1.xml?emailaddress=…` and `/mail/config-v1.1.xml` (Thunderbird);
+- `POST /autodiscover/autodiscover.xml` (Outlook);
+- `GET https://mta-sts.<domain>/.well-known/mta-sts.txt`.
+
+An unknown domain returns 404. These URLs are rate-limited to 60/min per client, using `X-Forwarded-For` only from loopback.
+
+They need DNS records (`autoconfig`, `autodiscover`, `mta-sts`, `_mta-sts` TXT, `_smtp._tls` TXT, and the SRV records shown in admin → Domains) plus nginx `server_name` entries and certificates. The `.mobileconfig` is downloaded from webmail settings and requires a login.
+
+**Fix.**
+- Add the records and nginx entries from `docs/Autodiscovery-MtaSts-v2.2-Report.md`.
+- **MTA-STS:** keep the mode at `none` or `testing` until the domain's **mx list** in admin matches EVERY MX record. For miautrix.tech that includes the Cloudflare Email Routing hosts (for example `*.mx.cloudflare.net`). A wrong list under `enforce` makes MTA-STS senders refuse to deliver to us.
+
+**Verify.**
+- `curl -s 'http://127.0.0.1:5000/.well-known/autoconfig/mail/config-v1.1.xml?emailaddress=user@<domain>' -H 'Host: autoconfig.<domain>'` returns XML.
+- `curl -s http://127.0.0.1:5000/.well-known/mta-sts.txt -H 'Host: mta-sts.<domain>'` returns the policy.
+
+**Rollback/escalate.** Set the MTA-STS mode to `none` and change the TXT `id`. Senders respect the cached policy until `max_age` expires, so lower it before experimenting.
+
+## 22. Sieve filters and out-of-office (v2.2)
+
+**Symptom.** A filter doesn't act, an out-of-office reply wasn't sent (or was sent twice), or a redirect didn't arrive.
+
+**Diagnose.**
+- Scripts are stored per mailbox, with only one active at a time (webmail → Settings → Filters). Saving reports compile errors with line and column.
+- A runtime error falls back to normal delivery to INBOX.
+- **Out-of-office (vacation)** replies at most once per sender per `:days` (default 7). It never replies to:
+  - lists, bulk or auto-submitted mail, or the user's own addresses;
+  - `<>` senders;
+  - **senders that failed authentication** (our `Authentication-Results` must show an aligned pass).
+- **Reject notices** follow the same authentication rule, to avoid backscatter.
+- **Through Cloudflare,** vacation replies, reject notices and redirects are sent from the mailbox's own address, because Cloudflare accepts only our own domains. In `direct` mode, vacation and reject use `<>`, and redirects keep the original sender (no SRS, so SPF may fail at the destination).
+- **Redirects** are limited to 5 per message, with a loop guard.
+
+```sql
+SELECT mailbox_id, name, is_active, updated_at FROM sieve_scripts WHERE tenant_id = '<tenant-guid>';
+SELECT mailbox_id, handle, last_sent_at FROM sieve_vacation_responses WHERE tenant_id = '<tenant-guid>' ORDER BY last_sent_at DESC LIMIT 20;
+```
+
+**Fix.**
+- Correct the script, or recreate it with the Out of office form.
+- To make the out-of-office reply again to a sender during testing, delete that sender's row from `sieve_vacation_responses`.
+
+**Verify.** Send from an external account. You get exactly one auto-reply, and the filtered message is in the expected folder.
+
+**Rollback/escalate.** Deactivate the script in webmail. Mail is then delivered as before.
+
+## 23. Outbound DANE (v2.2, off by default)
+
+**Symptom.** After enabling DANE, mail to a domain stays deferred with a TLS/TLSA error.
+
+**Diagnose.**
+- DANE (RFC 7672) applies only to `direct`-mode domains.
+- It needs `OUTBOUND_DANE_MODE=opportunistic` and `OUTBOUND_DNSSEC_RESOLVER=<ip of a local validating resolver>`. Without the resolver, DANE stays inactive and the Worker logs a warning at boot.
+- When a recipient publishes DNSSEC-validated TLSA records, STARTTLS and a matching certificate are mandatory. A mismatch is a temporary failure, never a plaintext fallback.
+
+**Fix.** Check the recipient's MX certificate against its TLSA record (`dig +dnssec TLSA _25._tcp.<mx-host>`). It's their misconfiguration. The mail retries for up to the retry lifetime and then bounces.
+
+**Verify.** `dig @<resolver> +dnssec example.com` shows the `ad` flag.
+
+**Rollback/escalate.** Set `OUTBOUND_DANE_MODE=off` and restart the Worker.
 <!-- APPENDIX:BEGIN (generated by scripts/build-troubleshooting-bundle.ps1; do not edit below) -->
 ## Appendix A — Script reference
 
@@ -1549,7 +1669,7 @@ SELECT line FROM (
 
 ### `scripts/imap-external-validation.py`
 
-SHA-256: `e385e6a36ba8ebfe3ce5985397dfd75fb9f507a1ca8c2534d4ef091b73063955`
+SHA-256: `bea942569630779f9a28456aa27b650ea76e41b2ccfed80eaffdf17f518d1013`
 
 ``python
 #!/usr/bin/env python3
@@ -1696,6 +1816,28 @@ with imaplib.IMAP4_SSL(host, 993, ssl_context=context) as client:
         print("SKIP  IMAP-009 shared checks: MIAUTRIX_IMAP_SHARED_MAILBOX is unset")
 
     client.logout()
+
+# Run a separate session in explicit rev2 mode so the read-only rev1 pass above
+# remains a regression check for clients (including Thunderbird) that never ENABLE.
+with imaplib.IMAP4_SSL(host, 993, ssl_context=context) as rev2:
+    status, _ = rev2.login(username, password)
+    check("IMAP4rev2 LOGIN", status == "OK")
+    status, data = rev2._simple_command("ENABLE", "IMAP4rev2")
+    enabled = status == "OK" and any(b"IMAP4REV2" in (line or b"").upper() for line in (data or []))
+    check("IMAP4rev2 ENABLE", enabled)
+    status, data = rev2.select("INBOX", readonly=True)
+    check("IMAP4rev2 EXAMINE/SELECT", status == "OK", f"{data[0].decode(errors='replace') if data and data[0] else '0'} messages")
+    if status == "OK":
+        status, data = rev2.search(None, "ALL")
+        check("IMAP4rev2 SEARCH", status == "OK", f"{len(data[0].split()) if data and data[0] else 0} ids")
+        status, data = rev2.status("INBOX", "(MESSAGES DELETED SIZE)")
+        check("IMAP4rev2 STATUS DELETED/SIZE", status == "OK")
+        status, _ = rev2.status("INBOX", "(RECENT)")
+        check("IMAP4rev2 rejects RECENT", status == "NO" or status == "BAD", status)
+        status, _ = rev2.lsub()
+        check("IMAP4rev2 LSUB rejected", status == "NO" or status == "BAD", status)
+        rev2.close()
+    rev2.logout()
 
 print(f"\n{sum(results)}/{len(results)} checks passed")
 sys.exit(0 if all(results) else 1)

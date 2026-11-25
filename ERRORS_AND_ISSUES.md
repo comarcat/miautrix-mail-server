@@ -1015,7 +1015,7 @@ The root `deploy.ps1` previously included a hardcoded production database passwo
 - **Lost manual section:** TROUBLESHOOTING §15 (Send As), written for v2.0.0, had been placed below the appendix marker, so the bundle generator removed it. It is restored above the marker, together with the new §16–§18.
 
 
-### 13.18 Known, pre-existing: 16 integration tests fail on the shared dev test environment (2026-11-24, Low — test debt)
+### 13.18 Known, pre-existing: 16 (12 since v2.2) integration tests fail on the shared dev test environment (2026-11-24, Low — test debt)
 
 - **Scope:** the same 16 tests fail on v2.0.0 (`76c8e7c`, 84/100 pass) and on `release/v2.1` (94/110 pass). v2.1 introduces no new integration failures; its 10 new integration tests pass.
 - **Causes (fixtures, not product code):**
@@ -1024,3 +1024,37 @@ The root `deploy.ps1` previously included a hardcoded production database passwo
   - `InboundQueueDispatcherTests` (3): the test service provider doesn't register `IMimeMessageParser`.
   - `MailApiTests` send and the 7 `Calendar*` tests: the send path returns `404 Folder was not found` because the test tenants have no Sent folder.
 - **Next:** move these fixtures to the PostgreSQL test database and seed system folders. This is a v2.1 follow-up and doesn't block the deploy.
+- **Update (v2.2):** on a fresh, fully migrated database, 12 still fail: `CliTests` (3), `LicensingQuotaTests`, `BackupRestoreTests`, and `CalendarOutboundMimeTests`/`CalendarInvitationEmailTests` (7). `InboundQueueDispatcherTests` and the `MailApiTests` send test now pass.
+
+### 13.19 Fixed in v2.2 (not yet deployed): the web API trusted client-supplied identity headers (2026-11-25, Critical)
+
+- **Found by:** coordinator review of the v2.2 `.mobileconfig` endpoint.
+- **Cause:**
+  - `HeaderRequestContextAccessor` took the tenant and user from the `X-Tenant-Id`/`X-User-Id` request headers, and fell back to the default tenant and **default admin** when they were missing.
+  - No middleware validated the Bearer token that webmail and admin send.
+  - `Session`/`RefreshToken` were empty entities, so tokens were never stored.
+  - Integration tests called the API with the two headers and no token, and passed.
+- **Impact:** anyone who could reach the API could act as any user or as the admin, if they knew or guessed the IDs, or simply sent no headers at all. Production nginx was not checked from the repository; the owner should confirm whether it strips or sets these headers.
+- **Fix:**
+  - persisted sessions with hashed tokens;
+  - `SessionAuthenticationMiddleware` requires a valid session on every controller endpoint without `[AllowAnonymous]`, enforced by an allowlist reflection test;
+  - identity comes only from the session;
+  - mismatched headers → 404 plus an audit entry;
+  - refresh rotation with reuse detection, and revocation on logout and password change;
+  - the frontends updated.
+- **Deploy note:** everyone is logged out once. A rollback to v2.1 re-opens the hole.
+
+### 13.20 Caught in coordinator review before merge (v2.2, 2026-11-25)
+
+- **SPF:** unknown modifiers caused `permerror`; RFC 7208 §6 requires ignoring them.
+- **Inbound auth on the Cloudflare webhook:** without a client IP, SPF was `none`, so `enforce` could have rejected legitimate mail that passes DMARC only through SPF. DMARC is now never enforced there without trusted Cloudflare results.
+- **Quarantine detection** searched the whole raw message for `dmarc=fail`, so message bodies could trigger it. Now only our own header counts.
+- **DNS checks** ran once per recipient; they now run once per message.
+- **Sieve through Cloudflare:** vacation replies and reject DSNs used a null sender and redirects used external senders, and Cloudflare refuses both. They now go out from the mailbox address in Cloudflare mode. Vacation and reject replies now go only to authenticated senders (backscatter).
+- **Discovery endpoints were unreachable in production:** the webmail SPA catch-all handled `/.well-known/autoconfig`, `/autodiscover` and `/.well-known/mta-sts.txt`.
+- **MTA-STS `mx:`** listed only our host, which would have broken inbound Cloudflare-routed mail under `enforce`. The list is now configurable, with a warning in admin.
+- **The `.mobileconfig`** lacked Apple's required payload keys.
+- **Migrations:** two migrations weren't idempotent.
+- **Session enforcement** only applied under `/api`; it now applies to every controller endpoint.
+- **Merge fallout:** the `.mobileconfig` endpoint still read identity headers after the auth change. Sieve and inbound auth now share one authserv-id.
+

@@ -11,6 +11,11 @@ The Admin Security page now shows real identity/security invariants where they e
 - Session lifetime is read from the session manager.
 - Lockout threshold/duration is centralized in `LockoutOptions`.
 - Domain MFA enforcement is persisted on the `domains.mfa_enforced` column.
+- **API authentication (v2.2):**
+  - Every controller endpoint requires a server-side session (hashed tokens, rotation, revocation), except an allowlist enforced by a reflection test.
+  - Client identity headers are never trusted.
+  - See ERRORS §13.19.
+- **Inbound authentication (v2.2):** SPF/DKIM/DMARC results go in `Authentication-Results`, and forged headers using our authserv-id are removed. Monitor mode by default.
 - **SMTP transport (v2.1):** TLS 1.2+ on ports 25, 465 and 587; STARTTLS on 25; AUTH only after TLS; bounded command/DATA lines, message size, recipients and timeouts (TROUBLESHOOTING §16).
 - **DKIM (v2.1):** the server signs only for domains in `direct` transport mode. Cloudflare-mode domains are left byte-identical, as Cloudflare signs them. DANE is not implemented.
 - **Sender authorization (v2.0.0):** SMTP submission and webmail share one policy, `ISenderAuthorizationService`.

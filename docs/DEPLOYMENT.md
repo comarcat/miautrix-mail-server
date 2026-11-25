@@ -56,6 +56,22 @@ Cleanup runs only after a successful verification marker. `cleanup --keep 2` ret
 - **After deploy:** run `messages reparse --tenant all` (dry run first) with `.env` loaded in a subshell; see `docs/HANDOFF-v2.1.md` and TROUBLESHOOTING §18.
 - **Before switching a domain to `direct`:** outbound port 25 reachable, PTR matches the EHLO name, SPF includes the server IP, DKIM TXT published (TROUBLESHOOTING §17).
 
+## v2.2 upgrade notes
+
+- **Migrations:** `V22_Autodiscovery_MtaSts`, `V22_Sieve_Scripts` and `V22_ApiAuth_Sessions`. Deploy **with `-RunMigrations`**. They are forward-only and idempotent, and add only tables and columns.
+- **Sessions:** the API now requires a session, so every user is logged out once. The deploy health check accepts `401` (any status below 500).
+- **New optional settings:**
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `MIAUTRIX_INBOUND_AUTH_MODE` | `monitor` | `off` \| `monitor` \| `enforce` for SPF/DKIM/DMARC |
+| `MIAUTRIX_INBOUND_TRUSTED_AUTHSERV_IDS` | empty | authserv-ids whose results the Cloudflare Worker may forward |
+| `MIAUTRIX_PUBLIC_IMAP_HOST` / `MIAUTRIX_PUBLIC_SMTP_HOST` | `MIAUTRIX_HOSTNAME` | Hostnames given to clients by autodiscovery |
+| `OUTBOUND_DANE_MODE` | `off` | `opportunistic` enables DANE for `direct` domains |
+| `OUTBOUND_DNSSEC_RESOLVER` | none | IP of a local validating resolver (required for DANE) |
+
+- **Optional infrastructure:** DNS plus nginx `server_name` entries and certificates for `autoconfig.<domain>`, `autodiscover.<domain>` and `mta-sts.<domain>` (`docs/Autodiscovery-MtaSts-v2.2-Report.md`). Separately, the Cloudflare Email Worker update (`workers/email`).
+
 ## Security notes
 
 The old root `deploy.ps1` is retired. `scripts/deploy-compile-upload.ps1` is deprecated and refuses its destructive wipe unless `-IUnderstandNoBackup` is supplied; use it only for a separately reviewed recovery case. A production database credential was present in tracked files and remains in repository history; the owner must rotate it. History rewriting is optional and requires owner review. No deploy or database command has been run by the authoring session.

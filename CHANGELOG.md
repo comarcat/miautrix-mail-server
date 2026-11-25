@@ -2,6 +2,41 @@
 
 All notable changes to this project are documented here.
 
+## [2.2.0] - Unreleased (branch `release/v2.2`)
+
+**Deploy:**
+- three idempotent migrations, so use `-RunMigrations`;
+- no required `.env` changes;
+- every user is logged out once.
+
+Handoff: `docs/HANDOFF-v2.2.md`.
+
+### Security
+- **The web API authenticates every request (ERRORS §13.19, Critical).**
+  - Sessions are stored server-side and tokens are stored hashed. Every controller endpoint needs a valid Bearer session, except an explicit, test-enforced allowlist.
+  - Identity comes only from the session. Mismatched `X-Tenant-Id`/`X-User-Id` headers → 404 plus an audit entry. The default-admin fallback is removed.
+  - Refresh tokens rotate, reuse revokes the session, and logout or a password change revokes sessions.
+  - Webmail and admin use authenticated downloads and refresh on 401.
+
+### Added
+- **Inbound SPF/DKIM/DMARC** (RFC 7208/6376/8301/8463/7489/8601) on port 25 and the Cloudflare webhook. Each message gets an `Authentication-Results` header.
+  - `MIAUTRIX_INBOUND_AUTH_MODE` = `monitor` (default) | `enforce` | `off`.
+  - Optional `MIAUTRIX_INBOUND_TRUSTED_AUTHSERV_IDS` for the results the Cloudflare Worker forwards.
+  - Embedded Public Suffix List.
+- **Sieve on delivery** (RFC 5228, 5230, 5232, 5429, 3894, 5490, envelope).
+  - Webmail gets Settings → Filters and an Out of office form.
+  - Vacation and reject notices go only to authenticated senders.
+  - Messages are routed per transport mode.
+- **Client autodiscovery:** Thunderbird autoconfig, Outlook POX autodiscover, and an Apple `.mobileconfig`.
+- **MTA-STS (RFC 8461) and TLS-RPT (RFC 8460) policy hosting** per domain, `none` by default, with DNS guidance in admin.
+- **Outbound DANE** (RFC 7672) for `direct` domains: `OUTBOUND_DANE_MODE` (default `off`) and `OUTBOUND_DNSSEC_RESOLVER`.
+- **IMAP:** more IMAP4rev2 session-mode work (BINARY, Net-Unicode names, response codes) and tests. IMAP4rev2 is still not advertised.
+- **Audit:** `docs/Audit-Remaining-v2.2-Report.md` triages all 73 findings.
+
+### Fixed
+- RFC 2047/2231 encoded headers and attachment filenames in generated MIME stay within line limits.
+- 4 previously failing integration fixtures now pass (12 known failures remain, ERRORS §13.18).
+
 ## [2.1.0] - Unreleased (branch `release/v2.1`)
 
 **Deploy:** no new migrations, so deploy without `-RunMigrations`. No `.env` changes are required. After the deploy, run `messages reparse --tenant all` (dry run first) for drafts that IMAP clients saved before v2.1. Handoff: `docs/HANDOFF-v2.1.md`.
