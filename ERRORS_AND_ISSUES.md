@@ -978,4 +978,5 @@ The root `deploy.ps1` previously included a hardcoded production database passwo
 - **Tests:** unit 101, security 7, protocol 27, integration 10, admin 18, webmail 15; build 0 warnings.
 - **Deploy needs `-RunMigrations`:** six new migrations, all idempotent, proven on dev and fresh databases.
 - **Deployed** 2026-11-24 from `76c8e7c` with `-RunMigrations`. The pre-check found all 5 delegates at `access_level = write`. The owner validated imaplib, Himalaya, Thunderbird (`Shared/sales`) and SMTP Send As / rejection: all working.
+- **Schema converged (post-deploy fingerprint):** production matches a fresh install apart from the legacy `AddSmtpQueueDirection` history row, and dev is identical to production. This closes the drift in §13.10 and §13.11.
 - **Lesson:** worker-reported "green" was not enough. Coordinator review caught three defects that every test passed with: subscriptions defaulting to off, all stored mail marked `\Recent`, and send-only delegates able to modify mailboxes. Review migrations and defaults against existing production data, not only fresh databases.

@@ -83,7 +83,7 @@ See TROUBLESHOOTING §5.
    - Evaluate and implement NAMESPACE, MOVE, IDLE, ESEARCH, LIST-EXTENDED/LIST-STATUS and STATUS=SIZE, plus the other mandatory rev2 behaviors.
    - Advertise `IMAP4rev2` alongside `IMAP4rev1` only after full validation with the same clients.
    - Requirements: `docs/IMAP Report.md`. Matrix template: `IMAP-Phase1-Report.md`.
-2. **Post-deploy schema fingerprint.** Capture `artifacts/schema-pro.txt` and compare it with a fresh install. The expected difference is only the legacy `AddSmtpQueueDirection` history row.
+2. ✅ **Post-deploy schema fingerprint (2026-11-24):** production matches a fresh install from current migrations. The only difference is the harmless legacy `20261005173819_AddSmtpQueueDirection` history row. Dev is identical to production (1,115 lines each).
 3. **Inline images:** `cid:` references are not yet mapped to the attachment endpoint.
 4. **Folder rename REST endpoint:** IMAP RENAME works, but webmail has no endpoint.
 5. **Ops:** switch deploys to SSH keys (`-SshKey`) and rotate the LXC root password.
