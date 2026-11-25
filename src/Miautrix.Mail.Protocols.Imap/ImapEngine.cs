@@ -487,6 +487,16 @@ public sealed partial class ImapSession
         if (current.Count > _selectedUidSnapshot.Count || current.Any(uid => !_selectedUidSnapshot.Contains(uid)))
             responses.Add($"* {current.Count} EXISTS");
         if (!_imap4Rev2Enabled && recentUids.Count != priorRecentCount) responses.Add($"* {recentUids.Count} RECENT");
+        for (var index = 0; index < currentMessages.Count; index++)
+        {
+            var message = currentMessages[index];
+            if (_selectedFlagsSnapshot.TryGetValue(message.Uid, out var oldFlags) &&
+                !string.Equals(oldFlags, $"{message.Flags}|{message.IsRead}", StringComparison.Ordinal))
+            {
+                var isRecent = message.IsRecent || recentUids.Contains(message.Uid);
+                responses.Add($"* {index + 1} FETCH (UID {message.Uid} FLAGS ({FormatFlags(message.Flags, message.IsRead, isRecent && !_imap4Rev2Enabled)}))");
+            }
+        }
         _selectedUidSnapshot = current;
         _selectedFlagsSnapshot.Clear();
         foreach (var message in currentMessages) _selectedFlagsSnapshot[message.Uid] = $"{message.Flags}|{message.IsRead}";
@@ -879,6 +889,8 @@ public sealed partial class ImapSession
         if (SelectedFolder?.Id == folder.Id) return new ImapCommandResult(tag, "NO", "[INUSE] Mailbox is selected", Array.Empty<string>());
         try
         {
+            if (_imap4Rev2Enabled && (!IsValidNetUnicode(names[0].Text) || !IsValidNetUnicode(names[1].Text)))
+                return new ImapCommandResult(tag, "NO", "Invalid Net-Unicode mailbox name", Array.Empty<string>());
             var destinationPath = DecodeMailboxPath(names[1].Text);
             var destinationMailboxId = folder.MailboxId;
             if (destinationPath.StartsWith("Shared/", StringComparison.OrdinalIgnoreCase))

@@ -62,4 +62,21 @@ public sealed class ImapMimeFormatterTests
         Assert.Equal(ImapBinarySectionStatus.Success, formatter.GetBinarySection(text, "1", out var decoded));
         Assert.Equal("A\r\nB\r\n", Encoding.ASCII.GetString(decoded));
     }
+
+    [Fact]
+    public void Binary_sections_reject_multipart_and_message_entities_but_allow_nested_leaf_parts()
+    {
+        var formatter = new MimeKitImapMimeFormatter();
+        var multipart = Encoding.ASCII.GetBytes("Content-Type: multipart/mixed; boundary=x\r\n\r\n--x\r\nContent-Type: text/plain\r\n\r\none\r\n--x\r\nContent-Type: text/plain\r\n\r\ntwo\r\n--x--\r\n");
+        var nestedMessage = Encoding.ASCII.GetBytes("Content-Type: message/rfc822\r\n\r\nFrom: nested@example.test\r\nContent-Type: multipart/mixed; boundary=y\r\n\r\n--y\r\nContent-Type: text/plain\r\n\r\nnested leaf\r\n--y--\r\n");
+        var globalMessage = Encoding.ASCII.GetBytes("Content-Type: message/global\r\n\r\nFrom: nested@example.test\r\nSubject: global\r\n\r\nmessage bytes\r\n");
+
+        Assert.Equal(ImapBinarySectionStatus.NotLeafBodyPart, formatter.GetBinarySection(multipart, "", out _));
+        Assert.Equal(ImapBinarySectionStatus.Success, formatter.GetBinarySection(multipart, "2", out var secondPart));
+        Assert.Equal("two", Encoding.ASCII.GetString(secondPart));
+        Assert.Equal(ImapBinarySectionStatus.NotLeafBodyPart, formatter.GetBinarySection(nestedMessage, "1", out _));
+        Assert.Equal(ImapBinarySectionStatus.Success, formatter.GetBinarySection(nestedMessage, "1.1", out var nestedLeaf));
+        Assert.Equal("nested leaf", Encoding.ASCII.GetString(nestedLeaf));
+        Assert.Equal(ImapBinarySectionStatus.NotLeafBodyPart, formatter.GetBinarySection(globalMessage, "1", out _));
+    }
 }
