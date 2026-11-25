@@ -19,6 +19,7 @@ public sealed class InboundAuthenticationOptions
 {
     public AuthenticationMode Mode { get; init; } = AuthenticationMode.Monitor;
     public string AuthservId { get; init; } = "localhost";
+    public IReadOnlySet<string> TrustedAuthservIds { get; init; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
     public static InboundAuthenticationOptions FromEnvironment()
     {
@@ -33,6 +34,16 @@ public sealed class InboundAuthenticationOptions
         var hostname = Environment.GetEnvironmentVariable("MIAUTRIX_HOSTNAME");
         if (string.IsNullOrWhiteSpace(hostname)) hostname = Environment.MachineName;
         if (string.IsNullOrWhiteSpace(hostname) || hostname.Any(char.IsWhiteSpace)) throw new InvalidOperationException("MIAUTRIX_HOSTNAME must be a non-empty authserv-id without whitespace.");
-        return new InboundAuthenticationOptions { Mode = mode, AuthservId = hostname.Trim() };
+        var trustedAuthservIds = ParseTrustedAuthservIds(Environment.GetEnvironmentVariable("MIAUTRIX_INBOUND_TRUSTED_AUTHSERV_IDS"));
+        return new InboundAuthenticationOptions { Mode = mode, AuthservId = hostname.Trim(), TrustedAuthservIds = trustedAuthservIds };
+    }
+
+    private static IReadOnlySet<string> ParseTrustedAuthservIds(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var ids = value.Split(',', StringSplitOptions.TrimEntries);
+        if (ids.Any(id => id.Length == 0 || id.Any(char.IsWhiteSpace) || id.Contains(';') || id.Contains('=')))
+            throw new InvalidOperationException("MIAUTRIX_INBOUND_TRUSTED_AUTHSERV_IDS must be a comma-separated list of authserv-ids without whitespace or separators.");
+        return new HashSet<string>(ids, StringComparer.OrdinalIgnoreCase);
     }
 }

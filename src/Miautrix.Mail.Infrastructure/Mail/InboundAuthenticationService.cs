@@ -34,19 +34,29 @@ public sealed class InboundAuthenticationService : IInboundAuthenticationService
         {
             var spf = await _spfEvaluator.EvaluateAsync(input.ClientIp, input.Helo, input.MailFrom, budget.Token);
             var trustedSpfAvailable = false;
+            TrustedAuthenticationResults? trustedResults = null;
             if (input.Path == InboundMailPath.CloudflareWebhook)
             {
-                var cloudflareResults = input.CloudflareAuthenticationResults ?? ReadCloudflareAuthenticationResults(input.RawMessage);
-                if (TryReadSpf(cloudflareResults, out var cloudflareSpf))
+                var cloudflareResults = input.CloudflareAuthenticationResults ?? TrustedAuthenticationResultsParser.ReadFirstTrustedHeader(input.RawMessage, options.TrustedAuthservIds);
+                if (TrustedAuthenticationResultsParser.TryParse(cloudflareResults, options.TrustedAuthservIds, out var external))
                 {
-                    spf = cloudflareSpf;
-                    trustedSpfAvailable = !cloudflareSpf.Result.Equals("none", StringComparison.OrdinalIgnoreCase);
+                    trustedResults = external;
+                    if (external.Spf is not null)
+                    {
+                        spf = external.Spf;
+                        trustedSpfAvailable = !external.Spf.Result.Equals("none", StringComparison.OrdinalIgnoreCase);
+                    }
                 }
             }
             var dkim = await EvaluateDkim(input.RawMessage, budget.Token);
+            if (trustedResults is not null)
+                dkim = dkim.Concat(trustedResults.Dkim.Where(trusted => !dkim.Any(local =>
+                    string.Equals(local.Domain, trusted.Domain, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(local.Selector, trusted.Selector, StringComparison.OrdinalIgnoreCase)))).ToArray();
             var message = MimeMessage.Load(new MemoryStream(Encoding.UTF8.GetBytes(input.RawMessage)));
             var fromDomains = message.From.Mailboxes.Select(m => m.Domain.ToLowerInvariant()).Distinct().ToArray();
             var dmarc = await EvaluateDmarc(fromDomains, spf, dkim, budget.Token);
+            dmarc = ApplyTrustedDmarcResult(dmarc, trustedResults);
             if (input.Path == InboundMailPath.CloudflareWebhook && !trustedSpfAvailable && spf.Result == "none")
                 dmarc = dmarc with { Disposition = "none", Reason = "spf unavailable" };
             var auth = $"{options.AuthservId}; spf={spf.Result} smtp.mailfrom={(spf.Domain ?? "unknown")}; " +
@@ -64,31 +74,28 @@ public sealed class InboundAuthenticationService : IInboundAuthenticationService
         }
     }
 
-    private static string? ReadCloudflareAuthenticationResults(string raw)
+    private DmarcAuthenticationResult ApplyTrustedDmarcResult(DmarcAuthenticationResult local, TrustedAuthenticationResults? trusted)
     {
-        var headerEnd = raw.IndexOf("\r\n\r\n", StringComparison.Ordinal);
-        var headers = headerEnd >= 0 ? raw[..headerEnd] : raw.Split(new[] { "\n\n" }, StringSplitOptions.None)[0];
-        foreach (var line in headers.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None))
-            if (line.StartsWith("Authentication-Results:", StringComparison.OrdinalIgnoreCase) && line.Contains("cloudflare", StringComparison.OrdinalIgnoreCase))
-                return line[(line.IndexOf(':') + 1)..].Trim();
-        return null;
-    }
-
-    private static bool TryReadSpf(string? authResults, out SpfAuthenticationResult result)
-    {
-        result = new("none", null);
-        if (string.IsNullOrWhiteSpace(authResults)) return false;
-        var segments = authResults.Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        if (segments.Length < 2 || !segments[0].Contains("cloudflare", StringComparison.OrdinalIgnoreCase)) return false;
-        var spf = segments.Skip(1).FirstOrDefault(x => x.StartsWith("spf=", StringComparison.OrdinalIgnoreCase));
-        if (spf is null) return false;
-        var pair = spf.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-        var status = pair[0][4..].ToLowerInvariant();
-        if (status is not ("pass" or "fail" or "softfail" or "neutral" or "temperror" or "permerror" or "none")) return false;
-        var domain = pair.FirstOrDefault(x => x.StartsWith("smtp.mailfrom=", StringComparison.OrdinalIgnoreCase))?[14..].Trim('<', '>');
-        if (domain?.Contains('@') == true) domain = domain[(domain.LastIndexOf('@') + 1)..];
-        result = new(status, domain, "Cloudflare-authenticated webhook result");
-        return true;
+        if (trusted?.DmarcResult is null) return local;
+        if (trusted.DmarcResult == "pass")
+            return local with
+            {
+                Result = "pass",
+                Domain = trusted.FromDomain ?? local.Domain,
+                Disposition = "none",
+                AlignedIdentifiers = local.AlignedIdentifiers.Append("dmarc:" + (trusted.FromDomain ?? local.Domain ?? "unknown")).ToArray(),
+                Reason = "trusted Authentication-Results"
+            };
+        if (trusted.DmarcResult == "temperror") return local with { Result = "temperror", Disposition = "none", Reason = "trusted Authentication-Results" };
+        if (trusted.DmarcResult == "permerror") return local with { Result = "permerror", Disposition = "none", Reason = "trusted Authentication-Results" };
+        if (trusted.DmarcResult == "fail")
+        {
+            var policy = local.SubdomainPolicy ?? local.Policy ?? "none";
+            var apply = local.Percentage == 100 || (local.Percentage > 0 && pctRoll() < local.Percentage);
+            var disposition = apply && (policy is "reject" or "quarantine") ? policy : "none";
+            return local with { Result = "fail", Domain = trusted.FromDomain ?? local.Domain, Disposition = disposition, Reason = "trusted Authentication-Results" };
+        }
+        return local with { Result = trusted.DmarcResult, Disposition = "none", Reason = "trusted Authentication-Results" };
     }
 
     private async Task<DmarcAuthenticationResult> EvaluateDmarc(string[] fromDomains, SpfAuthenticationResult spf, IReadOnlyList<DkimAuthenticationResult> dkim, CancellationToken ct)

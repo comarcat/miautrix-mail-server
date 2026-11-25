@@ -85,12 +85,34 @@ public sealed class DkimInboundAuthenticationTests
         using var key = RSA.Create(2048);
         var message = Sign(key, "s1");
         var dns = new FakeDnsResolver(); dns.Txt["s1._domainkey." + Domain] = [PublicRecord(key)];
-        var service = new InboundAuthenticationService(dns, Options);
+        var service = new InboundAuthenticationService(dns, OptionsWithTrustedAuthservIds());
         var legacy = await service.EvaluateAsync(new(null, null, "sender@example.test", message, InboundMailPath.CloudflareWebhook));
         Assert.Equal("none", legacy.Spf.Result);
         Assert.Equal("pass", legacy.Dkim.Single().Result);
-        var withCloudflare = await service.EvaluateAsync(new(null, null, "sender@example.test", message, InboundMailPath.CloudflareWebhook, "cloudflare; spf=pass smtp.mailfrom=example.test"));
+        var withCloudflare = await service.EvaluateAsync(new(null, null, "sender@example.test", message, InboundMailPath.CloudflareWebhook, "mx.cloudflare.net; spf=pass smtp.mailfrom=example.test"));
         Assert.Equal("pass", withCloudflare.Spf.Result);
+    }
+
+    [Fact]
+    public async Task Untrusted_authserv_results_are_ignored_and_trusted_dkim_and_dmarc_are_consumed()
+    {
+        var raw = "From: sender@example.test\r\n\r\nbody\r\n";
+        var untrustedDns = new FakeDnsResolver();
+        untrustedDns.Txt["_dmarc.example.test"] = ["v=DMARC1; p=reject"];
+        var untrusted = await new InboundAuthenticationService(untrustedDns, Options)
+            .EvaluateAsync(new(null, null, "sender@remote.test", raw, InboundMailPath.CloudflareWebhook,
+                "mx.cloudflare.net.attacker.test; spf=pass smtp.mailfrom=example.test; dkim=pass header.d=example.test; dmarc=pass header.from=example.test"));
+        Assert.Equal("none", untrusted.Spf.Result);
+        Assert.Equal("fail", untrusted.Dmarc.Result);
+        Assert.Equal("none", untrusted.Dmarc.Disposition);
+
+        var dns = new FakeDnsResolver();
+        var trusted = await new InboundAuthenticationService(dns, OptionsWithTrustedAuthservIds())
+            .EvaluateAsync(new(null, null, "sender@remote.test", raw, InboundMailPath.CloudflareWebhook,
+                "mx.cloudflare.net; spf=pass smtp.mailfrom=example.test; dkim=pass header.d=example.test header.s=cf; dmarc=pass header.from=example.test"));
+        Assert.Equal("pass", trusted.Spf.Result);
+        Assert.Contains(trusted.Dkim, signature => signature.Result == "pass" && signature.Domain == "example.test");
+        Assert.Equal("pass", trusted.Dmarc.Result);
     }
 
     private static async Task<InboundAuthenticationResult> Evaluate(string raw, RSA key, string selector)
@@ -98,6 +120,9 @@ public sealed class DkimInboundAuthenticationTests
         var dns = new FakeDnsResolver(); dns.Txt[$"{selector}._domainkey.{Domain}"] = [PublicRecord(key)];
         return await new InboundAuthenticationService(dns, Options).EvaluateAsync(new(null, null, "sender@example.test", raw, InboundMailPath.Smtp25));
     }
+
+    private static InboundAuthenticationOptions OptionsWithTrustedAuthservIds() =>
+        new() { AuthservId = "mx.example.test", TrustedAuthservIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "mx.cloudflare.net" } };
 
     private static string Sign(RSA key, string selector, DkimSignatureAlgorithm algorithm = DkimSignatureAlgorithm.RsaSha256, bool expired = false)
     {
