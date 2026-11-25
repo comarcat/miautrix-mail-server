@@ -2,6 +2,7 @@ using Miautrix.Mail.Domain;
 using Miautrix.Mail.Queue;
 using Miautrix.Mail.Application.Transport;
 using System.Net;
+using Microsoft.Extensions.Logging;
 
 namespace Miautrix.Mail.Protocols.Smtp;
 
@@ -28,17 +29,20 @@ public sealed class SmtpInboundHandler : ISmtpInboundHandler
     private readonly ISmtpQueueManager _queueManager;
     private readonly IInboundAuthenticationService? _authentication;
     private readonly InboundAuthenticationOptions? _authenticationOptions;
+    private readonly ILogger<SmtpInboundHandler>? _logger;
 
     public SmtpInboundHandler(
         ISmtpDomainValidator domainValidator,
         ISmtpQueueManager queueManager,
         IInboundAuthenticationService? authentication = null,
-        InboundAuthenticationOptions? authenticationOptions = null)
+        InboundAuthenticationOptions? authenticationOptions = null,
+        ILogger<SmtpInboundHandler>? logger = null)
     {
         _domainValidator = domainValidator;
         _queueManager = queueManager;
         _authentication = authentication;
         _authenticationOptions = authenticationOptions;
+        _logger = logger;
     }
 
     public SmtpResponse HandleRcptTo(string recipientAddress, out Guid tenantId)
@@ -83,6 +87,11 @@ public sealed class SmtpInboundHandler : ISmtpInboundHandler
                 auth = new(new("temperror", null), [new(null, null, "temperror", "verification service error")],
                     new("temperror", null, null, "none", []), $"{authserv}; spf=temperror; dkim=temperror; dmarc=temperror");
             }
+
+            _logger?.LogInformation("Inbound authentication path={Path} SPF={SpfResult} SPFDomain={SpfDomain} DKIM={DkimResults} DMARC={DmarcResult} FromDomain={FromDomain}",
+                path, auth.Spf.Result, auth.Spf.Domain ?? "unknown",
+                string.Join(",", auth.Dkim.Select(signature => $"{signature.Domain ?? "unknown"}:{signature.Result}")),
+                auth.Dmarc.Result, auth.Dmarc.Domain ?? "unknown");
 
             var temporaryError = auth.Spf.Result == "temperror" || auth.Dmarc.Result == "temperror" || auth.Dkim.Any(item => item.Result == "temperror");
             if (_authenticationOptions?.Mode == AuthenticationMode.Enforce && !temporaryError &&

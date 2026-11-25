@@ -26,7 +26,7 @@ The embedded Public Suffix List is sourced from [publicsuffix.org](https://publi
 
 - `MIAUTRIX_INBOUND_AUTH_MODE`: optional `off`, `monitor` (default), or `enforce`; any other value fails startup.
 - `MIAUTRIX_HOSTNAME`: used as the Authentication-Results authserv-id; when absent, the process machine name is used. Whitespace is rejected.
-- `monitor` records the result and never rejects or reroutes.
+- `monitor` records the result, logs only the path and authentication domains/results (never bodies), and never rejects or reroutes.
 - `enforce` rejects only DMARC fail with effective reject policy after `pct`, at the end of SMTP DATA before queueing. DMARC quarantine routes to an existing Junk folder, otherwise Inbox with `\\Flagged`. SPF failure alone never rejects. Authentication temperror never rejects.
 - The Cloudflare webhook accepts an optional `X-Miautrix-Cloudflare-Authentication-Results` result, or a Cloudflare Authentication-Results field in the raw message. SPF is used only when the result identifies Cloudflare; without an IP or such result SPF is none and DMARC can still pass via DKIM.
 - Submission and internal delivery are not evaluated.
@@ -54,7 +54,7 @@ For hosted domains, inbound port 25 applies the published DMARC policy to unauth
 
 Unit tests use an in-memory fake DNS resolver; they do not call public DNS. SPF has more than 30 table cases covering all mechanisms, qualifiers, macro forms, include/redirect, limits, duplicate records, timeout, HELO/null reverse path and IPv6. Mechanism examples were adapted from the [IETF SPF test suite](https://github.com/ietf-wg-spfbis/spf-test-suite). DKIM fixtures are signed in-test using MimeKit and generated RSA keys, including tampering, weak/obsolete signatures, expiry, missing key, and multiple signatures. DMARC tests cover strict/relaxed SPF/DKIM alignment, organizational fallback, subdomain policy, percentage sampling, missing and multiple records, and multiple From domains.
 
-Validated during implementation: SPF evaluator tests 39/39; DKIM + DMARC unit tests 15/15; full unit suite 176/176; focused SMTP protocol tests 4/4; DMARC quarantine integration tests 2/2; webhook integration test 1/1; solution build with warnings as errors passed before the final SPF/DMARC refinements. Full-suite rerun is pending in this report's current checkpoint.
+Validated during implementation: SPF evaluator tests 39/39; DKIM + DMARC unit tests 15/15; full unit suite 180/180; security tests 7/7; full protocol tests 41/41; focused SMTP protocol tests 4/4; targeted integration suite 39/39; inbound webhook and DMARC quarantine tests 3/3; solution build with warnings as errors (zero warnings/errors). Full integration suite: 99/112 passed, 13 failed. These failures are in the existing CLI/storage configuration, EF in-memory UID allocation and Sent-folder fixture groups documented under `ERRORS_AND_ISSUES.md` §13.18; the inbound dispatcher fixtures now seed Inbox and all five dispatcher tests pass. No failure occurred in the inbound authentication tests.
 
 ## Deferred
 
