@@ -70,6 +70,14 @@ Cleanup runs only after a successful verification marker. `cleanup --keep 2` ret
 | `OUTBOUND_DANE_MODE` | `off` | `opportunistic` enables DANE for `direct` domains |
 | `OUTBOUND_DNSSEC_RESOLVER` | none | IP of a local validating resolver (required for DANE) |
 
+- **nginx proxy headers (needed for MTA-STS and discovery rate limits):** every `location` that proxies to Kestrel needs these lines. Without `Host`, `mta-sts.<domain>` returns 404. Without `X-Forwarded-For`, all clients share one discovery rate-limit bucket.
+
+```nginx
+proxy_set_header Host $host;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+proxy_set_header X-Forwarded-Proto $scheme;
+```
+
 - **Optional infrastructure:** DNS plus nginx `server_name` entries and certificates for `autoconfig.<domain>`, `autodiscover.<domain>` and `mta-sts.<domain>` (`docs/Autodiscovery-MtaSts-v2.2-Report.md`). Separately, the Cloudflare Email Worker update (`workers/email`).
 
 ## Security notes
