@@ -53,7 +53,7 @@ public sealed class InboundQueueDispatcherTests
 
             await using var context = CreateContext();
             var item = await context.SmtpQueue.AsNoTracking().FirstAsync(q => q.Id == queueItemId);
-            Assert.Equal("Delivered", item.Status);
+            Assert.True(item.Status == "Delivered", item.LastError);
             Assert.Null(item.LastError);
 
             var message = await context.Messages.AsNoTracking()
@@ -102,7 +102,7 @@ public sealed class InboundQueueDispatcherTests
 
             await using var context = CreateContext();
             var item = await context.SmtpQueue.AsNoTracking().FirstAsync(q => q.Id == queueItemId);
-            Assert.Equal("Delivered", item.Status);
+            Assert.True(item.Status == "Delivered", item.LastError);
 
             var message = await context.Messages.AsNoTracking()
                 .FirstAsync(m => m.TenantId == tenantId && m.MailboxId == mailboxId);
@@ -194,7 +194,7 @@ public sealed class InboundQueueDispatcherTests
             Assert.False(string.IsNullOrWhiteSpace(badItem.LastError));
 
             var goodItem = await context.SmtpQueue.AsNoTracking().FirstAsync(q => q.Id == goodItemId);
-            Assert.Equal("Delivered", goodItem.Status);
+            Assert.True(goodItem.Status == "Delivered", goodItem.LastError);
             Assert.Null(goodItem.LastError);
         }
         finally
@@ -317,6 +317,11 @@ public sealed class InboundQueueDispatcherTests
             QuotaBytes = 10L * 1024 * 1024 * 1024,
             CreatedAt = now,
             UpdatedAt = now
+        });
+        context.Folders.Add(new Folder
+        {
+            Id = Guid.NewGuid(), TenantId = tenantId, MailboxId = mailboxId,
+            Name = "Inbox", Role = "inbox", CreatedAt = now, UpdatedAt = now
         });
 
         await context.SaveChangesAsync();
