@@ -13,6 +13,13 @@ public sealed class MtaStsMigrationTests
         await using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
             .UseNpgsql(Environment.GetEnvironmentVariable("MIAUTRIX_DB_CONNECTION")).Options);
         await db.Database.MigrateAsync();
+        const string idempotentDdl = """
+            ALTER TABLE domains ADD COLUMN IF NOT EXISTS mta_sts_mode text NOT NULL DEFAULT 'none';
+            ALTER TABLE domains ADD COLUMN IF NOT EXISTS mta_sts_max_age integer NOT NULL DEFAULT 604800;
+            ALTER TABLE domains ADD COLUMN IF NOT EXISTS tls_report_rua text NULL;
+            """;
+        await db.Database.ExecuteSqlRawAsync(idempotentDdl);
+        await db.Database.ExecuteSqlRawAsync(idempotentDdl);
         var migrationCountBefore = await db.Database.SqlQueryRaw<int>("SELECT COUNT(*)::int AS \"Value\" FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '20261125151035_V22_Autodiscovery_MtaSts'").SingleAsync();
         await db.Database.MigrateAsync();
         var migrationCountAfter = await db.Database.SqlQueryRaw<int>("SELECT COUNT(*)::int AS \"Value\" FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '20261125151035_V22_Autodiscovery_MtaSts'").SingleAsync();

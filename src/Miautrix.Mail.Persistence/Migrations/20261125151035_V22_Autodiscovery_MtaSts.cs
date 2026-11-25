@@ -9,25 +9,11 @@ namespace Miautrix.Mail.Persistence.Migrations;
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<int>(
-                name: "mta_sts_max_age",
-                table: "domains",
-                type: "integer",
-                nullable: false,
-                defaultValue: 604800);
-
-            migrationBuilder.AddColumn<string>(
-                name: "mta_sts_mode",
-                table: "domains",
-                type: "text",
-                nullable: false,
-                defaultValue: "none");
-
-            migrationBuilder.AddColumn<string>(
-                name: "tls_report_rua",
-                table: "domains",
-                type: "text",
-                nullable: true);
+            migrationBuilder.Sql("""
+                ALTER TABLE domains ADD COLUMN IF NOT EXISTS mta_sts_mode text NOT NULL DEFAULT 'none';
+                ALTER TABLE domains ADD COLUMN IF NOT EXISTS mta_sts_max_age integer NOT NULL DEFAULT 604800;
+                ALTER TABLE domains ADD COLUMN IF NOT EXISTS tls_report_rua text NULL;
+                """);
         }
 
         /// <inheritdoc />
